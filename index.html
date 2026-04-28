@@ -339,7 +339,7 @@
     }
     .add-first:hover { border-color: #1f4e78; color: #1f4e78; background: transparent; }
 
-    /* ── Side panel ── */
+    /* ── Side panel (step detail, slides in) ── */
     .side-panel {
       width: 0;
       overflow: hidden;
@@ -347,19 +347,17 @@
       background: white;
       border-left: 1px solid #ddd;
       flex-shrink: 0;
-      display: flex;
-      flex-direction: column;
     }
-    .side-panel.open { width: 290px; }
+    .side-panel.open { width: 270px; }
     @media (prefers-color-scheme: dark) {
       .side-panel { background: #1e1e1e; border-left-color: #333; }
     }
 
     .side-inner {
-      width: 290px;
+      width: 270px;
       padding: 20px;
       overflow-y: auto;
-      flex: 1;
+      height: 100%;
     }
 
     .side-title {
@@ -458,14 +456,24 @@
       .btn-del:hover { background: #2a1a1a; }
     }
 
-    /* ── Links section ── */
-    .links-section {
-      width: 290px;
-      border-top: 1px solid #eee;
-      padding: 16px 20px;
+    /* ── Links panel (always visible) ── */
+    .links-panel {
+      width: 220px;
       flex-shrink: 0;
+      background: white;
+      border-left: 1px solid #ddd;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
     }
-    @media (prefers-color-scheme: dark) { .links-section { border-top-color: #333; } }
+    @media (prefers-color-scheme: dark) {
+      .links-panel { background: #1e1e1e; border-left-color: #333; }
+    }
+    .links-section {
+      padding: 20px 16px;
+      overflow-y: auto;
+      flex: 1;
+    }
 
     .links-header {
       font-size: 10px;
@@ -601,6 +609,9 @@
 
   <div class="side-panel" id="sidePanel">
     <div class="side-inner" id="sideInner"></div>
+  </div>
+
+  <div class="links-panel">
     <div class="links-section">
       <div class="links-header">
         <span>Useful Links</span>
@@ -1038,7 +1049,6 @@ window.showLinkForm = function(id) {
   document.getElementById('linkUrlIn').value  = id ? (allLinks[id]?.url||'')  : '';
   document.getElementById('linkDelBtn').style.display = id ? '' : 'none';
   document.getElementById('linkForm').classList.add('visible');
-  document.getElementById('sidePanel').classList.add('open');
   document.getElementById('linkNameIn').focus();
 };
 
