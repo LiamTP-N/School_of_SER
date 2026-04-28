@@ -240,6 +240,7 @@
       flex-shrink: 0;
     }
     .handle:hover { background: #163a5a; transform: scale(1.2); }
+    .handle-ghost { width: 20px; height: 20px; flex-shrink: 0; }
     @media (prefers-color-scheme: dark) {
       .handle { background: #5b9bd5; }
       .handle:hover { background: #4a8ac4; }
@@ -797,16 +798,32 @@ function renderBox(id, n) {
   const sel  = id===selectedId ? ' selected' : '';
   const det  = (n.url||n.audience||n.documents||n.deadline||n.notes) ? ' has-detail' : '';
   const tag  = n.step ? `Step ${esc(n.step)}` : 'Step';
+
+  // Only show a handle if that slot is free
+  const canDown   = !n.nextYes;
+  const canBranch = !n.nextNo;
+
+  const hLeft  = canBranch
+    ? `<button class="handle" title="Branch left"   onclick="event.stopPropagation();window.startInline('${n.workflow}','${id}',false)">+</button>`
+    : `<span class="handle handle-ghost"></span>`;
+  const hDown  = canDown
+    ? `<button class="handle" title="Next step down" onclick="event.stopPropagation();window.startInline('${n.workflow}','${id}',true)">+</button>`
+    : `<span class="handle handle-ghost"></span>`;
+  const hRight = canBranch
+    ? `<button class="handle" title="Branch right"  onclick="event.stopPropagation();window.startInline('${n.workflow}','${id}',false)">+</button>`
+    : `<span class="handle handle-ghost"></span>`;
+
+  // If all slots filled, don't render handles at all
+  const handles = (canDown || canBranch)
+    ? `<div class="step-handles">${hLeft}${hDown}${hRight}</div>`
+    : '';
+
   return `<div class="step-wrap" id="wrap-${id}">
     <div class="step-box${sel}${det}" onclick="window.selectStep('${id}')">
       <div class="step-tag">${tag}</div>
       <div class="step-task-text">${esc(n.task||'(empty)')}</div>
     </div>
-    <div class="step-handles">
-      <button class="handle" title="Branch left"  onclick="event.stopPropagation();window.startInline('${n.workflow}','${id}',false,'left')">+</button>
-      <button class="handle" title="Continue down" onclick="event.stopPropagation();window.startInline('${n.workflow}','${id}',true)">+</button>
-      <button class="handle" title="Branch right" onclick="event.stopPropagation();window.startInline('${n.workflow}','${id}',false,'right')">+</button>
-    </div>
+    ${handles}
   </div>`;
 }
 
@@ -824,19 +841,11 @@ function esc(s) {
 // isYes=true → nextYes chain, isYes=false → nextNo branch
 // dir: 'left'|'right' used only for labelling, both map to nextNo
 
-window.startInline = function(wf, parentId, isYes, dir) {
-  // If parent already has the target slot filled, walk to end of that chain
+window.startInline = function(wf, parentId, isYes) {
+  // Slot must be free - handles are hidden if already filled, but guard anyway
   if (parentId && allDocs[parentId]) {
     const field = isYes ? 'nextYes' : 'nextNo';
-    if (allDocs[parentId][field]) {
-      let cur = allDocs[parentId][field];
-      const seen = new Set([parentId]);
-      while (allDocs[cur]?.nextYes && !seen.has(allDocs[cur].nextYes)) {
-        seen.add(cur);
-        cur = allDocs[cur].nextYes;
-      }
-      return window.startInline(wf, cur, true);
-    }
+    if (allDocs[parentId][field]) return; // slot already taken, do nothing
   }
 
   // Inject a temporary pending entry
