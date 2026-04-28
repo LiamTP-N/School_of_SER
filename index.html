@@ -215,6 +215,19 @@
       .ct-btn:hover{border-color:#5b9bd5;color:#5b9bd5;}
     }
 
+    /* ── Edge delete button ── */
+    .edge-del-btn {
+      position:absolute;
+      width:22px; height:22px; border-radius:50%;
+      background:#e74c3c; color:white; border:none;
+      font-size:13px; line-height:1; cursor:pointer;
+      display:flex; align-items:center; justify-content:center;
+      z-index:150; box-shadow:0 2px 6px rgba(0,0,0,0.3);
+      transform:translate(-50%,-50%);
+      transition:background 0.15s, transform 0.1s;
+    }
+    .edge-del-btn:hover { background:#c0392b; transform:translate(-50%,-50%) scale(1.15); }
+
     /* ── Hint bar ── */
     .hint-bar {
       position:fixed; bottom:60px; left:50%; transform:translateX(-50%);
@@ -245,7 +258,6 @@
     <button class="fb active" data-filter="all">All</button>
     <button class="fb" data-filter="Teaching">Teaching</button>
     <button class="fb" data-filter="Research">Research</button>
-    <button class="fb" data-filter="Admin">Admin</button>
   </div>
   <div class="tb-right">
     <span class="tb-status" id="statusBar"></span>
@@ -284,7 +296,7 @@
     <div class="sf"><label>Step label</label><input id="sf-step" placeholder="e.g. 1, 2a"></div>
     <div class="sf"><label>Workflow / Lane</label>
       <select id="sf-workflow">
-        <option>Teaching</option><option>Research</option><option>Admin</option>
+        <option>Teaching</option><option>Research</option>
       </select>
     </div>
     <div class="sf"><label>URL</label><input id="sf-url" placeholder="https://..."></div>
@@ -355,7 +367,6 @@ const db  = getFirestore(app);
 const LANE_DEFS = [
   { wf:'Teaching', color:'#1f4e78', light:'#e8f0f8' },
   { wf:'Research', color:'#1e6b3c', light:'#e6f4ec' },
-  { wf:'Admin',    color:'#7b3f00', light:'#f5ede6' },
 ];
 const LANE_HEIGHT = 3200;
 const ROW_TOP  = 56;   // y of row 0 (below lane header)
@@ -363,6 +374,7 @@ const ROW_H    = 110;  // px per row
 let   NODE_W   = 180;  // node width - updated dynamically in computeLanes()
 const NODE_H   = 72;   // approximate node height for edge calc
 const COL_PAD  = 8;    // padding inside each sub-lane
+const SUB_LANES = 5;   // sub-lanes per workflow column
 
 let LANES = [], LANE_MAP = {};
 
@@ -378,8 +390,8 @@ function computeLanes() {
   LANE_MAP = {};
   LANES.forEach(l => { LANE_MAP[l.wf] = l; });
   // Node width = sub-lane width minus padding on both sides
-  const subW = Math.floor(laneW / 3);
-  NODE_W = Math.max(120, subW - COL_PAD * 2);
+  const subW = Math.floor(laneW / SUB_LANES);
+  NODE_W = Math.max(100, subW - COL_PAD * 2);
   document.documentElement.style.setProperty('--node-w', NODE_W + 'px');
 }
 window.addEventListener('resize', () => { computeLanes(); renderLanes(); renderAll(); });
@@ -388,7 +400,7 @@ computeLanes();
 // ── Grid helpers ─────────────────────────────────────
 function nodeX(wf, col) {
   const l = LANE_MAP[wf] || LANES[0];
-  const subW = Math.floor(l.w / 3);
+  const subW = Math.floor(l.w / SUB_LANES);
   return l.x + col * subW + Math.floor((subW - NODE_W) / 2);
 }
 function nodeY(row) {
@@ -396,8 +408,8 @@ function nodeY(row) {
 }
 function colFromX(wf, px) {
   const l = LANE_MAP[wf] || LANES[0];
-  const subW = Math.floor(l.w / 3);
-  return Math.min(2, Math.max(0, Math.floor((px - l.x) / subW)));
+  const subW = Math.floor(l.w / SUB_LANES);
+  return Math.min(SUB_LANES-1, Math.max(0, Math.floor((px - l.x) / subW)));
 }
 function rowFromY(py) {
   return Math.max(0, Math.round((py - ROW_TOP) / ROW_H));
@@ -405,7 +417,7 @@ function rowFromY(py) {
 
 // ── State ─────────────────────────────────────────────
 let nodes = {}, edges = {}, links = {};
-let selectedId = null, filter = 'all', populateUsed = false, editLinkId = null;
+let selectedId = null, selectedEdgeId = null, filter = 'all', populateUsed = false, editLinkId = null;
 let panX = 0, panY = 0, zoom = 1;
 let isPanning = false, panSX = 0, panSY = 0;
 let connecting = false, connectFrom = null;
@@ -496,7 +508,7 @@ function renderLanes() {
     laneGroup.appendChild(txt);
 
     // Sub-lane dividers (dashed, very subtle)
-    [1, 2].forEach(s => {
+    Array.from({length:SUB_LANES-1},(_,i)=>i+1).forEach(s => {
       const sx = l.x + Math.floor(l.w/3)*s;
       const sl = document.createElementNS('http://www.w3.org/2000/svg','line');
       sl.setAttribute('x1', sx); sl.setAttribute('y1', 44);
@@ -649,10 +661,16 @@ function renderEdge(id) {
     d = `M${x1},${y1} L${x1},${midY-r} Q${x1},${midY} ${x1+dx},${midY} L${x2-dx},${midY} Q${x2},${midY} ${x2},${midY+r} L${x2},${y2}`;
   }
 
+  const isSelected = id === selectedEdgeId;
+
+  // Visible path
   const path = document.createElementNS('http://www.w3.org/2000/svg','path');
   path.setAttribute('d', d);
   path.setAttribute('fill','none');
-  if (crossLane) {
+  if (isSelected) {
+    path.setAttribute('stroke','#e74c3c'); path.setAttribute('stroke-width','2.5');
+    path.setAttribute('marker-end','url(#arr)');
+  } else if (crossLane) {
     path.setAttribute('stroke','#c0a060'); path.setAttribute('stroke-width','1.5');
     path.setAttribute('stroke-dasharray','6 4'); path.setAttribute('marker-end','url(#arr-cross)');
     path.setAttribute('opacity','0.75');
@@ -661,13 +679,79 @@ function renderEdge(id) {
     path.setAttribute('marker-end','url(#arr)');
   }
   edgeGroup.appendChild(path);
+
+  // Wide invisible hit area (easier to click)
+  const hit = document.createElementNS('http://www.w3.org/2000/svg','path');
+  hit.setAttribute('d', d);
+  hit.setAttribute('fill','none');
+  hit.setAttribute('stroke','transparent');
+  hit.setAttribute('stroke-width','14');
+  hit.style.cursor = 'pointer';
+  hit.addEventListener('click', ev => {
+    ev.stopPropagation();
+    selectEdge(id, x1, y1, x2, y2);
+  });
+  edgeGroup.appendChild(hit);
 }
 
 function renderEdges() {
   requestAnimationFrame(() => {
     edgeGroup.innerHTML = '';
     Object.keys(edges).forEach(id => renderEdge(id));
+    if (selectedEdgeId) showEdgeDeleteBtn();
   });
+}
+
+function selectEdge(id, x1, y1, x2, y2) {
+  selectedEdgeId = id;
+  // Re-render to highlight selected edge
+  edgeGroup.innerHTML = '';
+  Object.keys(edges).forEach(eid => renderEdge(eid));
+  showEdgeDeleteBtn();
+}
+
+function showEdgeDeleteBtn() {
+  // Remove any existing button
+  document.querySelectorAll('.edge-del-btn').forEach(b => b.remove());
+  const e = edges[selectedEdgeId]; if (!e) return;
+  const f = nodes[e.from], t = nodes[e.to]; if (!f || !t) return;
+
+  const fromEl = document.getElementById('node-'+e.from);
+  const toEl   = document.getElementById('node-'+e.to);
+  const fh  = fromEl ? fromEl.offsetHeight : NODE_H;
+  const fw2 = fromEl ? fromEl.offsetWidth  : NODE_W;
+  const tw2 = toEl   ? toEl.offsetWidth    : NODE_W;
+
+  const x1 = nodeX(f.workflow, f.col??0) + fw2/2;
+  const y1 = nodeY(f.row??0) + fh;
+  const x2 = nodeX(t.workflow, t.col??0) + tw2/2;
+  const y2 = nodeY(t.row??0);
+
+  // Place button at midpoint of the edge
+  const mx = (x1+x2)/2;
+  const my = y1 + Math.max(12,(y2-y1)/2);
+
+  // Button lives on the canvas div (transformed with pan/zoom)
+  const btn = document.createElement('button');
+  btn.className = 'edge-del-btn';
+  btn.title = 'Delete connection';
+  btn.textContent = '×';
+  btn.style.left = mx + 'px';
+  btn.style.top  = my + 'px';
+  btn.addEventListener('click', async ev => {
+    ev.stopPropagation();
+    if (!confirm('Delete this connection?')) return;
+    await window.removeEdge(selectedEdgeId);
+    selectedEdgeId = null;
+    btn.remove();
+  });
+  canvas.appendChild(btn);
+}
+
+function clearEdgeSelect() {
+  selectedEdgeId = null;
+  document.querySelectorAll('.edge-del-btn').forEach(b => b.remove());
+  renderEdges();
 }
 
 function esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
@@ -689,6 +773,7 @@ wrap.addEventListener('mousedown', e => {
     isPanning = true; canvas.style.cursor = 'grabbing';
     panSX = e.clientX-panX; panSY = e.clientY-panY;
     if (selectedId) { selectedId = null; renderAll(); closeDetail(); }
+    if (selectedEdgeId) clearEdgeSelect();
   }
 });
 
@@ -820,7 +905,7 @@ function spawnFromPort(fromId, dir) {
   let targetCol;
   if (dir === 'down')      targetCol = parentCol;
   else if (dir === 'bl')   targetCol = Math.max(0, parentCol-1);
-  else                     targetCol = Math.min(2, parentCol+1);
+  else                     targetCol = Math.min(SUB_LANES-1, parentCol+1);
 
   // Find next free row in that col (same wf)
   let targetRow = parentRow+1;
@@ -1083,7 +1168,6 @@ document.getElementById('populateBtn').addEventListener('click', async () => {
       r1a: nd('Research','1a','Get blank PO form',              1, 1),
       r1b: nd('Research','1b','Complete the PO form',           1, 2),
       r2:  nd('Research','2', 'Upload PO & @ Liam for approval',0, 2),
-      a1:  nd('Admin',   '1', 'Admin step 1 (to be defined)',   0, 0),
     };
     const nIds = {};
     for (const [k,data] of Object.entries(nData)) {
