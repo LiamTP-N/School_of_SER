@@ -52,8 +52,7 @@
     /* ── Node ── */
     .node {
       position:absolute;
-      min-width:160px; max-width:220px;
-      width:max-content;
+      width: var(--node-w, 180px);
       background:white; border:1.5px solid #d4d8dd;
       border-radius:8px; padding:8px 12px 28px;
       cursor:pointer; user-select:none;
@@ -73,7 +72,7 @@
       border-radius:8px 8px 0 0;
     }
     .node-tag { font-size:9px; font-weight:700; letter-spacing:0.07em; text-transform:uppercase; color:#bbb; margin-bottom:3px; margin-top:2px; }
-    .node-task { font-size:12px; font-weight:500; color:#1a1a1a; line-height:1.4; word-break:break-word; max-width:196px; }
+    .node-task { font-size:12px; font-weight:500; color:#1a1a1a; line-height:1.4; word-break:break-word; }
     @media(prefers-color-scheme:dark){ .node-task{color:#e0e0e0;} }
 
     /* ── Port handles ── */
@@ -96,7 +95,7 @@
 
     /* ── Inline input ── */
     .node-input {
-      position:absolute; width:180px;
+      position:absolute; width:var(--node-w,180px);
       background:white; border:2px solid #1f4e78; border-radius:8px;
       padding:8px 12px; z-index:60;
       box-shadow:0 8px 24px rgba(31,78,120,0.2);
@@ -361,7 +360,7 @@ const LANE_DEFS = [
 const LANE_HEIGHT = 3200;
 const ROW_TOP  = 56;   // y of row 0 (below lane header)
 const ROW_H    = 110;  // px per row
-const NODE_W   = 180;  // node width
+let   NODE_W   = 180;  // node width - updated dynamically in computeLanes()
 const NODE_H   = 72;   // approximate node height for edge calc
 const COL_PAD  = 8;    // padding inside each sub-lane
 
@@ -378,6 +377,10 @@ function computeLanes() {
   }));
   LANE_MAP = {};
   LANES.forEach(l => { LANE_MAP[l.wf] = l; });
+  // Node width = sub-lane width minus padding on both sides
+  const subW = Math.floor(laneW / 3);
+  NODE_W = Math.max(120, subW - COL_PAD * 2);
+  document.documentElement.style.setProperty('--node-w', NODE_W + 'px');
 }
 window.addEventListener('resize', () => { computeLanes(); renderLanes(); renderAll(); });
 computeLanes();
