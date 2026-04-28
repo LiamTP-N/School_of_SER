@@ -373,6 +373,27 @@ function computeLanes(){
 window.addEventListener('resize', ()=>{ computeLanes(); renderLanes(); renderAll(); });
 computeLanes();
 
+// ── Sub-lane helpers ─────────────────────────
+// Each workflow lane is divided into 3 equal sub-lanes (0=left, 1=centre, 2=right)
+// Boxes snap to the x-centre of whichever sub-lane they're dropped into.
+const NODE_W = 180; // target node width for sub-lane calculation
+const SUB_PAD = 8;  // padding inside each sub-lane
+
+function subLaneX(lane, sub){
+  // Returns the left x of a node placed in sub-lane 0, 1, or 2
+  const subW = Math.floor(lane.w / 3);
+  const slLeft = lane.x + sub * subW;
+  // Centre the node within the sub-lane
+  return slLeft + Math.floor((subW - NODE_W) / 2);
+}
+
+function nearestSubLane(lane, nx){
+  // Given a node's current x, return which sub-lane (0/1/2) it's closest to
+  const subW = Math.floor(lane.w / 3);
+  const rel = nx - lane.x;
+  return Math.min(2, Math.max(0, Math.floor(rel / subW)));
+}
+
 // ── State ────────────────────────────────────
 let nodes = {}, edges = {}, links = {};
 let selectedId = null, filter = 'all', populateUsed = false, editLinkId = null;
@@ -446,6 +467,18 @@ function renderLanes(){
     line.setAttribute('stroke', dark ? '#2e2e38' : '#d8dce2');
     line.setAttribute('stroke-width','1');
     laneGroup.appendChild(line);
+
+    // Sub-lane dividers (subtle dashed lines at 1/3 and 2/3)
+    [1,2].forEach(s=>{
+      const sx=l.x+Math.floor(l.w/3)*s;
+      const sl=document.createElementNS('http://www.w3.org/2000/svg','line');
+      sl.setAttribute('x1',sx); sl.setAttribute('y1',48);
+      sl.setAttribute('x2',sx); sl.setAttribute('y2',LANE_HEIGHT);
+      sl.setAttribute('stroke', dark ? '#2a2a32' : '#e4e8ee');
+      sl.setAttribute('stroke-width','1');
+      sl.setAttribute('stroke-dasharray','4 6');
+      laneGroup.appendChild(sl);
+    });
 
     // Lane header pill
     const hg=document.createElementNS('http://www.w3.org/2000/svg','g');
@@ -545,14 +578,12 @@ function renderNode(id){
 
 function hasDetail(n){ return !!(n.url||n.audience||n.documents||n.deadline||n.notes); }
 
-// ── Snap node into its lane ───────────────────
+// ── Snap node into its sub-lane ──────────────
 function snapToLane(id){
   const n=nodes[id];
   const lane=LANE_MAP[n.workflow]||LANE_MAP['Teaching'];
-  const pad=8;
-  const el=document.getElementById('node-'+id);
-  const nw=el?el.offsetWidth:180;
-  n.x = Math.max(lane.x+pad, Math.min(lane.x+lane.w-nw-pad, n.x));
+  const sub=nearestSubLane(lane, n.x);
+  n.x = subLaneX(lane, sub);
   n.y = Math.max(52, n.y);
 }
 
@@ -673,10 +704,11 @@ window.addEventListener('mousemove', e=>{
     const n=nodes[draggingId];
     const lane=LANE_MAP[n.workflow]||LANE_MAP['Teaching'];
     const dEl=document.getElementById('node-'+draggingId);
-    const nw=dEl?dEl.offsetWidth:180;
+    // Clamp strictly within lane boundaries during drag
+    const rawX=mx-dragOX;
     const pad=8;
-    // Clamp x strictly within lane - no crossing allowed during drag
-    n.x=Math.max(lane.x+pad, Math.min(lane.x+lane.w-nw-pad, mx-dragOX));
+    const nw=dEl?dEl.offsetWidth:NODE_W;
+    n.x=Math.max(lane.x+pad, Math.min(lane.x+lane.w-nw-pad, rawX));
     n.y=Math.max(52, my-dragOY);
     if(dEl){ dEl.style.left=n.x+'px'; dEl.style.top=n.y+'px'; }
     renderEdges();
@@ -774,55 +806,45 @@ async function createEdge(fromId,toId){
 function spawnFromPort(fromId, dir){
   const n=nodes[fromId];
   const lane=LANE_MAP[n.workflow]||LANE_MAP['Teaching'];
-  const pad=10;
-  const nodeW=200, nodeH=100, gapY=130;
+  const gapY=120;
+  const nodeH=70;
 
-  // X positioning within lane
-  // Split lane into thirds for left/centre/right columns
-  const laneInner=lane.w - pad*2;
-  const third=Math.floor(laneInner/3);
-  const col0=lane.x+pad;           // left column x
-  const col1=lane.x+pad+third;     // centre column x
-  const col2=lane.x+pad+third*2;   // right column x
+  // Which sub-lane is the parent in?
+  const parentSub=nearestSubLane(lane, n.x);
 
-  // Figure out which column the parent is closest to
-  const parentCol = n.x < lane.x+lane.w/3 ? 0
-                  : n.x < lane.x+2*lane.w/3 ? 1 : 2;
-
-  let tx;
+  // Target sub-lane based on direction
+  let targetSub;
   if(dir==='down'){
-    tx=n.x; // same column as parent
+    targetSub=parentSub;                            // straight down - same sub-lane
   } else if(dir==='bl'){
-    tx = parentCol===0 ? col0 : parentCol===1 ? col0 : col1;
-  } else { // br
-    tx = parentCol===2 ? col2 : parentCol===1 ? col2 : col1;
+    targetSub=parentSub===0 ? 0 : parentSub-1;     // one sub-lane left, floor at 0
+  } else {
+    targetSub=parentSub===2 ? 2 : parentSub+1;     // one sub-lane right, ceil at 2
   }
 
-  // Clamp into lane
-  tx=Math.max(lane.x+pad, Math.min(lane.x+lane.w-nodeW-pad, tx));
+  const tx=subLaneX(lane, targetSub);
 
-  // Find first free Y slot at this X (no overlap with existing nodes in same lane)
-  let ty = n.y + gapY;
-  ty = findFreeY(tx, ty, fromId, lane, nodeW, nodeH, gapY);
+  // Find first free Y slot in this sub-lane
+  let ty=n.y+gapY;
+  ty=findFreeY(tx, ty, fromId, lane, NODE_W, nodeH, gapY);
 
   showInlineInput(tx, ty, fromId);
 }
 
-// Find the first Y position at (tx) that doesn't overlap any existing node in the lane
+// Find the first free Y in a sub-lane that doesn't overlap existing nodes
 function findFreeY(tx, startY, excludeId, lane, nodeW, nodeH, gapY){
-  const pad=10, maxIter=20;
+  const pad=12, maxIter=30;
   let ty=Math.max(52, startY);
   for(let i=0;i<maxIter;i++){
     const collision=Object.entries(nodes).some(([id,nd])=>{
       if(id===excludeId) return false;
       if(nd.workflow!==lane.wf) return false;
-      // Check overlap: two rects overlap if neither is fully outside the other
       const noOverlap = tx+nodeW+pad <= nd.x || tx >= nd.x+nodeW+pad
                      || ty+nodeH+pad <= nd.y || ty >= nd.y+nodeH+pad;
       return !noOverlap;
     });
     if(!collision) break;
-    ty+=gapY; // push down and try again
+    ty+=gapY;
   }
   return ty;
 }
@@ -831,8 +853,9 @@ function showInlineInput(x,y,fromId){
   document.querySelectorAll('.node-input').forEach(el=>el.remove());
   const wf=fromId?(nodes[fromId]?.workflow||'Teaching'):'Teaching';
   const lane=LANE_MAP[wf];
-  // Snap x into lane
-  const sx=Math.max(lane.x+8, Math.min(lane.x+lane.w-208, x));
+  // Snap to nearest sub-lane
+  const sub=nearestSubLane(lane, x);
+  const sx=subLaneX(lane, sub);
   const sy=Math.max(48,y);
 
   const el=document.createElement('div');
@@ -880,11 +903,10 @@ async function commitNode(task,wf,x,y,fromId){
 
 window.addFreeNode=function(){
   const r=wrap.getBoundingClientRect();
-  const cx=(r.width/2-panX)/zoom-100;
   const cy=(r.height/2-panY)/zoom-40;
-  // Snap to Teaching lane by default
+  // Default to centre sub-lane of Teaching
   const lane=LANE_MAP['Teaching'];
-  const sx=Math.max(lane.x+8,Math.min(lane.x+lane.w-208,cx));
+  const sx=subLaneX(lane, 1);
   showInlineInput(sx,Math.max(48,cy),null);
 };
 
