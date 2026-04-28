@@ -330,14 +330,32 @@ const app = initializeApp(firebaseConfig);
 const db  = getFirestore(app);
 
 // ── Lane config ──────────────────────────────
-const LANES = [
-  { wf:'Teaching', color:'#1f4e78', light:'#e8f0f8', x:40,  w:280 },
-  { wf:'Research', color:'#1e6b3c', light:'#e6f4ec', x:340, w:280 },
-  { wf:'Admin',    color:'#7b3f00', light:'#f5ede6', x:640, w:280 },
+const LANE_DEFS = [
+  { wf:'Teaching', color:'#1f4e78', light:'#e8f0f8' },
+  { wf:'Research', color:'#1e6b3c', light:'#e6f4ec' },
+  { wf:'Admin',    color:'#7b3f00', light:'#f5ede6' },
 ];
 const LANE_HEIGHT = 3200;
-const LANE_MAP = {};
-LANES.forEach(l=>{ LANE_MAP[l.wf]=l; });
+let LANES = [];
+let LANE_MAP = {};
+
+function computeLanes(){
+  // Canvas area = viewport width minus right panel (300px)
+  const totalW = window.innerWidth - 300;
+  const n = LANE_DEFS.length;
+  const laneW = Math.floor(totalW / n);
+  LANES = LANE_DEFS.map((def, i) => ({
+    ...def,
+    x: i * laneW,
+    w: i === n-1 ? totalW - i*laneW : laneW  // last lane takes remainder
+  }));
+  LANE_MAP = {};
+  LANES.forEach(l=>{ LANE_MAP[l.wf]=l; });
+}
+
+// Recompute on resize
+window.addEventListener('resize', ()=>{ computeLanes(); renderLanes(); renderAll(); });
+computeLanes();
 
 // ── State ────────────────────────────────────
 let nodes = {}, edges = {}, links = {};
@@ -706,28 +724,57 @@ async function createEdge(fromId,toId){
 function spawnFromPort(fromId, dir){
   const n=nodes[fromId];
   const lane=LANE_MAP[n.workflow]||LANE_MAP['Teaching'];
-  const pad=8;
-  const nodeW=200, nodeH=100, gapY=130, gapX=220;
+  const pad=10;
+  const nodeW=200, nodeH=100, gapY=130;
 
-  let tx, ty;
+  // X positioning within lane
+  // Split lane into thirds for left/centre/right columns
+  const laneInner=lane.w - pad*2;
+  const third=Math.floor(laneInner/3);
+  const col0=lane.x+pad;           // left column x
+  const col1=lane.x+pad+third;     // centre column x
+  const col2=lane.x+pad+third*2;   // right column x
+
+  // Figure out which column the parent is closest to
+  const parentCol = n.x < lane.x+lane.w/3 ? 0
+                  : n.x < lane.x+2*lane.w/3 ? 1 : 2;
+
+  let tx;
   if(dir==='down'){
-    tx=n.x;
-    ty=n.y+gapY;
+    tx=n.x; // same column as parent
   } else if(dir==='bl'){
-    // below-left: shift left but stay in lane
-    tx=n.x-gapX;
-    ty=n.y+gapY;
+    tx = parentCol===0 ? col0 : parentCol===1 ? col0 : col1;
   } else { // br
-    // below-right: shift right but stay in lane
-    tx=n.x+gapX;
-    ty=n.y+gapY;
+    tx = parentCol===2 ? col2 : parentCol===1 ? col2 : col1;
   }
 
   // Clamp into lane
   tx=Math.max(lane.x+pad, Math.min(lane.x+lane.w-nodeW-pad, tx));
-  ty=Math.max(52, ty);
+
+  // Find first free Y slot at this X (no overlap with existing nodes in same lane)
+  let ty = n.y + gapY;
+  ty = findFreeY(tx, ty, fromId, lane, nodeW, nodeH, gapY);
 
   showInlineInput(tx, ty, fromId);
+}
+
+// Find the first Y position at (tx) that doesn't overlap any existing node in the lane
+function findFreeY(tx, startY, excludeId, lane, nodeW, nodeH, gapY){
+  const pad=10, maxIter=20;
+  let ty=Math.max(52, startY);
+  for(let i=0;i<maxIter;i++){
+    const collision=Object.entries(nodes).some(([id,nd])=>{
+      if(id===excludeId) return false;
+      if(nd.workflow!==lane.wf) return false;
+      // Check overlap: two rects overlap if neither is fully outside the other
+      const noOverlap = tx+nodeW+pad <= nd.x || tx >= nd.x+nodeW+pad
+                     || ty+nodeH+pad <= nd.y || ty >= nd.y+nodeH+pad;
+      return !noOverlap;
+    });
+    if(!collision) break;
+    ty+=gapY; // push down and try again
+  }
+  return ty;
 }
 
 function showInlineInput(x,y,fromId){
@@ -1005,19 +1052,22 @@ document.getElementById('populateBtn').addEventListener('click',async()=>{
   const btn=document.getElementById('populateBtn');
   btn.disabled=true; btn.textContent='Adding...';
   try{
-    const nd=(wf,s,t,x,y)=>({workflow:wf,step:s,task:t,url:'',audience:'',documents:'',deadline:'',notes:'',x,y});
+    // Use computed lane positions so nodes land correctly at any screen size
+    const tl=LANE_MAP['Teaching'], rl=LANE_MAP['Research'], al=LANE_MAP['Admin'];
+    const lpad=10;
+    const nd=(wf,s,t,lx,y)=>({workflow:wf,step:s,task:t,url:'',audience:'',documents:'',deadline:'',notes:'',x:lx,y});
     const batch=writeBatch(db);
     const nData={
-      t1: nd('Teaching','1','Do you have a PEP ready?',88,52),
-      t1a:nd('Teaching','1a','Get blank PEP template',168,182),
-      t1b:nd('Teaching','1b','Complete the PEP',168,312),
-      t2: nd('Teaching','2','Upload PEP to MS Teams',88,312),
-      t3: nd('Teaching','3','Record link in SEM spreadsheet',88,442),
-      r1: nd('Research','1','Do you have a PO form?',388,52),
-      r1a:nd('Research','1a','Get blank PO form',468,182),
-      r1b:nd('Research','1b','Complete the PO form',468,312),
-      r2: nd('Research','2','Upload PO & @ Liam for approval',388,312),
-      a1: nd('Admin','1','Admin step 1 (to be defined)',688,52),
+      t1: nd('Teaching','1','Do you have a PEP ready?',    tl.x+lpad,        52),
+      t1a:nd('Teaching','1a','Get blank PEP template',     tl.x+lpad+Math.floor((tl.w-lpad*2)/3), 182),
+      t1b:nd('Teaching','1b','Complete the PEP',           tl.x+lpad+Math.floor((tl.w-lpad*2)/3), 312),
+      t2: nd('Teaching','2','Upload PEP to MS Teams',      tl.x+lpad,        312),
+      t3: nd('Teaching','3','Record link in SEM spreadsheet', tl.x+lpad,     442),
+      r1: nd('Research','1','Do you have a PO form?',      rl.x+lpad,        52),
+      r1a:nd('Research','1a','Get blank PO form',          rl.x+lpad+Math.floor((rl.w-lpad*2)/3), 182),
+      r1b:nd('Research','1b','Complete the PO form',       rl.x+lpad+Math.floor((rl.w-lpad*2)/3), 312),
+      r2: nd('Research','2','Upload PO & @ Liam for approval', rl.x+lpad,    312),
+      a1: nd('Admin','1','Admin step 1 (to be defined)',   al.x+lpad,        52),
     };
     const nIds={};
     for(const [k,data] of Object.entries(nData)){
