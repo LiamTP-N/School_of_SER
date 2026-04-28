@@ -467,9 +467,9 @@ function renderNode(id){
     <div class="node-tag">${n.step?'Step '+esc(n.step):'Box'}</div>
     <div class="node-task">${esc(n.task||'(empty)')}</div>
     <div class="ports">
-      <button class="port" style="background:${lane.color};" data-id="${id}" title="Drag to connect">+</button>
-      <button class="port" style="background:${lane.color};" data-id="${id}" title="Drag to connect">+</button>
-      <button class="port" style="background:${lane.color};" data-id="${id}" title="Drag to connect">+</button>
+      <button class="port" style="background:${lane.color};" data-id="${id}" data-dir="bl" title="Branch below-left">+</button>
+      <button class="port" style="background:${lane.color};" data-id="${id}" data-dir="down" title="Next step below">+</button>
+      <button class="port" style="background:${lane.color};" data-id="${id}" data-dir="br" title="Branch below-right">+</button>
     </div>`;
 
   // Drag node
@@ -491,7 +491,14 @@ function renderNode(id){
     selectNode(id);
   });
 
+  // Port click → instant new box at fixed offset, no drag needed
   el.querySelectorAll('.port').forEach(p=>{
+    p.addEventListener('click', e=>{
+      e.stopPropagation();
+      const dir=p.dataset.dir;
+      spawnFromPort(id, dir);
+    });
+    // Still allow drag-to-connect for manual linking
     p.addEventListener('mousedown', e=>{ e.stopPropagation(); e.preventDefault(); startConnect(id); });
   });
 
@@ -695,6 +702,34 @@ async function createEdge(fromId,toId){
 }
 
 // ── Inline input ─────────────────────────────
+// ── Spawn from port (click → instant positioned inline input) ───
+function spawnFromPort(fromId, dir){
+  const n=nodes[fromId];
+  const lane=LANE_MAP[n.workflow]||LANE_MAP['Teaching'];
+  const pad=8;
+  const nodeW=200, nodeH=100, gapY=130, gapX=220;
+
+  let tx, ty;
+  if(dir==='down'){
+    tx=n.x;
+    ty=n.y+gapY;
+  } else if(dir==='bl'){
+    // below-left: shift left but stay in lane
+    tx=n.x-gapX;
+    ty=n.y+gapY;
+  } else { // br
+    // below-right: shift right but stay in lane
+    tx=n.x+gapX;
+    ty=n.y+gapY;
+  }
+
+  // Clamp into lane
+  tx=Math.max(lane.x+pad, Math.min(lane.x+lane.w-nodeW-pad, tx));
+  ty=Math.max(52, ty);
+
+  showInlineInput(tx, ty, fromId);
+}
+
 function showInlineInput(x,y,fromId){
   document.querySelectorAll('.node-input').forEach(el=>el.remove());
   const wf=fromId?(nodes[fromId]?.workflow||'Teaching'):'Teaching';
