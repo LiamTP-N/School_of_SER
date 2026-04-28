@@ -424,6 +424,9 @@ let connecting = false, connectFrom = null;
 
 // Drag state: we drag a ghost, not the real node
 let dragId = null, dragGhost = null, dragTargetCol = 0, dragTargetRow = 0;
+// Pending drag: mousedown recorded but not yet committed to dragging
+let pendingDragId = null, pendingDragE = null;
+const DRAG_THRESHOLD = 5; // px movement before drag starts
 
 const canvas    = document.getElementById('canvas');
 const bgSvg     = document.getElementById('bgSvg');
@@ -570,19 +573,19 @@ function renderNode(id) {
       <button class="port" style="background:${lane.color};" data-dir="br" title="Branch below-right">+</button>
     </div>`;
 
-  // Drag the node to a new grid cell
+  // Record pending drag on mousedown - only commits if mouse moves DRAG_THRESHOLD px
   el.addEventListener('mousedown', e => {
     if (e.target.classList.contains('port')) return;
     if (connecting) return;
     e.stopPropagation();
-    startDragNode(id, e);
+    pendingDragId = id;
+    pendingDragE = e;
   });
 
   el.addEventListener('click', e => {
     if (e.target.classList.contains('port')) return;
-    if (dragId) return;
     if (connecting) { finishConnect(id); return; }
-    selectNode(id);
+    if (!dragId) selectNode(id);
   });
 
   // Port: click = spawn, mousedown = drag-connect
@@ -787,6 +790,17 @@ window.addEventListener('mousemove', e => {
     applyTransform();
   }
 
+  // Commit pending drag once mouse has moved enough
+  if (pendingDragId && !dragId) {
+    const r2 = wrap.getBoundingClientRect();
+    const dx = e.clientX - pendingDragE.clientX;
+    const dy = e.clientY - pendingDragE.clientY;
+    if (Math.sqrt(dx*dx+dy*dy) > DRAG_THRESHOLD) {
+      startDragNode(pendingDragId, pendingDragE);
+      pendingDragId = null; pendingDragE = null;
+    }
+  }
+
   if (dragId) {
     const wf = nodes[dragId]?.workflow || 'Teaching';
     dragTargetCol = colFromX(wf, mx);
@@ -811,6 +825,9 @@ window.addEventListener('mousemove', e => {
 
 window.addEventListener('mouseup', async e => {
   if (isPanning) { isPanning = false; canvas.style.cursor = ''; }
+
+  // If mouse released before drag threshold, it was a click - cancel pending
+  pendingDragId = null; pendingDragE = null;
 
   if (dragId) {
     const id = dragId;
