@@ -394,6 +394,25 @@ function nearestSubLane(lane, nx){
   return Math.min(2, Math.max(0, Math.floor(rel / subW)));
 }
 
+// ── Row grid ─────────────────────────────────
+// All nodes snap to global horizontal rows so boxes line up across columns.
+const ROW_TOP = 52;   // y of first row (below lane header)
+const ROW_H   = 120;  // height of each row slot (node + gap)
+
+function rowY(row){
+  // Returns the top y for a given row index (0-based)
+  return ROW_TOP + row * ROW_H;
+}
+
+function nearestRow(y){
+  // Given a y, return the nearest row index
+  return Math.max(0, Math.round((y - ROW_TOP) / ROW_H));
+}
+
+function snapY(y){
+  return rowY(nearestRow(y));
+}
+
 // ── State ────────────────────────────────────
 let nodes = {}, edges = {}, links = {};
 let selectedId = null, filter = 'all', populateUsed = false, editLinkId = null;
@@ -578,13 +597,13 @@ function renderNode(id){
 
 function hasDetail(n){ return !!(n.url||n.audience||n.documents||n.deadline||n.notes); }
 
-// ── Snap node into its sub-lane ──────────────
+// ── Snap node into its sub-lane and row ──────
 function snapToLane(id){
   const n=nodes[id];
   const lane=LANE_MAP[n.workflow]||LANE_MAP['Teaching'];
   const sub=nearestSubLane(lane, n.x);
   n.x = subLaneX(lane, sub);
-  n.y = Math.max(52, n.y);
+  n.y = snapY(n.y);
 }
 
 // ── Edges ────────────────────────────────────
@@ -806,57 +825,55 @@ async function createEdge(fromId,toId){
 function spawnFromPort(fromId, dir){
   const n=nodes[fromId];
   const lane=LANE_MAP[n.workflow]||LANE_MAP['Teaching'];
-  const gapY=120;
-  const nodeH=70;
 
   // Which sub-lane is the parent in?
   const parentSub=nearestSubLane(lane, n.x);
+  const parentRow=nearestRow(n.y);
 
   // Target sub-lane based on direction
   let targetSub;
   if(dir==='down'){
-    targetSub=parentSub;                            // straight down - same sub-lane
+    targetSub=parentSub;
   } else if(dir==='bl'){
-    targetSub=parentSub===0 ? 0 : parentSub-1;     // one sub-lane left, floor at 0
+    targetSub=parentSub===0 ? 0 : parentSub-1;
   } else {
-    targetSub=parentSub===2 ? 2 : parentSub+1;     // one sub-lane right, ceil at 2
+    targetSub=parentSub===2 ? 2 : parentSub+1;
   }
 
   const tx=subLaneX(lane, targetSub);
 
-  // Find first free Y slot in this sub-lane
-  let ty=n.y+gapY;
-  ty=findFreeY(tx, ty, fromId, lane, NODE_W, nodeH, gapY);
+  // Start from next row down, find first free row in this sub-lane
+  const startRow=parentRow+1;
+  const targetRow=findFreeRow(tx, startRow, fromId, lane);
+  const ty=rowY(targetRow);
 
   showInlineInput(tx, ty, fromId);
 }
 
-// Find the first free Y in a sub-lane that doesn't overlap existing nodes
-function findFreeY(tx, startY, excludeId, lane, nodeW, nodeH, gapY){
-  const pad=12, maxIter=30;
-  let ty=Math.max(52, startY);
-  for(let i=0;i<maxIter;i++){
+// Find the first row at sub-lane x that has no existing node
+function findFreeRow(tx, startRow, excludeId, lane){
+  const pad=10, maxRows=40;
+  for(let row=startRow; row<startRow+maxRows; row++){
+    const ty=rowY(row);
     const collision=Object.entries(nodes).some(([id,nd])=>{
       if(id===excludeId) return false;
       if(nd.workflow!==lane.wf) return false;
-      const noOverlap = tx+nodeW+pad <= nd.x || tx >= nd.x+nodeW+pad
-                     || ty+nodeH+pad <= nd.y || ty >= nd.y+nodeH+pad;
-      return !noOverlap;
+      // Same sub-lane x AND same row y?
+      return Math.abs(nd.x-tx)<pad && Math.abs(nd.y-ty)<pad;
     });
-    if(!collision) break;
-    ty+=gapY;
+    if(!collision) return row;
   }
-  return ty;
+  return startRow; // fallback
 }
 
 function showInlineInput(x,y,fromId){
   document.querySelectorAll('.node-input').forEach(el=>el.remove());
   const wf=fromId?(nodes[fromId]?.workflow||'Teaching'):'Teaching';
   const lane=LANE_MAP[wf];
-  // Snap to nearest sub-lane
+  // Snap to nearest sub-lane AND nearest row
   const sub=nearestSubLane(lane, x);
   const sx=subLaneX(lane, sub);
-  const sy=Math.max(48,y);
+  const sy=snapY(y);
 
   const el=document.createElement('div');
   el.className='node-input';
@@ -887,7 +904,12 @@ function showInlineInput(x,y,fromId){
 async function commitNode(task,wf,x,y,fromId){
   try{
     setStatus('Saving...');
-    const data={workflow:wf,step:'',task,url:'',audience:'',documents:'',deadline:'',notes:'',x,y};
+    // Ensure saved position is on the grid
+    const lane=LANE_MAP[wf]||LANE_MAP['Teaching'];
+    const sub=nearestSubLane(lane,x);
+    const gx=subLaneX(lane,sub);
+    const gy=snapY(y);
+    const data={workflow:wf,step:'',task,url:'',audience:'',documents:'',deadline:'',notes:'',x:gx,y:gy};
     const ref=await addDoc(collection(db,'nodes'),data);
     nodes[ref.id]=data;
     renderNode(ref.id);
@@ -1007,7 +1029,6 @@ window.deleteNode=async function(){
 
 // ── Auto layout ───────────────────────────────
 window.autoLayout=function(){
-  const topY=52, rowH=130;
   LANES.forEach(l=>{
     const ids=Object.entries(nodes).filter(([,n])=>n.workflow===l.wf).map(([id])=>id);
     const inDeg={};
@@ -1026,22 +1047,16 @@ window.autoLayout=function(){
     }
     ids.filter(id=>!sorted.includes(id)).forEach(id=>sorted.push(id));
 
-    // Place nodes: detect branches (multiple children from same parent) and offset them
-    const placed={};
+    // Assign each node a row and sub-lane using the grid
     sorted.forEach((id,i)=>{
-      const children=sorted.filter(cid=>Object.values(edges).some(e=>e.from===id&&e.to===cid));
       const parents=sorted.filter(pid=>Object.values(edges).some(e=>e.from===pid&&e.to===id));
-      // Main column x or offset for branch nodes
       const siblingIndex=parents.length>0
         ? sorted.filter(sid=>parents.some(pid=>Object.values(edges).some(e=>e.from===pid&&e.to===sid))).indexOf(id)
         : 0;
-      const col=siblingIndex>0?1:0;
-      const colW=Math.floor((l.w-16)/2);
-      const nx=l.x+8+(col*(colW+8));
-      const ny=topY+i*rowH;
-      nodes[id].x=Math.min(nx,l.x+l.w-208);
-      nodes[id].y=ny;
-      placed[id]=true;
+      // Main nodes go in sub-lane 0, first branch in sub-lane 1, second in sub-lane 2
+      const sub=Math.min(2,siblingIndex>0?siblingIndex:0);
+      nodes[id].x=subLaneX(l,sub);
+      nodes[id].y=rowY(i);
     });
   });
 
@@ -1129,22 +1144,22 @@ document.getElementById('populateBtn').addEventListener('click',async()=>{
   const btn=document.getElementById('populateBtn');
   btn.disabled=true; btn.textContent='Adding...';
   try{
-    // Use computed lane positions so nodes land correctly at any screen size
+    // Use computed lane + grid positions
     const tl=LANE_MAP['Teaching'], rl=LANE_MAP['Research'], al=LANE_MAP['Admin'];
-    const lpad=10;
+    // subLaneX(lane, 0)=left sub, (1)=centre, (2)=right. rowY(n)=row n.
     const nd=(wf,s,t,lx,y)=>({workflow:wf,step:s,task:t,url:'',audience:'',documents:'',deadline:'',notes:'',x:lx,y});
     const batch=writeBatch(db);
     const nData={
-      t1: nd('Teaching','1','Do you have a PEP ready?',    tl.x+lpad,        52),
-      t1a:nd('Teaching','1a','Get blank PEP template',     tl.x+lpad+Math.floor((tl.w-lpad*2)/3), 182),
-      t1b:nd('Teaching','1b','Complete the PEP',           tl.x+lpad+Math.floor((tl.w-lpad*2)/3), 312),
-      t2: nd('Teaching','2','Upload PEP to MS Teams',      tl.x+lpad,        312),
-      t3: nd('Teaching','3','Record link in SEM spreadsheet', tl.x+lpad,     442),
-      r1: nd('Research','1','Do you have a PO form?',      rl.x+lpad,        52),
-      r1a:nd('Research','1a','Get blank PO form',          rl.x+lpad+Math.floor((rl.w-lpad*2)/3), 182),
-      r1b:nd('Research','1b','Complete the PO form',       rl.x+lpad+Math.floor((rl.w-lpad*2)/3), 312),
-      r2: nd('Research','2','Upload PO & @ Liam for approval', rl.x+lpad,    312),
-      a1: nd('Admin','1','Admin step 1 (to be defined)',   al.x+lpad,        52),
+      t1: nd('Teaching','1','Do you have a PEP ready?',    subLaneX(tl,0), rowY(0)),
+      t1a:nd('Teaching','1a','Get blank PEP template',     subLaneX(tl,1), rowY(1)),
+      t1b:nd('Teaching','1b','Complete the PEP',           subLaneX(tl,1), rowY(2)),
+      t2: nd('Teaching','2','Upload PEP to MS Teams',      subLaneX(tl,0), rowY(2)),
+      t3: nd('Teaching','3','Record link in SEM spreadsheet', subLaneX(tl,0), rowY(3)),
+      r1: nd('Research','1','Do you have a PO form?',      subLaneX(rl,0), rowY(0)),
+      r1a:nd('Research','1a','Get blank PO form',          subLaneX(rl,1), rowY(1)),
+      r1b:nd('Research','1b','Complete the PO form',       subLaneX(rl,1), rowY(2)),
+      r2: nd('Research','2','Upload PO & @ Liam for approval', subLaneX(rl,0), rowY(2)),
+      a1: nd('Admin','1','Admin step 1 (to be defined)',   subLaneX(al,0), rowY(0)),
     };
     const nIds={};
     for(const [k,data] of Object.entries(nData)){
