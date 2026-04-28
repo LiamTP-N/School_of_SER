@@ -54,7 +54,7 @@
       position:absolute;
       width: var(--node-w, 180px);
       background:white; border:1.5px solid #d4d8dd;
-      border-radius:8px; padding:6px 10px 24px;
+      border-radius:7px; padding:5px 9px 20px;
       cursor:pointer; user-select:none;
       transition:border-color 0.15s, box-shadow 0.15s;
       z-index:10;
@@ -412,6 +412,7 @@
 <div class="canvas-toolbar">
   <button class="ct-btn" onclick="addFreeNode()">+ Add Box</button>
   <button class="ct-btn" id="undoBtn" onclick="undoAction()" title="Undo (Ctrl+Z)">↩ Undo</button>
+  <button class="ct-btn" onclick="fitAll()" title="Zoom to fit all boxes">⊞ Fit All</button>
   <button class="ct-btn" onclick="resetView()">Reset View</button>
 </div>
 
@@ -449,10 +450,10 @@ const LANE_DEFS = [
   { wf:'Research', color:'#1e6b3c', light:'#e6f4ec' },
 ];
 const LANE_HEIGHT = 3200;
-const ROW_TOP  = 50;   // y of row 0 (below lane header)
-const ROW_H    = 90;   // px per row
+const ROW_TOP  = 48;
+const ROW_H    = 76;   // px per row - tighter vertical spacing
 let   NODE_W   = 180;  // node width - updated dynamically in computeLanes()
-const NODE_H   = 60;   // approximate node height for edge calc
+const NODE_H   = 54;   // approximate node height for edge calc
 const COL_PAD  = 8;    // padding inside each sub-lane
 const SUB_LANES = 5;   // sub-lanes per workflow column
 
@@ -1386,6 +1387,43 @@ window.deleteNode = async function() {
 // ── Auto layout ───────────────────────────────────────
 window.resetView = function() { panX = 20; panY = 10; zoom = 1; applyTransform(); };
 
+window.fitAll = function() {
+  if (!Object.keys(nodes).length) return;
+
+  // Find bounding box of all visible nodes
+  const visible = filter === 'all'
+    ? Object.values(nodes)
+    : Object.values(nodes).filter(n => n.workflow === filter);
+  if (!visible.length) return;
+
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+  visible.forEach(n => {
+    const x = nodeX(n.workflow, n.col ?? 0);
+    const y = nodeY(n.row ?? 0);
+    if (x < minX) minX = x;
+    if (y < minY) minY = y;
+    if (x + NODE_W > maxX) maxX = x + NODE_W;
+    if (y + NODE_H > maxY) maxY = y + NODE_H;
+  });
+
+  const margin = 40;
+  const contentW = maxX - minX + margin * 2;
+  const contentH = maxY - minY + margin * 2;
+
+  const wrapEl = document.getElementById('canvasWrap');
+  const viewW = wrapEl.offsetWidth;
+  const viewH = wrapEl.offsetHeight;
+
+  // Zoom to fit, capped between 0.2 and 1.2
+  const newZoom = Math.min(1.2, Math.max(0.2, Math.min(viewW / contentW, viewH / contentH)));
+
+  // Pan to centre content
+  panX = (viewW - contentW * newZoom) / 2 - (minX - margin) * newZoom;
+  panY = (viewH - contentH * newZoom) / 2 - (minY - margin) * newZoom;
+  zoom = newZoom;
+  applyTransform();
+};
+
 // ── Zoom ─────────────────────────────────────────────
 let zoomHintDismissed = false;
 wrap.addEventListener('wheel', e => {
@@ -1558,7 +1596,8 @@ document.addEventListener('mousedown', e => {
 // ── Boot ─────────────────────────────────────────────
 document.getElementById('undoBtn').disabled = true;
 resetView();
-loadAll();
+// After first load, auto-fit to show all content
+loadAll().then(() => { setTimeout(fitAll, 100); }).catch(() => {});
 
 </script>
 </body>
