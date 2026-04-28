@@ -130,7 +130,9 @@
       display:none;
       max-height:calc(100vh - 80px);
       overflow-y:auto;
+      color:#333;
     }
+    @media(prefers-color-scheme:dark){ #stepDetail{ color:#e0e0e0; } }
     #stepDetail.visible { display:block; }
     @media(prefers-color-scheme:dark){
       #stepDetail{background:#1e1e22;border-color:#3a3a42;box-shadow:0 8px 32px rgba(0,0,0,0.5);}
@@ -308,16 +310,7 @@
     <button class="sd-close" onclick="closeDetail()">×</button>
   </div>
   <div class="sf sf-task"><label>Task</label><textarea id="sf-task"></textarea></div>
-  <div class="sf"><label>Step label</label><input id="sf-step" placeholder="e.g. 1, 2a"></div>
-  <div class="sf"><label>Workflow / Lane</label>
-    <select id="sf-workflow">
-      <option>Teaching</option><option>Research</option>
-    </select>
-  </div>
   <div class="sf"><label>URL</label><input id="sf-url" placeholder="https://..."></div>
-  <div class="sf"><label>Audience</label><input id="sf-audience"></div>
-  <div class="sf"><label>Documents</label><input id="sf-documents"></div>
-  <div class="sf"><label>Deadline</label><input id="sf-deadline"></div>
   <div class="sf"><label>Notes</label><textarea id="sf-notes"></textarea></div>
   <p class="sd-hint">Drag from + handles to connect. Cross-lane lines draw as dashed.</p>
   <div class="sd-btns">
@@ -1024,12 +1017,7 @@ function openDetail(id) {
 
   // Fill fields
   document.getElementById('sf-task').value     = n.task||'';
-  document.getElementById('sf-step').value     = n.step||'';
-  document.getElementById('sf-workflow').value = n.workflow||'Teaching';
   document.getElementById('sf-url').value      = n.url||'';
-  document.getElementById('sf-audience').value = n.audience||'';
-  document.getElementById('sf-documents').value= n.documents||'';
-  document.getElementById('sf-deadline').value = n.deadline||'';
   document.getElementById('sf-notes').value    = n.notes||'';
   renderConnSection(id);
 
@@ -1090,14 +1078,10 @@ window.saveDetail = async function() {
   if (!selectedId) return;
   const task = document.getElementById('sf-task').value.trim();
   if (!task) { alert('Task cannot be empty.'); return; }
-  const newWf = document.getElementById('sf-workflow').value;
   try {
     setStatus('Saving...');
-    const updates = { task, step:document.getElementById('sf-step').value.trim(),
-      workflow:newWf, url:document.getElementById('sf-url').value.trim(),
-      audience:document.getElementById('sf-audience').value.trim(),
-      documents:document.getElementById('sf-documents').value.trim(),
-      deadline:document.getElementById('sf-deadline').value.trim(),
+    const updates = { task,
+      url:document.getElementById('sf-url').value.trim(),
       notes:document.getElementById('sf-notes').value.trim() };
     await updateDoc(doc(db,'nodes',selectedId), updates);
     Object.assign(nodes[selectedId], updates);
