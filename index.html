@@ -9,511 +9,501 @@
 
     body {
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-      background: #f5f5f5;
+      background: #f0f0f0;
       color: #333;
-      padding: 20px;
-      line-height: 1.6;
+      min-height: 100vh;
     }
     @media (prefers-color-scheme: dark) {
-      body { background: #1a1a1a; color: #e0e0e0; }
+      body { background: #161616; color: #e0e0e0; }
     }
 
-    .container {
-      max-width: 1300px;
-      margin: 0 auto;
-      background: white;
-      border-radius: 8px;
-      padding: 30px;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-    }
-    @media (prefers-color-scheme: dark) {
-      .container { background: #2a2a2a; }
-    }
-
-    h1 { font-size: 24px; margin-bottom: 6px; font-weight: 600; }
-    .subtitle { font-size: 14px; color: #666; margin-bottom: 20px; }
-    @media (prefers-color-scheme: dark) { .subtitle { color: #999; } }
-
-    .info-box {
-      background: #f0f7ff;
-      border-left: 3px solid #0066cc;
-      padding: 12px 16px;
-      border-radius: 4px;
-      font-size: 13px;
-      margin-bottom: 20px;
-    }
-    @media (prefers-color-scheme: dark) {
-      .info-box { background: #1a3a52; border-left-color: #0088dd; }
-    }
-
-    .controls {
+    /* ── Top bar ── */
+    .topbar {
+      background: #1f4e78;
+      color: white;
+      padding: 12px 24px;
       display: flex;
-      gap: 10px;
-      margin-bottom: 20px;
-      flex-wrap: wrap;
       align-items: center;
+      gap: 16px;
+      flex-wrap: wrap;
+      position: sticky;
+      top: 0;
+      z-index: 100;
     }
-    .controls label { font-size: 13px; font-weight: 500; }
+    .topbar h1 { font-size: 17px; font-weight: 600; }
+    .topbar-filters { display: flex; gap: 8px; align-items: center; }
+    .topbar-filters span { font-size: 12px; opacity: 0.7; }
 
-    button {
-      padding: 7px 14px;
-      border: 0.5px solid #ccc;
-      border-radius: 4px;
-      background: white;
-      color: #333;
+    .filter-btn {
+      padding: 4px 12px;
+      border: 1px solid rgba(255,255,255,0.4);
+      border-radius: 20px;
+      background: transparent;
+      color: white;
       cursor: pointer;
-      font-size: 13px;
+      font-size: 12px;
       font-weight: 500;
       transition: all 0.15s;
     }
-    @media (prefers-color-scheme: dark) {
-      button { background: #333; color: #e0e0e0; border-color: #555; }
-    }
-    button:hover { background: #f0f0f0; border-color: #999; }
-    @media (prefers-color-scheme: dark) { button:hover { background: #3a3a3a; } }
-    button.active { background: #1f4e78; color: white; border-color: #1f4e78; }
-    button:disabled { opacity: 0.5; cursor: not-allowed; }
+    .filter-btn:hover { background: rgba(255,255,255,0.15); }
+    .filter-btn.active { background: white; color: #1f4e78; border-color: white; }
 
     .btn-populate {
-      margin-left: auto;
-      background: #e8f4e8;
-      border-color: #4caf50;
-      color: #2e7d32;
+      padding: 4px 12px;
+      border: 1px solid rgba(255,255,255,0.35);
+      border-radius: 4px;
+      background: rgba(255,255,255,0.1);
+      color: white;
+      cursor: pointer;
       font-size: 12px;
+      transition: all 0.15s;
+      margin-left: auto;
     }
-    .btn-populate:hover { background: #d4edda; }
-    @media (prefers-color-scheme: dark) {
-      .btn-populate { background: #1a3a1a; border-color: #4caf50; color: #81c784; }
+    .btn-populate:hover { background: rgba(255,255,255,0.2); }
+    .btn-populate:disabled { opacity: 0.4; cursor: not-allowed; }
+
+    .statusbar {
+      font-size: 11px;
+      color: rgba(255,255,255,0.45);
     }
 
-    .diagram-area {
+    /* ── Main layout ── */
+    .main {
+      display: flex;
+      height: calc(100vh - 50px);
+      overflow: hidden;
+    }
+
+    /* ── Diagram scroll area ── */
+    .diagram-scroll {
+      flex: 1;
+      overflow: auto;
+      padding: 32px 28px 60px;
+    }
+
+    .diagram-columns {
       display: flex;
       gap: 0;
-      overflow-x: auto;
-      border: 0.5px solid #ddd;
-      border-radius: 8px;
-      background: #fafafa;
-      padding: 24px 16px;
-      margin-bottom: 12px;
-      min-height: 420px;
-    }
-    @media (prefers-color-scheme: dark) {
-      .diagram-area { background: #1e1e1e; border-color: #444; }
+      align-items: flex-start;
+      min-width: fit-content;
     }
 
-    /* Each workflow column */
-    .workflow-col {
+    /* ── Workflow column ── */
+    .wf-col {
       display: flex;
       flex-direction: column;
-      align-items: center;
-      min-width: 220px;
-      flex: 1;
-      position: relative;
+      align-items: flex-start;
+      min-width: 300px;
+      padding: 0 24px;
+      border-right: 1px solid #ddd;
     }
+    .wf-col:last-child { border-right: none; }
+    @media (prefers-color-scheme: dark) { .wf-col { border-right-color: #2e2e2e; } }
 
-    .col-header {
-      font-size: 13px;
-      font-weight: 600;
-      letter-spacing: 0.04em;
+    .wf-col-header {
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.08em;
       text-transform: uppercase;
       color: #1f4e78;
-      margin-bottom: 16px;
-      padding: 4px 12px;
+      margin-bottom: 24px;
+      padding-bottom: 8px;
       border-bottom: 2px solid #1f4e78;
+      width: 100%;
     }
     @media (prefers-color-scheme: dark) {
-      .col-header { color: #5b9bd5; border-bottom-color: #5b9bd5; }
+      .wf-col-header { color: #5b9bd5; border-bottom-color: #5b9bd5; }
     }
 
-    /* The node tree within a column */
+    /* ── Node tree ── */
     .node-tree {
       display: flex;
       flex-direction: column;
-      align-items: center;
-      width: 100%;
-      position: relative;
+      align-items: flex-start;
     }
 
-    /* A branch row: main path + optional side branch */
-    .branch-row {
+    .node-row {
       display: flex;
       flex-direction: row;
       align-items: flex-start;
-      justify-content: center;
-      width: 100%;
-      position: relative;
     }
 
-    .branch-main {
+    .node-main-path {
       display: flex;
       flex-direction: column;
-      align-items: center;
+      align-items: flex-start;
     }
 
-    .branch-side {
-      display: flex;
+    /* ── Step box ── */
+    .step-wrap {
+      position: relative;
+      display: inline-flex;
       flex-direction: column;
-      align-items: center;
-      margin-left: 16px;
-      position: relative;
+      align-items: flex-start;
     }
 
-    /* Connector arrows (CSS borders) */
-    .arrow-down {
-      width: 0;
-      height: 24px;
-      border-left: 1.5px solid #aaa;
-      position: relative;
-    }
-    .arrow-down::after {
-      content: '';
-      position: absolute;
-      bottom: 0;
-      left: -4px;
-      border-left: 4px solid transparent;
-      border-right: 4px solid transparent;
-      border-top: 6px solid #aaa;
-    }
-    @media (prefers-color-scheme: dark) {
-      .arrow-down { border-left-color: #666; }
-      .arrow-down::after { border-top-color: #666; }
-    }
-
-    .arrow-right {
-      height: 1.5px;
-      width: 20px;
-      background: #aaa;
-      position: relative;
-      margin-top: 28px;
-      flex-shrink: 0;
-    }
-    .arrow-right::after {
-      content: '';
-      position: absolute;
-      right: 0;
-      top: -4px;
-      border-top: 4px solid transparent;
-      border-bottom: 4px solid transparent;
-      border-left: 6px solid #aaa;
-    }
-    @media (prefers-color-scheme: dark) {
-      .arrow-right { background: #666; }
-      .arrow-right::after { border-left-color: #666; }
-    }
-
-    /* Step box */
     .step-box {
-      width: 170px;
-      min-height: 56px;
-      border: 1px solid #ccc;
-      border-radius: 6px;
+      width: 190px;
+      min-height: 64px;
+      border: 1.5px solid #d0d0d0;
+      border-radius: 8px;
       background: white;
-      padding: 8px 10px;
+      padding: 10px 12px 26px;
       cursor: pointer;
       transition: border-color 0.15s, box-shadow 0.15s;
       position: relative;
-      font-size: 12px;
     }
     @media (prefers-color-scheme: dark) {
-      .step-box { background: #2a2a2a; border-color: #555; }
+      .step-box { background: #242424; border-color: #424242; }
     }
     .step-box:hover {
       border-color: #1f4e78;
-      box-shadow: 0 0 0 2px rgba(31,78,120,0.15);
+      box-shadow: 0 2px 10px rgba(31,78,120,0.12);
     }
-    .step-box.decision {
-      border-color: #e67e22;
-      background: #fff9f4;
+    .step-box.has-detail { border-color: #5b9bd5; }
+    .step-box.selected {
+      border-color: #1f4e78;
+      box-shadow: 0 0 0 3px rgba(31,78,120,0.18);
     }
     @media (prefers-color-scheme: dark) {
-      .step-box.decision { background: #2a1f10; border-color: #c87941; }
+      .step-box.selected { border-color: #5b9bd5; box-shadow: 0 0 0 3px rgba(91,155,213,0.25); }
     }
 
-    .step-label {
-      font-size: 10px;
-      color: #999;
-      margin-bottom: 2px;
+    .step-tag {
+      font-size: 9px;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: #bbb;
+      margin-bottom: 5px;
     }
-    .step-task {
-      font-size: 12px;
+    .step-task-text {
+      font-size: 13px;
       font-weight: 500;
-      color: #222;
-      line-height: 1.4;
+      color: #1a1a1a;
+      line-height: 1.45;
     }
-    @media (prefers-color-scheme: dark) { .step-task { color: #ddd; } }
-    .step-decision-badge {
-      font-size: 10px;
-      color: #e67e22;
-      font-weight: 600;
-      margin-top: 4px;
+    @media (prefers-color-scheme: dark) { .step-task-text { color: #e0e0e0; } }
+
+    /* Inline textarea for new step */
+    .step-inline-input {
+      width: 190px;
+      min-height: 64px;
+      border: 2px solid #1f4e78;
+      border-radius: 8px;
+      background: white;
+      padding: 10px 12px;
+      font-family: inherit;
+      font-size: 13px;
+      font-weight: 500;
+      color: #1a1a1a;
+      resize: none;
+      outline: none;
+      line-height: 1.45;
+      box-shadow: 0 0 0 3px rgba(31,78,120,0.15);
+    }
+    @media (prefers-color-scheme: dark) {
+      .step-inline-input { background: #242424; color: #e0e0e0; border-color: #5b9bd5; }
     }
 
-    /* Add step button (dashed) */
-    .add-step-btn {
-      width: 170px;
-      min-height: 36px;
-      border: 1.5px dashed #ccc;
-      border-radius: 6px;
-      background: transparent;
+    /* ── + handles ── */
+    .step-handles {
+      position: absolute;
+      bottom: 4px;
+      left: 0;
+      right: 0;
+      display: flex;
+      justify-content: space-between;
+      padding: 0 8px;
+      opacity: 0;
+      transition: opacity 0.15s;
+      pointer-events: none;
+    }
+    .step-wrap:hover .step-handles { opacity: 1; pointer-events: all; }
+
+    .handle {
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      background: #1f4e78;
+      color: white;
+      font-size: 16px;
+      font-weight: 300;
+      cursor: pointer;
+      border: none;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      line-height: 1;
+      padding-bottom: 1px;
+      transition: transform 0.1s, background 0.1s;
+      flex-shrink: 0;
+    }
+    .handle:hover { background: #163a5a; transform: scale(1.2); }
+    @media (prefers-color-scheme: dark) {
+      .handle { background: #5b9bd5; }
+      .handle:hover { background: #4a8ac4; }
+    }
+
+    /* ── Connectors ── */
+    .conn-down {
+      width: 2px;
+      height: 28px;
+      background: #ccc;
+      margin-left: 94px;
+      position: relative;
+      flex-shrink: 0;
+    }
+    .conn-down::after {
+      content: '';
+      position: absolute;
+      bottom: -1px;
+      left: -4px;
+      border-left: 5px solid transparent;
+      border-right: 5px solid transparent;
+      border-top: 7px solid #ccc;
+    }
+    @media (prefers-color-scheme: dark) {
+      .conn-down { background: #4a4a4a; }
+      .conn-down::after { border-top-color: #4a4a4a; }
+    }
+
+    .conn-horiz {
+      display: flex;
+      align-items: center;
+      margin-top: 32px;
+      margin-left: 4px;
+      flex-shrink: 0;
+    }
+    .conn-horiz-line {
+      width: 20px;
+      height: 2px;
+      background: #ccc;
+      position: relative;
+    }
+    .conn-horiz-line::after {
+      content: '';
+      position: absolute;
+      right: -1px;
+      top: -4px;
+      border-top: 5px solid transparent;
+      border-bottom: 5px solid transparent;
+      border-left: 7px solid #ccc;
+    }
+    @media (prefers-color-scheme: dark) {
+      .conn-horiz-line { background: #4a4a4a; }
+      .conn-horiz-line::after { border-left-color: #4a4a4a; }
+    }
+    .conn-horiz-label {
+      font-size: 10px;
+      color: #bbb;
+      margin-left: 5px;
+      white-space: nowrap;
+    }
+
+    .branch-yes-label {
+      font-size: 10px;
+      color: #bbb;
+      margin: 2px 0 0 6px;
+    }
+
+    /* Rejoin chip */
+    .rejoin-chip {
+      font-size: 10px;
       color: #999;
-      font-size: 12px;
+      border: 1px dashed #ccc;
+      border-radius: 4px;
+      padding: 4px 10px;
+      width: 190px;
+      text-align: center;
+      cursor: pointer;
+      background: transparent;
+      transition: border-color 0.15s, color 0.15s;
+    }
+    .rejoin-chip:hover { border-color: #1f4e78; color: #1f4e78; background: transparent; }
+
+    /* Add-first placeholder */
+    .add-first {
+      width: 190px;
+      height: 52px;
+      border: 2px dashed #d0d0d0;
+      border-radius: 8px;
+      background: transparent;
+      color: #ccc;
+      font-size: 20px;
       cursor: pointer;
       display: flex;
       align-items: center;
       justify-content: center;
-      gap: 4px;
       transition: border-color 0.15s, color 0.15s;
-      padding: 0;
     }
-    .add-step-btn:hover {
-      border-color: #1f4e78;
-      color: #1f4e78;
-      background: transparent;
-    }
+    .add-first:hover { border-color: #1f4e78; color: #1f4e78; background: transparent; }
 
-    /* Rejoin indicator */
-    .rejoin-indicator {
-      font-size: 10px;
-      color: #888;
-      text-align: center;
-      padding: 4px 8px;
-      border: 1px dashed #ccc;
-      border-radius: 4px;
-      background: transparent;
-      width: 170px;
-      cursor: pointer;
-    }
-    .rejoin-indicator:hover { border-color: #1f4e78; color: #1f4e78; background: transparent; }
-
-    /* Divider between columns */
-    .col-divider {
-      width: 1px;
-      background: #e0e0e0;
-      margin: 0 8px;
-      align-self: stretch;
-    }
-    @media (prefers-color-scheme: dark) { .col-divider { background: #3a3a3a; } }
-
-    .status-bar {
-      font-size: 12px;
-      color: #999;
-      text-align: right;
-      padding: 4px 0;
-    }
-
-    /* Modal */
-    .modal {
-      display: none;
-      position: fixed;
-      inset: 0;
-      background: rgba(0,0,0,0.5);
-      z-index: 1000;
-      align-items: center;
-      justify-content: center;
-    }
-    .modal.open { display: flex; }
-
-    .modal-content {
+    /* ── Side panel ── */
+    .side-panel {
+      width: 0;
+      overflow: hidden;
+      transition: width 0.2s ease;
       background: white;
-      border-radius: 8px;
-      padding: 24px;
-      width: 90%;
-      max-width: 480px;
-      max-height: 85vh;
-      overflow-y: auto;
+      border-left: 1px solid #ddd;
+      flex-shrink: 0;
+      display: flex;
+      flex-direction: column;
     }
+    .side-panel.open { width: 290px; }
     @media (prefers-color-scheme: dark) {
-      .modal-content { background: #2a2a2a; color: #e0e0e0; }
+      .side-panel { background: #1e1e1e; border-left-color: #333; }
     }
 
-    .modal-content h2 { font-size: 17px; margin-bottom: 16px; font-weight: 600; }
+    .side-inner {
+      width: 290px;
+      padding: 20px;
+      overflow-y: auto;
+      flex: 1;
+    }
 
-    .form-group { margin-bottom: 14px; }
-    .form-group label {
-      display: block;
-      font-size: 12px;
+    .side-title {
+      font-size: 13px;
       font-weight: 600;
-      margin-bottom: 4px;
-      color: #555;
-      text-transform: uppercase;
-      letter-spacing: 0.04em;
+      margin-bottom: 16px;
+      padding-bottom: 10px;
+      border-bottom: 1px solid #eee;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
     }
-    @media (prefers-color-scheme: dark) { .form-group label { color: #aaa; } }
+    @media (prefers-color-scheme: dark) { .side-title { border-bottom-color: #333; } }
 
-    .form-group input,
-    .form-group textarea,
-    .form-group select {
+    .side-close {
+      background: none;
+      border: none;
+      font-size: 20px;
+      line-height: 1;
+      cursor: pointer;
+      color: #aaa;
+      padding: 0 2px;
+    }
+    .side-close:hover { color: #333; background: none; }
+    @media (prefers-color-scheme: dark) { .side-close:hover { color: #ddd; } }
+
+    .sf { margin-bottom: 13px; }
+    .sf label {
+      display: block;
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: #bbb;
+      margin-bottom: 3px;
+    }
+    .sf input, .sf textarea {
       width: 100%;
-      padding: 7px 10px;
-      border: 0.5px solid #ccc;
+      padding: 6px 9px;
+      border: 1px solid #e0e0e0;
       border-radius: 4px;
       font-family: inherit;
       font-size: 13px;
       background: white;
-      color: #333;
+      color: #222;
+      transition: border-color 0.15s;
     }
+    .sf input:focus, .sf textarea:focus { border-color: #1f4e78; outline: none; }
     @media (prefers-color-scheme: dark) {
-      .form-group input,
-      .form-group textarea,
-      .form-group select {
-        background: #333;
-        color: #e0e0e0;
-        border-color: #555;
-      }
+      .sf input, .sf textarea { background: #2a2a2a; color: #ddd; border-color: #3a3a3a; }
     }
-    .form-group textarea { resize: vertical; min-height: 56px; }
+    .sf textarea { resize: vertical; min-height: 54px; }
+    .sf-task textarea { font-size: 14px; font-weight: 500; min-height: 72px; }
 
-    .form-section-title {
+    .side-hint {
       font-size: 11px;
-      font-weight: 600;
-      color: #999;
-      text-transform: uppercase;
-      letter-spacing: 0.06em;
-      margin: 18px 0 10px;
-      padding-bottom: 4px;
-      border-bottom: 0.5px solid #eee;
+      color: #bbb;
+      line-height: 1.5;
+      margin-top: 6px;
     }
-    @media (prefers-color-scheme: dark) { .form-section-title { border-bottom-color: #444; } }
 
-    .checkbox-row {
+    .side-btns {
       display: flex;
-      align-items: center;
       gap: 8px;
+      margin-top: 16px;
+      padding-top: 14px;
+      border-top: 1px solid #eee;
+    }
+    @media (prefers-color-scheme: dark) { .side-btns { border-top-color: #333; } }
+
+    .btn-save {
+      flex: 1;
+      padding: 8px;
+      background: #1f4e78;
+      color: white;
+      border: none;
+      border-radius: 4px;
       font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
     }
-    .checkbox-row input[type=checkbox] { width: auto; }
-
-    .branch-controls {
-      background: #fff9f4;
-      border: 1px solid #f0c080;
-      border-radius: 6px;
-      padding: 12px;
-      margin-top: 8px;
-      font-size: 13px;
-    }
-    @media (prefers-color-scheme: dark) {
-      .branch-controls { background: #2a1f10; border-color: #7a5020; }
-    }
-    .branch-controls p { font-size: 12px; color: #888; margin-bottom: 8px; }
-
-    .modal-buttons {
-      display: flex;
-      gap: 10px;
-      justify-content: flex-end;
-      margin-top: 20px;
-      padding-top: 16px;
-      border-top: 0.5px solid #eee;
-    }
-    @media (prefers-color-scheme: dark) { .modal-buttons { border-top-color: #444; } }
-
-    .btn-save { background: #1f4e78; color: white; border-color: #1f4e78; }
     .btn-save:hover { background: #163a5a; }
 
-    .btn-delete {
-      margin-right: auto;
-      background: #fff0f0;
+    .btn-del {
+      padding: 8px 12px;
+      background: transparent;
       color: #c0392b;
-      border-color: #e74c3c;
+      border: 1px solid #e74c3c;
+      border-radius: 4px;
+      font-size: 13px;
+      cursor: pointer;
     }
-    .btn-delete:hover { background: #ffe0e0; }
+    .btn-del:hover { background: #fff0f0; }
     @media (prefers-color-scheme: dark) {
-      .btn-delete { background: #3a1a1a; color: #e57373; border-color: #c0392b; }
+      .btn-del { color: #e57373; border-color: #c0392b; }
+      .btn-del:hover { background: #2a1a1a; }
     }
 
-    .btn-branch {
-      background: #fff4e8;
-      color: #c87000;
-      border-color: #e67e22;
-      font-size: 12px;
-    }
-    .btn-branch:hover { background: #ffe8cc; }
-    @media (prefers-color-scheme: dark) {
-      .btn-branch { background: #2a1f00; color: #f0a040; border-color: #c87000; }
-    }
-
-    .loading {
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      min-height: 200px;
-      color: #888;
-      width: 100%;
-      font-size: 14px;
-    }
-
-    /* Page layout: diagram + links sidebar */
-    .page-body {
-      display: flex;
-      gap: 16px;
-      align-items: flex-start;
-    }
-
-    .diagram-wrap {
-      flex: 1;
-      min-width: 0;
-    }
-
-    /* Useful links panel */
-    .links-panel {
-      width: 220px;
+    /* ── Links section ── */
+    .links-section {
+      width: 290px;
+      border-top: 1px solid #eee;
+      padding: 16px 20px;
       flex-shrink: 0;
-      border: 0.5px solid #ddd;
-      border-radius: 8px;
-      background: #fafafa;
-      padding: 14px;
     }
-    @media (prefers-color-scheme: dark) {
-      .links-panel { background: #1e1e1e; border-color: #444; }
-    }
+    @media (prefers-color-scheme: dark) { .links-section { border-top-color: #333; } }
 
-    .links-panel-header {
-      font-size: 12px;
-      font-weight: 600;
-      letter-spacing: 0.04em;
+    .links-header {
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.07em;
       text-transform: uppercase;
-      color: #1f4e78;
-      margin-bottom: 12px;
-      padding-bottom: 6px;
-      border-bottom: 2px solid #1f4e78;
+      color: #bbb;
+      margin-bottom: 10px;
       display: flex;
       align-items: center;
       justify-content: space-between;
     }
-    @media (prefers-color-scheme: dark) {
-      .links-panel-header { color: #5b9bd5; border-bottom-color: #5b9bd5; }
-    }
-
-    .links-panel-header button {
-      padding: 2px 8px;
+    .links-add-btn {
       font-size: 11px;
+      padding: 2px 8px;
+      border: 1px solid #ddd;
       border-radius: 3px;
       background: transparent;
-      border: 0.5px solid #1f4e78;
-      color: #1f4e78;
+      color: #888;
+      cursor: pointer;
     }
-    .links-panel-header button:hover { background: #e8f0f8; }
-    @media (prefers-color-scheme: dark) {
-      .links-panel-header button { color: #5b9bd5; border-color: #5b9bd5; }
-      .links-panel-header button:hover { background: #1a2a3a; }
-    }
+    .links-add-btn:hover { border-color: #1f4e78; color: #1f4e78; background: transparent; }
 
     .link-item {
       display: flex;
       align-items: center;
-      justify-content: space-between;
       gap: 6px;
-      padding: 5px 0;
-      border-bottom: 0.5px solid #eee;
+      padding: 4px 0;
+      border-bottom: 1px solid #f5f5f5;
     }
-    @media (prefers-color-scheme: dark) { .link-item { border-bottom-color: #333; } }
     .link-item:last-child { border-bottom: none; }
+    @media (prefers-color-scheme: dark) { .link-item { border-bottom-color: #2a2a2a; } }
 
     .link-item a {
       font-size: 12px;
       color: #1f4e78;
       text-decoration: none;
       flex: 1;
-      min-width: 0;
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
@@ -522,154 +512,118 @@
     @media (prefers-color-scheme: dark) { .link-item a { color: #5b9bd5; } }
 
     .link-edit-btn {
-      flex-shrink: 0;
-      padding: 1px 6px;
       font-size: 10px;
+      padding: 1px 6px;
+      border: 1px solid #e0e0e0;
       border-radius: 3px;
       background: transparent;
-      border: 0.5px solid #ccc;
-      color: #999;
+      color: #bbb;
       cursor: pointer;
+      flex-shrink: 0;
     }
     .link-edit-btn:hover { border-color: #1f4e78; color: #1f4e78; background: transparent; }
 
-    .links-empty {
+    .links-empty { font-size: 12px; color: #ccc; }
+
+    .link-form {
+      display: none;
+      flex-direction: column;
+      gap: 6px;
+      margin-top: 8px;
+    }
+    .link-form.visible { display: flex; }
+    .link-form input {
+      width: 100%;
+      padding: 5px 8px;
+      border: 1px solid #e0e0e0;
+      border-radius: 4px;
       font-size: 12px;
-      color: #aaa;
-      text-align: center;
-      padding: 12px 0;
+      font-family: inherit;
+      background: white;
+      color: #222;
+    }
+    @media (prefers-color-scheme: dark) {
+      .link-form input { background: #2a2a2a; color: #ddd; border-color: #3a3a3a; }
+    }
+    .link-form-btns { display: flex; gap: 6px; }
+    .link-form-btns button {
+      flex: 1;
+      padding: 5px;
+      font-size: 12px;
+      border-radius: 4px;
+      cursor: pointer;
+      border: 1px solid #ddd;
+      background: white;
+      color: #555;
+    }
+    .link-form-btns button.lf-save { background: #1f4e78; color: white; border-color: #1f4e78; }
+    .link-form-btns button.lf-save:hover { background: #163a5a; }
+    .link-form-btns button.lf-del { border-color: #e74c3c; color: #c0392b; }
+    .link-form-btns button.lf-del:hover { background: #fff0f0; }
+    @media (prefers-color-scheme: dark) {
+      .link-form-btns button { background: #2a2a2a; color: #ccc; border-color: #3a3a3a; }
     }
 
-    /* Link modal */
-    .link-modal-content {
-      max-width: 360px;
+    /* loading */
+    .loading {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 200px;
+      color: #bbb;
+      font-size: 14px;
+      width: 100%;
     }
   </style>
 </head>
 <body>
-<div class="container">
+
+<div class="topbar">
   <h1>Northumbria Department Workflow Map</h1>
-  <p class="subtitle">Click any box to edit · Click a decision box to manage branches</p>
-
-  <div class="info-box">
-    <strong>How to use:</strong> Click any step box to edit it. Mark a step as a decision point to create a yes/no branch. Use the dashed "+ Add Step" button to add steps to any path. Changes save instantly.
-  </div>
-
-  <div class="controls">
-    <label>Filter:</label>
+  <div class="topbar-filters">
+    <span>Filter:</span>
     <button class="filter-btn active" data-filter="all">All</button>
     <button class="filter-btn" data-filter="Teaching">Teaching</button>
     <button class="filter-btn" data-filter="Research">Research</button>
     <button class="filter-btn" data-filter="Admin">Admin</button>
-    <button class="btn-populate" id="populateBtn">+ Populate Default Data</button>
+  </div>
+  <span class="statusbar" id="statusBar"></span>
+  <button class="btn-populate" id="populateBtn">+ Populate Default Data</button>
+</div>
+
+<div class="main">
+
+  <div class="diagram-scroll">
+    <div class="diagram-columns" id="diagramColumns">
+      <div class="loading">Loading...</div>
+    </div>
   </div>
 
-  <div class="page-body">
-    <div class="diagram-wrap">
-      <div class="diagram-area" id="diagramArea">
-        <div class="loading">Loading...</div>
-      </div>
-      <div class="status-bar" id="statusBar"></div>
-    </div>
-
-    <div class="links-panel">
-      <div class="links-panel-header">
+  <div class="side-panel" id="sidePanel">
+    <div class="side-inner" id="sideInner"></div>
+    <div class="links-section">
+      <div class="links-header">
         <span>Useful Links</span>
-        <button onclick="window.openLinkModal(null)">+ Add</button>
+        <button class="links-add-btn" onclick="window.showLinkForm(null)">+ Add</button>
       </div>
-      <div id="linksList"><div class="links-empty">No links yet</div></div>
-    </div>
-  </div>
-</div>
-
-<!-- Edit / Add modal -->
-<div id="editModal" class="modal">
-  <div class="modal-content">
-    <h2 id="modalTitle">Edit Step</h2>
-
-    <div class="form-group">
-      <label>Workflow</label>
-      <input type="text" id="editWorkflow" readonly style="opacity:0.6;">
-    </div>
-    <div class="form-group">
-      <label>Step label</label>
-      <input type="text" id="editStep" placeholder="e.g. 1, 1a, 2b">
-    </div>
-    <div class="form-group">
-      <label>Task</label>
-      <textarea id="editTask" required></textarea>
-    </div>
-    <div class="form-group">
-      <label>URL</label>
-      <input type="text" id="editUrl">
-    </div>
-    <div class="form-group">
-      <label>Audience</label>
-      <input type="text" id="editAudience">
-    </div>
-    <div class="form-group">
-      <label>Documents</label>
-      <input type="text" id="editDocuments">
-    </div>
-    <div class="form-group">
-      <label>Deadline</label>
-      <input type="text" id="editDeadline">
-    </div>
-    <div class="form-group">
-      <label>Notes</label>
-      <textarea id="editNotes" style="min-height:40px;"></textarea>
-    </div>
-
-    <div class="form-section-title">Branching</div>
-    <div class="form-group">
-      <div class="checkbox-row">
-        <input type="checkbox" id="editIsDecision">
-        <label for="editIsDecision" style="text-transform:none;letter-spacing:0;font-size:13px;font-weight:400;color:inherit;margin:0;">This step is a decision point (yes/no)</label>
+      <div id="linksList"><span class="links-empty">No links yet</span></div>
+      <div class="link-form" id="linkForm">
+        <input type="text" id="linkNameIn" placeholder="Name (e.g. Timetabling)">
+        <input type="text" id="linkUrlIn"  placeholder="https://...">
+        <div class="link-form-btns">
+          <button id="linkDelBtn" class="lf-del" style="display:none;" onclick="window.deleteLink()">Delete</button>
+          <button onclick="window.hideLinkForm()">Cancel</button>
+          <button class="lf-save" onclick="window.saveLink()">Save</button>
+        </div>
       </div>
     </div>
-
-    <div id="branchControls" class="branch-controls" style="display:none;">
-      <p>A "no" branch step will be created automatically when you save. The "yes" path continues down the main column as normal.</p>
-      <div class="form-group" style="margin-bottom:0;">
-        <label>Rejoin at step ID (optional)</label>
-        <select id="editRejoinId">
-          <option value="">— no rejoin —</option>
-        </select>
-        <div style="font-size:11px;color:#999;margin-top:4px;">If set, the branch path will show "rejoins at [step]" and point back here.</div>
-      </div>
-    </div>
-
-    <div class="modal-buttons">
-      <button type="button" class="btn-delete" id="deleteBtn" style="display:none;">Delete Step</button>
-      <button type="button" onclick="window.closeModal()">Cancel</button>
-      <button type="button" class="btn-save" id="saveBtn" onclick="window.saveStep()">Save</button>
-    </div>
   </div>
-</div>
 
-<!-- Useful links modal -->
-<div id="linkModal" class="modal">
-  <div class="modal-content link-modal-content">
-    <h2 id="linkModalTitle">Add Link</h2>
-    <div class="form-group">
-      <label>Name</label>
-      <input type="text" id="linkName" placeholder="e.g. Timetabling">
-    </div>
-    <div class="form-group">
-      <label>URL</label>
-      <input type="text" id="linkUrl" placeholder="https://...">
-    </div>
-    <div class="modal-buttons">
-      <button type="button" class="btn-delete" id="linkDeleteBtn" style="display:none;">Delete</button>
-      <button type="button" onclick="window.closeLinkModal()">Cancel</button>
-      <button type="button" class="btn-save" onclick="window.saveLink()">Save</button>
-    </div>
-  </div>
 </div>
 
 <script type="module">
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.0/firebase-app.js';
-import { getFirestore, collection, getDocs, getDoc, updateDoc, deleteDoc, doc, addDoc, writeBatch, setDoc } from 'https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore.js';
+import { getFirestore, collection, getDocs, updateDoc, deleteDoc, doc, addDoc, writeBatch, setDoc } from 'https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore.js';
 
 const firebaseConfig = {
   apiKey: "AIzaSyDSK-2hI6ML1eykIed6E8S5Ve29phrEolI",
@@ -681,629 +635,479 @@ const firebaseConfig = {
 };
 
 const app = initializeApp(firebaseConfig);
-const db = getFirestore(app);
+const db  = getFirestore(app);
 
-// ---------------------------------------------------------------------------
-// State
-// ---------------------------------------------------------------------------
-let allDocs = {};        // id -> document data
-let roots = {};          // workflow -> root document ID
-let currentFilter = 'all';
-let currentEditingId = null;
-let isNewStep = false;
-let newStepParentId = null;   // ID of the step this new step follows
-let newStepBranch = 'yes';    // 'yes' or 'no'
-let populateUsed = false;
-let allLinks = {};        // id -> {name, url}
-let currentLinkId = null;
+// ── State ──────────────────────────────────────
+let allDocs  = {};
+let roots    = {};
+let allLinks = {};
+let currentFilter  = 'all';
+let selectedId     = null;
+let populateUsed   = false;
+let editingLinkId  = null;
+const WORKFLOWS    = ['Teaching', 'Research', 'Admin'];
 
-const BRANCH_NAMES = ['Teaching', 'Research', 'Admin'];
-
-// ---------------------------------------------------------------------------
-// Default data (graph-linked)
-// ---------------------------------------------------------------------------
-// We build the IDs manually so we can cross-reference them
+// ── Default data ───────────────────────────────
 function buildDefaultData() {
-  // Teaching
-  const t1 = 'teaching-1', t2 = 'teaching-2', t3 = 'teaching-3', t4 = 'teaching-4', t1no = 'teaching-1-no';
-  // Research
-  const r1 = 'research-1', r2 = 'research-2', r3 = 'research-3', r1no = 'research-1-no';
-  // Admin
-  const a1 = 'admin-1';
-
+  const t1='teaching-1', tNo='teaching-1-no', t2='teaching-2', t3='teaching-3', t4='teaching-4';
+  const r1='research-1', rNo='research-1-no', r2='research-2', r3='research-3';
+  const a1='admin-1';
+  const D = (w,s,t,nY,nN,rid,dec,rest={}) => ({
+    workflow:w, step:s, task:t, nextYes:nY, nextNo:nN, rejoinId:rid||'',
+    isDecision:!!dec, url:'', audience:'', documents:'', deadline:'', notes:'', ...rest
+  });
   const docs = {
-    // Teaching
-    [t1]: { workflow:'Teaching', step:'1', task:'Do you have a PEP ready?', url:'', audience:'All Staff', documents:'', deadline:'Start of term', notes:'Decision point', isDecision:true, nextYes:t3, nextNo:t1no, rejoinId:'' },
-    [t1no]: { workflow:'Teaching', step:'1a', task:'Get blank PEP template', url:'', audience:'All Staff', documents:'PEP template', deadline:'Start of term', notes:'Only if no PEP exists', isDecision:false, nextYes:t2, nextNo:null, rejoinId:t3 },
-    [t2]: { workflow:'Teaching', step:'1b', task:'Complete the PEP', url:'', audience:'All Staff', documents:'PEP', deadline:'Start of term', notes:'Fill in all sections', isDecision:false, nextYes:t3, nextNo:null, rejoinId:'' },
-    [t3]: { workflow:'Teaching', step:'2', task:'Upload PEP to MS Teams', url:'', audience:'All Staff', documents:'PEP', deadline:'Week 1', notes:'Upload to shared Teams channel', isDecision:false, nextYes:t4, nextNo:null, rejoinId:'' },
-    [t4]: { workflow:'Teaching', step:'3', task:'Record link in SEM spreadsheet', url:'', audience:'All Staff', documents:'SEM spreadsheet', deadline:'Week 1', notes:'Add the Teams link into the tracker', isDecision:false, nextYes:null, nextNo:null, rejoinId:'' },
-    // Research
-    [r1]: { workflow:'Research', step:'1', task:'Do you have a PO form?', url:'', audience:'Researchers', documents:'', deadline:'Before purchase', notes:'Decision point', isDecision:true, nextYes:r3, nextNo:r1no, rejoinId:'' },
-    [r1no]: { workflow:'Research', step:'1a', task:'Get blank PO form', url:'', audience:'Researchers', documents:'PO form', deadline:'Before purchase', notes:'Only if no PO exists', isDecision:false, nextYes:r2, nextNo:null, rejoinId:r3 },
-    [r2]: { workflow:'Research', step:'1b', task:'Complete the PO form', url:'', audience:'Researchers', documents:'PO form', deadline:'Before purchase', notes:'Fill in all fields', isDecision:false, nextYes:r3, nextNo:null, rejoinId:'' },
-    [r3]: { workflow:'Research', step:'2', task:'Upload PO & @ Liam for approval', url:'', audience:'Researchers', documents:'PO form', deadline:'Before purchase', notes:'Tag in Teams for sign-off', isDecision:false, nextYes:null, nextNo:null, rejoinId:'' },
-    // Admin
-    [a1]: { workflow:'Admin', step:'1', task:'Admin step 1 (to be defined)', url:'', audience:'All Staff', documents:'', deadline:'', notes:'Click to edit', isDecision:false, nextYes:null, nextNo:null, rejoinId:'' },
+    [t1]:  D('Teaching','1', 'Do you have a PEP ready?',       t3,  tNo, '',  true),
+    [tNo]: D('Teaching','1a','Get blank PEP template',          t2,  null,t3,  false, {notes:'Only if no PEP exists', documents:'PEP template'}),
+    [t2]:  D('Teaching','1b','Complete the PEP',                t3,  null,'',  false, {notes:'Fill in all sections',  documents:'PEP'}),
+    [t3]:  D('Teaching','2', 'Upload PEP to MS Teams',          t4,  null,'',  false, {notes:'Shared Teams channel',  documents:'PEP',      deadline:'Week 1'}),
+    [t4]:  D('Teaching','3', 'Record link in SEM spreadsheet',  null,null,'',  false, {notes:'Add Teams link to tracker', documents:'SEM spreadsheet', deadline:'Week 1'}),
+    [r1]:  D('Research','1', 'Do you have a PO form?',          r3,  rNo, '',  true),
+    [rNo]: D('Research','1a','Get blank PO form',                r2,  null,r3,  false, {notes:'Only if no PO exists', documents:'PO form'}),
+    [r2]:  D('Research','1b','Complete the PO form',             r3,  null,'',  false, {notes:'Fill in all fields',   documents:'PO form'}),
+    [r3]:  D('Research','2', 'Upload PO & @ Liam for approval', null,null,'',  false, {notes:'Tag in Teams for sign-off', documents:'PO form'}),
+    [a1]:  D('Admin',   '1', 'Admin step 1 (to be defined)',    null,null,'',  false, {notes:'Click to edit'}),
   };
-
-  const rootIds = { Teaching: t1, Research: r1, Admin: a1 };
-  return { docs, rootIds };
+  return { docs, rootIds:{ Teaching:t1, Research:r1, Admin:a1 } };
 }
 
-// ---------------------------------------------------------------------------
-// Load
-// ---------------------------------------------------------------------------
-function setStatus(msg) {
-  document.getElementById('statusBar').textContent = msg;
-}
+// ── Load ───────────────────────────────────────
+function setStatus(m) { document.getElementById('statusBar').textContent = m; }
 
 async function loadAll() {
   try {
     setStatus('Loading...');
-    const [wfSnap, metaSnap, linksSnap] = await Promise.all([
-      getDocs(collection(db, 'workflows')),
-      getDocs(collection(db, 'meta')),
-      getDocs(collection(db, 'links'))
+    const [ws, ms, ls] = await Promise.all([
+      getDocs(collection(db,'workflows')),
+      getDocs(collection(db,'meta')),
+      getDocs(collection(db,'links')),
     ]);
-
-    allDocs = {};
-    wfSnap.forEach(d => { allDocs[d.id] = d.data(); });
-
-    roots = {};
-    metaSnap.forEach(d => {
-      const data = d.data();
-      if (data.rootId) roots[d.id] = data.rootId;
-    });
-
-    allLinks = {};
-    linksSnap.forEach(d => { allLinks[d.id] = d.data(); });
-
-    setStatus(`Loaded ${wfSnap.size} step${wfSnap.size !== 1 ? 's' : ''} · ${new Date().toLocaleTimeString()}`);
+    allDocs={};  ws.forEach(d=>{ allDocs[d.id]=d.data(); });
+    roots={};    ms.forEach(d=>{ if(d.data().rootId) roots[d.id]=d.data().rootId; });
+    allLinks={}; ls.forEach(d=>{ allLinks[d.id]=d.data(); });
+    setStatus(`${ws.size} step${ws.size!==1?'s':''} · ${new Date().toLocaleTimeString()}`);
     renderAll();
     renderLinks();
-  } catch (err) {
-    console.error(err);
-    setStatus('Error loading: ' + err.message);
-    document.getElementById('diagramArea').innerHTML = '<div class="loading">Error loading - check console</div>';
+  } catch(e) {
+    console.error(e);
+    setStatus('Error: '+e.message);
+    document.getElementById('diagramColumns').innerHTML='<div class="loading">Error loading — check console</div>';
   }
 }
 
-// ---------------------------------------------------------------------------
-// Render
-// ---------------------------------------------------------------------------
+// ── Render ─────────────────────────────────────
 function renderAll() {
-  const area = document.getElementById('diagramArea');
-
-  if (Object.keys(allDocs).length === 0) {
-    area.innerHTML = '<div class="loading">No workflows yet — click "+ Populate Default Data" to start.</div>';
+  const el = document.getElementById('diagramColumns');
+  if (!Object.keys(allDocs).length) {
+    el.innerHTML='<div class="loading">No workflows yet — click "+ Populate Default Data"</div>';
     return;
   }
-
-  const toRender = currentFilter === 'all' ? BRANCH_NAMES : [currentFilter];
-  const colsHtml = toRender.map((wf, i) => {
-    const col = renderColumn(wf);
-    const divider = (i < toRender.length - 1) ? '<div class="col-divider"></div>' : '';
-    return col + divider;
-  }).join('');
-
-  area.innerHTML = colsHtml;
+  const show = currentFilter==='all' ? WORKFLOWS : [currentFilter];
+  el.innerHTML = show.map(wf => renderCol(wf)).join('');
 }
 
-function renderColumn(wf) {
+function renderCol(wf) {
   const rootId = roots[wf];
-  const treeHtml = rootId && allDocs[rootId]
-    ? renderNodeTree(rootId, wf, new Set())
-    : `<button class="add-step-btn" onclick="window.addRootStep('${wf}')">+ Add first step</button>`;
-
-  return `
-    <div class="workflow-col" id="col-${wf}">
-      <div class="col-header">${wf}</div>
-      <div class="node-tree">${treeHtml}</div>
-    </div>`;
+  const body = (rootId && allDocs[rootId])
+    ? renderTree(rootId, new Set())
+    : `<button class="add-first" onclick="window.startInline('${wf}',null,true)" title="Add first step">+</button>`;
+  return `<div class="wf-col" id="col-${wf}">
+    <div class="wf-col-header">${wf}</div>
+    <div class="node-tree" id="tree-${wf}">${body}</div>
+  </div>`;
 }
 
-// Traverse the graph from nodeId, rendering nodes
-// visited prevents infinite loops in malformed graphs
-function renderNodeTree(nodeId, wf, visited) {
-  if (!nodeId || !allDocs[nodeId] || visited.has(nodeId)) return '';
-  visited.add(nodeId);
-
-  const node = allDocs[nodeId];
-  const isDecision = node.isDecision && node.nextNo;
-
+function renderTree(id, visited) {
+  if (!id || !allDocs[id] || visited.has(id)) return '';
+  visited.add(id);
+  const n = allDocs[id];
+  const hasBranch = n.nextNo && allDocs[n.nextNo];
   let html = '';
 
-  if (isDecision) {
-    // Render as a branch row: main box + side branch
-    const mainBoxHtml = renderStepBox(nodeId, node);
-    const noChainHtml = renderBranchChain(node.nextNo, wf, visited, node.rejoinId);
-
-    html += `
-      <div class="branch-row">
-        <div class="branch-main">
-          ${mainBoxHtml}
-        </div>
-        <div class="arrow-right"></div>
-        <div class="branch-side">
-          <div style="font-size:10px;color:#999;margin-bottom:4px;text-align:center;">No</div>
-          ${noChainHtml}
-        </div>
-      </div>`;
-
-    // Continue yes path below
-    if (node.nextYes && !visited.has(node.nextYes)) {
-      html += `
-        <div style="display:flex;align-items:center;flex-direction:column;">
-          <div style="font-size:10px;color:#999;margin-bottom:0px;">Yes</div>
-          <div class="arrow-down"></div>
-          ${renderNodeTree(node.nextYes, wf, visited)}
-        </div>`;
+  if (hasBranch) {
+    const bv = new Set(visited);
+    const branchHtml = renderBranchChain(n.nextNo, bv, n.rejoinId);
+    html += `<div class="node-row">
+      <div class="node-main-path">
+        ${renderBox(id, n)}
+        <span class="branch-yes-label">↓ Yes</span>
+      </div>
+      <div class="conn-horiz">
+        <div class="conn-horiz-line"></div>
+        <span class="conn-horiz-label">No →</span>
+      </div>
+      <div style="margin-left:8px;margin-top:0;display:flex;flex-direction:column;align-items:flex-start;">
+        ${branchHtml}
+      </div>
+    </div>`;
+    if (n.nextYes && !visited.has(n.nextYes)) {
+      html += `<div class="conn-down"></div>${renderTree(n.nextYes, visited)}`;
     } else {
-      html += renderAddButton(nodeId, 'yes', wf);
+      html += renderPlusStub(id, n.workflow, true);
     }
   } else {
-    // Simple linear node
-    html += renderStepBox(nodeId, node);
-
-    if (node.nextYes && !visited.has(node.nextYes)) {
-      html += `<div class="arrow-down"></div>${renderNodeTree(node.nextYes, wf, visited)}`;
+    html += renderBox(id, n);
+    if (n.nextYes && !visited.has(n.nextYes)) {
+      html += `<div class="conn-down"></div>${renderTree(n.nextYes, visited)}`;
     } else {
-      html += renderAddButton(nodeId, 'yes', wf);
+      html += renderPlusStub(id, n.workflow, true);
     }
   }
-
   return html;
 }
 
-// Render the chain of steps in a "no" branch
-function renderBranchChain(nodeId, wf, visited, rejoinId) {
-  if (!nodeId || !allDocs[nodeId] || visited.has(nodeId)) return '';
-
+function renderBranchChain(id, visited, rejoinId) {
   let html = '';
-  let current = nodeId;
-  const branchVisited = new Set(visited);
-
-  while (current && allDocs[current] && !branchVisited.has(current)) {
-    // Stop if this node is the rejoin target (don't render it here - it's on the main path)
-    if (current === rejoinId) break;
-
-    branchVisited.add(current);
-    const node = allDocs[current];
-    html += renderStepBox(current, node, true);
-
-    if (node.nextYes && !branchVisited.has(node.nextYes) && node.nextYes !== rejoinId) {
-      html += `<div class="arrow-down"></div>`;
-      current = node.nextYes;
+  let cur = id;
+  while (cur && allDocs[cur] && !visited.has(cur) && cur !== rejoinId) {
+    visited.add(cur);
+    const n = allDocs[cur];
+    html += renderBox(cur, n);
+    const nextOk = n.nextYes && !visited.has(n.nextYes) && n.nextYes !== rejoinId;
+    if (nextOk) {
+      html += `<div class="conn-down"></div>`;
+      cur = n.nextYes;
     } else {
-      // End of branch - add step button or rejoin indicator
       if (rejoinId && allDocs[rejoinId]) {
-        html += `<div class="arrow-down"></div>
-          <div class="rejoin-indicator" onclick="window.openEdit('${rejoinId}')">
-            ↳ rejoins: ${allDocs[rejoinId].step || '?'} — ${truncate(allDocs[rejoinId].task, 20)}
-          </div>`;
+        html += `<div class="conn-down" style="height:16px;"></div>
+          <button class="rejoin-chip" onclick="window.selectStep('${rejoinId}')">
+            ↳ rejoins step ${allDocs[rejoinId].step||'?'}
+          </button>`;
       } else {
-        html += renderAddButton(current, 'yes', wf, true);
+        html += renderPlusStub(cur, n.workflow, true);
       }
       break;
     }
   }
-
   return html;
 }
 
-function renderStepBox(id, node, isBranch) {
-  const decisionClass = node.isDecision ? ' decision' : '';
-  const badge = node.isDecision ? `<div class="step-decision-badge">Decision ↓yes / →no</div>` : '';
-  return `
-    <div class="step-box${decisionClass}" onclick="window.openEdit('${id}')">
-      <div class="step-label">Step ${node.step || '?'}</div>
-      <div class="step-task">${escHtml(node.task || '(empty)')}</div>
-      ${badge}
+function renderBox(id, n) {
+  const sel  = id===selectedId ? ' selected' : '';
+  const det  = (n.url||n.audience||n.documents||n.deadline||n.notes) ? ' has-detail' : '';
+  const tag  = n.step ? `Step ${esc(n.step)}` : 'Step';
+  return `<div class="step-wrap" id="wrap-${id}">
+    <div class="step-box${sel}${det}" onclick="window.selectStep('${id}')">
+      <div class="step-tag">${tag}</div>
+      <div class="step-task-text">${esc(n.task||'(empty)')}</div>
+    </div>
+    <div class="step-handles">
+      <button class="handle" title="Branch left"  onclick="event.stopPropagation();window.startInline('${n.workflow}','${id}',false,'left')">+</button>
+      <button class="handle" title="Continue down" onclick="event.stopPropagation();window.startInline('${n.workflow}','${id}',true)">+</button>
+      <button class="handle" title="Branch right" onclick="event.stopPropagation();window.startInline('${n.workflow}','${id}',false,'right')">+</button>
+    </div>
+  </div>`;
+}
+
+function renderPlusStub(parentId, wf, isYes) {
+  const dir = isYes ? 'true' : 'false';
+  return `<div class="conn-down" style="height:14px;"></div>
+    <button class="add-first" onclick="window.startInline('${wf}','${parentId}',${dir})" title="Add step">+</button>`;
+}
+
+function esc(s) {
+  return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// ── Inline input ───────────────────────────────
+// isYes=true → nextYes chain, isYes=false → nextNo branch
+// dir: 'left'|'right' used only for labelling, both map to nextNo
+
+window.startInline = function(wf, parentId, isYes, dir) {
+  // If parent already has the target slot filled, walk to end of that chain
+  if (parentId && allDocs[parentId]) {
+    const field = isYes ? 'nextYes' : 'nextNo';
+    if (allDocs[parentId][field]) {
+      let cur = allDocs[parentId][field];
+      const seen = new Set([parentId]);
+      while (allDocs[cur]?.nextYes && !seen.has(allDocs[cur].nextYes)) {
+        seen.add(cur);
+        cur = allDocs[cur].nextYes;
+      }
+      return window.startInline(wf, cur, true);
+    }
+  }
+
+  // Inject a temporary pending entry
+  const tempId = '__pending__';
+  allDocs[tempId] = { workflow:wf, step:'', task:'', url:'', audience:'', documents:'',
+    deadline:'', notes:'', isDecision:false, nextYes:null, nextNo:null, rejoinId:'',
+    __pending:true };
+
+  if (!parentId) {
+    roots[wf] = tempId;
+  } else {
+    const field = isYes ? 'nextYes' : 'nextNo';
+    allDocs[parentId] = { ...allDocs[parentId], [field]: tempId };
+    if (!isYes) allDocs[parentId].isDecision = true;
+  }
+
+  renderAll();
+
+  // Replace the rendered pending box with a live textarea
+  const col = document.getElementById('col-' + wf);
+  if (!col) { cancelInline(wf, parentId, isYes); return; }
+
+  // Find the wrap containing the pending box
+  let targetWrap = null;
+  col.querySelectorAll('.step-wrap').forEach(w => {
+    const b = w.querySelector('.step-box');
+    if (b?.getAttribute('onclick')?.includes('__pending__')) targetWrap = w;
+  });
+  if (!targetWrap) { cancelInline(wf, parentId, isYes); return; }
+
+  const ta = document.createElement('textarea');
+  ta.className = 'step-inline-input';
+  ta.placeholder = 'Type task… Enter to save, Esc to cancel';
+  ta.rows = 2;
+  targetWrap.replaceWith(ta);
+  ta.focus();
+
+  let committed = false;
+
+  ta.addEventListener('keydown', async e => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      if (committed) return;
+      committed = true;
+      const task = ta.value.trim();
+      if (!task) { cancelInline(wf, parentId, isYes); return; }
+      await commitInline(task, wf, parentId, isYes);
+    }
+    if (e.key === 'Escape') {
+      if (committed) return;
+      committed = true;
+      cancelInline(wf, parentId, isYes);
+    }
+  });
+
+  ta.addEventListener('blur', () => {
+    setTimeout(() => {
+      if (committed) return;
+      committed = true;
+      const task = ta.value.trim();
+      if (task) commitInline(task, wf, parentId, isYes);
+      else cancelInline(wf, parentId, isYes);
+    }, 180);
+  });
+};
+
+async function commitInline(task, wf, parentId, isYes) {
+  delete allDocs['__pending__'];
+  try {
+    setStatus('Saving...');
+    const newData = {
+      workflow:wf, step:'', task,
+      url:'', audience:'', documents:'', deadline:'', notes:'',
+      isDecision:false, nextYes:null, nextNo:null, rejoinId:'',
+    };
+    const ref = await addDoc(collection(db,'workflows'), newData);
+    const newId = ref.id;
+
+    if (!parentId) {
+      await setDoc(doc(db,'meta',wf), { rootId: newId });
+    } else {
+      const field = isYes ? 'nextYes' : 'nextNo';
+      const updates = { [field]: newId };
+      if (!isYes) updates.isDecision = true;
+      await updateDoc(doc(db,'workflows',parentId), updates);
+    }
+    setStatus('Saved · ' + new Date().toLocaleTimeString());
+    await loadAll();
+    window.selectStep(newId);
+  } catch(e) {
+    setStatus('Error: '+e.message);
+    alert('Error saving: '+e.message);
+    await loadAll();
+  }
+}
+
+function cancelInline(wf, parentId, isYes) {
+  delete allDocs['__pending__'];
+  if (!parentId) {
+    delete roots[wf];
+  } else if (allDocs[parentId]) {
+    const field = isYes ? 'nextYes' : 'nextNo';
+    allDocs[parentId] = { ...allDocs[parentId], [field]: null };
+    if (!isYes) allDocs[parentId].isDecision = false;
+  }
+  renderAll();
+}
+
+// ── Side panel ─────────────────────────────────
+window.selectStep = function(id) {
+  if (!allDocs[id] || allDocs[id].__pending) return;
+  selectedId = id;
+  renderAll();
+  openPanel(id);
+};
+
+function openPanel(id) {
+  const n = allDocs[id];
+  document.getElementById('sidePanel').classList.add('open');
+  document.getElementById('sideInner').innerHTML = `
+    <div class="side-title">
+      <span>Step detail</span>
+      <button class="side-close" onclick="window.closePanel()">×</button>
+    </div>
+    <div class="sf sf-task">
+      <label>Task</label>
+      <textarea id="sf-task">${esc(n.task||'')}</textarea>
+    </div>
+    <div class="sf">
+      <label>Step label</label>
+      <input id="sf-step" value="${esc(n.step||'')}" placeholder="e.g. 1, 2a">
+    </div>
+    <div class="sf">
+      <label>URL</label>
+      <input id="sf-url" value="${esc(n.url||'')}" placeholder="https://...">
+    </div>
+    <div class="sf">
+      <label>Audience</label>
+      <input id="sf-audience" value="${esc(n.audience||'')}">
+    </div>
+    <div class="sf">
+      <label>Documents</label>
+      <input id="sf-documents" value="${esc(n.documents||'')}">
+    </div>
+    <div class="sf">
+      <label>Deadline</label>
+      <input id="sf-deadline" value="${esc(n.deadline||'')}">
+    </div>
+    <div class="sf">
+      <label>Notes</label>
+      <textarea id="sf-notes">${esc(n.notes||'')}</textarea>
+    </div>
+    <p class="side-hint">Blue outline on a box = it has detail saved.</p>
+    <div class="side-btns">
+      <button class="btn-del" onclick="window.deleteStep('${id}')">Delete</button>
+      <button class="btn-save" onclick="window.saveDetail('${id}')">Save</button>
     </div>`;
 }
 
-function renderAddButton(parentId, branch, wf, isSideBranch) {
-  return `
-    <div class="arrow-down"></div>
-    <button class="add-step-btn" onclick="window.addStep('${parentId}','${branch}','${wf}')">+ Add Step</button>`;
-}
+window.closePanel = function() {
+  document.getElementById('sidePanel').classList.remove('open');
+  selectedId = null;
+  renderAll();
+};
 
-function escHtml(str) {
-  return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-}
-function truncate(str, n) {
-  return str && str.length > n ? str.slice(0, n) + '…' : (str || '');
-}
-
-// ---------------------------------------------------------------------------
-// Modal helpers
-// ---------------------------------------------------------------------------
-function populateRejoinDropdown(currentWf, excludeId) {
-  const sel = document.getElementById('editRejoinId');
-  sel.innerHTML = '<option value="">— no rejoin —</option>';
-  Object.entries(allDocs)
-    .filter(([id, d]) => d.workflow === currentWf && id !== excludeId)
-    .sort((a, b) => String(a[1].step).localeCompare(String(b[1].step)))
-    .forEach(([id, d]) => {
-      const opt = document.createElement('option');
-      opt.value = id;
-      opt.textContent = `Step ${d.step} — ${truncate(d.task, 30)}`;
-      sel.appendChild(opt);
+window.saveDetail = async function(id) {
+  const task = document.getElementById('sf-task').value.trim();
+  if (!task) { alert('Task cannot be empty.'); return; }
+  try {
+    setStatus('Saving...');
+    await updateDoc(doc(db,'workflows',id), {
+      task,
+      step:      document.getElementById('sf-step').value.trim(),
+      url:       document.getElementById('sf-url').value.trim(),
+      audience:  document.getElementById('sf-audience').value.trim(),
+      documents: document.getElementById('sf-documents').value.trim(),
+      deadline:  document.getElementById('sf-deadline').value.trim(),
+      notes:     document.getElementById('sf-notes').value.trim(),
     });
-}
-
-document.getElementById('editIsDecision').addEventListener('change', function() {
-  document.getElementById('branchControls').style.display = this.checked ? 'block' : 'none';
-});
-
-// ---------------------------------------------------------------------------
-// Open modal (edit existing)
-// ---------------------------------------------------------------------------
-window.openEdit = function(id) {
-  if (!allDocs[id]) return;
-  isNewStep = false;
-  currentEditingId = id;
-  const d = allDocs[id];
-
-  document.getElementById('modalTitle').textContent = 'Edit Step';
-  document.getElementById('deleteBtn').style.display = '';
-  document.getElementById('editWorkflow').value  = d.workflow   || '';
-  document.getElementById('editStep').value       = d.step       || '';
-  document.getElementById('editTask').value       = d.task       || '';
-  document.getElementById('editUrl').value        = d.url        || '';
-  document.getElementById('editAudience').value   = d.audience   || '';
-  document.getElementById('editDocuments').value  = d.documents  || '';
-  document.getElementById('editDeadline').value   = d.deadline   || '';
-  document.getElementById('editNotes').value      = d.notes      || '';
-  document.getElementById('editIsDecision').checked = !!d.isDecision;
-  document.getElementById('branchControls').style.display = d.isDecision ? 'block' : 'none';
-
-  populateRejoinDropdown(d.workflow, id);
-  document.getElementById('editRejoinId').value = d.rejoinId || '';
-
-  document.getElementById('editModal').classList.add('open');
-};
-
-// Open modal (new step)
-window.addStep = function(parentId, branch, wf) {
-  isNewStep = true;
-  currentEditingId = null;
-  newStepParentId = parentId;
-  newStepBranch = branch;
-
-  document.getElementById('modalTitle').textContent = 'Add New Step';
-  document.getElementById('deleteBtn').style.display = 'none';
-  document.getElementById('editWorkflow').value  = wf;
-  document.getElementById('editStep').value       = '';
-  document.getElementById('editTask').value       = '';
-  document.getElementById('editUrl').value        = '';
-  document.getElementById('editAudience').value   = '';
-  document.getElementById('editDocuments').value  = '';
-  document.getElementById('editDeadline').value   = '';
-  document.getElementById('editNotes').value      = '';
-  document.getElementById('editIsDecision').checked = false;
-  document.getElementById('branchControls').style.display = 'none';
-
-  populateRejoinDropdown(wf, null);
-  document.getElementById('editRejoinId').value = '';
-
-  document.getElementById('editModal').classList.add('open');
-};
-
-// Add root step (first step of empty workflow)
-window.addRootStep = function(wf) {
-  isNewStep = true;
-  currentEditingId = null;
-  newStepParentId = null;
-  newStepBranch = 'root';
-
-  document.getElementById('modalTitle').textContent = 'Add First Step';
-  document.getElementById('deleteBtn').style.display = 'none';
-  document.getElementById('editWorkflow').value  = wf;
-  document.getElementById('editStep').value       = '1';
-  document.getElementById('editTask').value       = '';
-  document.getElementById('editUrl').value        = '';
-  document.getElementById('editAudience').value   = '';
-  document.getElementById('editDocuments').value  = '';
-  document.getElementById('editDeadline').value   = '';
-  document.getElementById('editNotes').value      = '';
-  document.getElementById('editIsDecision').checked = false;
-  document.getElementById('branchControls').style.display = 'none';
-
-  populateRejoinDropdown(wf, null);
-  document.getElementById('editRejoinId').value = '';
-
-  document.getElementById('editModal').classList.add('open');
-};
-
-window.closeModal = function() {
-  document.getElementById('editModal').classList.remove('open');
-  currentEditingId = null;
-};
-
-// ---------------------------------------------------------------------------
-// Save
-// ---------------------------------------------------------------------------
-window.saveStep = async function() {
-  const taskVal = document.getElementById('editTask').value.trim();
-  if (!taskVal) { alert('Task cannot be empty.'); return; }
-
-  const isDecision = document.getElementById('editIsDecision').checked;
-  const rejoinId = document.getElementById('editRejoinId').value;
-  const wf = document.getElementById('editWorkflow').value;
-
-  const saveBtn = document.getElementById('saveBtn');
-  saveBtn.disabled = true;
-  setStatus('Saving...');
-
-  try {
-    if (isNewStep) {
-      // Create the new step document
-      const newData = {
-        workflow:   wf,
-        step:       document.getElementById('editStep').value.trim() || '?',
-        task:       taskVal,
-        url:        document.getElementById('editUrl').value,
-        audience:   document.getElementById('editAudience').value,
-        documents:  document.getElementById('editDocuments').value,
-        deadline:   document.getElementById('editDeadline').value,
-        notes:      document.getElementById('editNotes').value,
-        isDecision: isDecision,
-        nextYes:    null,
-        nextNo:     null,
-        rejoinId:   rejoinId || '',
-      };
-
-      const newRef = await addDoc(collection(db, 'workflows'), newData);
-      const newId = newRef.id;
-
-      if (newStepBranch === 'root') {
-        // Set as root for this workflow
-        await setDoc(doc(db, 'meta', wf), { rootId: newId });
-      } else {
-        // Wire parent's nextYes or nextNo to this new doc
-        const field = newStepBranch === 'yes' ? 'nextYes' : 'nextNo';
-        await updateDoc(doc(db, 'workflows', newStepParentId), { [field]: newId });
-
-        // If it's a 'no' branch and the parent had a rejoinId set, propagate it
-        if (newStepBranch === 'no' && allDocs[newStepParentId]?.rejoinId) {
-          await updateDoc(newRef, { rejoinId: allDocs[newStepParentId].rejoinId });
-        }
-      }
-
-      // If this new step is itself a decision, create its 'no' branch step immediately
-      if (isDecision) {
-        const branchData = {
-          workflow:   wf,
-          step:       (document.getElementById('editStep').value.trim() || '?') + 'a',
-          task:       '(branch step — click to edit)',
-          url: '', audience: '', documents: '', deadline: '', notes: '',
-          isDecision: false,
-          nextYes:    null,
-          nextNo:     null,
-          rejoinId:   rejoinId || '',
-        };
-        const branchRef = await addDoc(collection(db, 'workflows'), branchData);
-        await updateDoc(newRef, { nextNo: branchRef.id });
-      }
-
-    } else {
-      // Update existing
-      const existing = allDocs[currentEditingId];
-      const wasDecision = existing.isDecision;
-
-      const updateData = {
-        step:       document.getElementById('editStep').value.trim() || '?',
-        task:       taskVal,
-        url:        document.getElementById('editUrl').value,
-        audience:   document.getElementById('editAudience').value,
-        documents:  document.getElementById('editDocuments').value,
-        deadline:   document.getElementById('editDeadline').value,
-        notes:      document.getElementById('editNotes').value,
-        isDecision: isDecision,
-        rejoinId:   rejoinId || '',
-      };
-
-      // If becoming a decision for the first time, create the 'no' branch step
-      if (isDecision && !wasDecision) {
-        const branchData = {
-          workflow:   wf,
-          step:       (updateData.step || '?') + 'a',
-          task:       '(branch step — click to edit)',
-          url: '', audience: '', documents: '', deadline: '', notes: '',
-          isDecision: false,
-          nextYes:    null,
-          nextNo:     null,
-          rejoinId:   rejoinId || '',
-        };
-        const branchRef = await addDoc(collection(db, 'workflows'), branchData);
-        updateData.nextNo = branchRef.id;
-      }
-
-      // If removing decision status, clear nextNo
-      if (!isDecision && wasDecision) {
-        updateData.nextNo = null;
-      }
-
-      await updateDoc(doc(db, 'workflows', currentEditingId), updateData);
-    }
-
-    window.closeModal();
+    setStatus('Saved · '+new Date().toLocaleTimeString());
     await loadAll();
-  } catch (err) {
-    setStatus('Save error: ' + err.message);
-    alert('Error saving: ' + err.message);
-    console.error(err);
-  } finally {
-    saveBtn.disabled = false;
-  }
+    openPanel(id);
+  } catch(e) { setStatus('Error: '+e.message); alert('Error: '+e.message); }
 };
 
-// ---------------------------------------------------------------------------
-// Delete
-// ---------------------------------------------------------------------------
-document.getElementById('deleteBtn').addEventListener('click', async () => {
-  if (!currentEditingId) return;
-  const task = allDocs[currentEditingId]?.task || 'this step';
-  if (!confirm(`Delete "${task}"?\n\nNote: any steps that pointed to this one will need re-linking manually.`)) return;
-
-  setStatus('Deleting...');
+window.deleteStep = async function(id) {
+  if (!confirm(`Delete "${allDocs[id]?.task||'this step'}"?\n\nAny steps pointing to it will need re-linking.`)) return;
   try {
-    await deleteDoc(doc(db, 'workflows', currentEditingId));
-    window.closeModal();
+    await deleteDoc(doc(db,'workflows',id));
+    window.closePanel();
     await loadAll();
-  } catch (err) {
-    setStatus('Delete error: ' + err.message);
-    alert('Error: ' + err.message);
-  }
-});
+  } catch(e) { alert('Error: '+e.message); }
+};
 
-// ---------------------------------------------------------------------------
-// Populate default data
-// ---------------------------------------------------------------------------
-document.getElementById('populateBtn').addEventListener('click', async () => {
-  if (populateUsed) return;
-  if (Object.keys(allDocs).length > 0) {
-    if (!confirm(`Database already has data. Add defaults on top?`)) return;
-  }
-  populateUsed = true;
-  const btn = document.getElementById('populateBtn');
-  btn.disabled = true;
-  btn.textContent = 'Adding...';
-
-  try {
-    setStatus('Populating...');
-    const { docs, rootIds } = buildDefaultData();
-    const batch = writeBatch(db);
-
-    // Write all step documents with fixed IDs
-    for (const [id, data] of Object.entries(docs)) {
-      batch.set(doc(db, 'workflows', id), data);
-    }
-    // Write root pointers
-    for (const [wf, rootId] of Object.entries(rootIds)) {
-      batch.set(doc(db, 'meta', wf), { rootId });
-    }
-
-    await batch.commit();
-    btn.style.display = 'none';
-    setStatus('Default data added.');
-    await loadAll();
-  } catch (err) {
-    populateUsed = false;
-    btn.disabled = false;
-    btn.textContent = '+ Populate Default Data';
-    setStatus('Error: ' + err.message);
-    alert('Error: ' + err.message);
-  }
-});
-
-// ---------------------------------------------------------------------------
-// Links panel
-// ---------------------------------------------------------------------------
+// ── Links ──────────────────────────────────────
 function renderLinks() {
   const list = document.getElementById('linksList');
-  const entries = Object.entries(allLinks);
-  if (entries.length === 0) {
-    list.innerHTML = '<div class="links-empty">No links yet — click + Add</div>';
-    return;
-  }
-  // Sort by name
-  entries.sort((a, b) => (a[1].name || '').localeCompare(b[1].name || ''));
-  list.innerHTML = entries.map(([id, link]) => `
+  const entries = Object.entries(allLinks).sort((a,b)=>(a[1].name||'').localeCompare(b[1].name||''));
+  if (!entries.length) { list.innerHTML='<span class="links-empty">No links yet</span>'; return; }
+  list.innerHTML = entries.map(([id,l])=>`
     <div class="link-item">
-      <a href="${escHtml(link.url || '#')}" target="_blank" rel="noopener" title="${escHtml(link.url || '')}">${escHtml(link.name || 'Untitled')}</a>
-      <button class="link-edit-btn" onclick="window.openLinkModal('${id}')">edit</button>
+      <a href="${esc(l.url||'#')}" target="_blank" rel="noopener">${esc(l.name||'Untitled')}</a>
+      <button class="link-edit-btn" onclick="window.showLinkForm('${id}')">edit</button>
     </div>`).join('');
 }
 
-window.openLinkModal = function(id) {
-  currentLinkId = id;
-  if (id && allLinks[id]) {
-    document.getElementById('linkModalTitle').textContent = 'Edit Link';
-    document.getElementById('linkName').value = allLinks[id].name || '';
-    document.getElementById('linkUrl').value  = allLinks[id].url  || '';
-    document.getElementById('linkDeleteBtn').style.display = '';
-  } else {
-    document.getElementById('linkModalTitle').textContent = 'Add Link';
-    document.getElementById('linkName').value = '';
-    document.getElementById('linkUrl').value  = '';
-    document.getElementById('linkDeleteBtn').style.display = 'none';
-  }
-  document.getElementById('linkModal').classList.add('open');
+window.showLinkForm = function(id) {
+  editingLinkId = id;
+  document.getElementById('linkNameIn').value = id ? (allLinks[id]?.name||'') : '';
+  document.getElementById('linkUrlIn').value  = id ? (allLinks[id]?.url||'')  : '';
+  document.getElementById('linkDelBtn').style.display = id ? '' : 'none';
+  document.getElementById('linkForm').classList.add('visible');
+  document.getElementById('sidePanel').classList.add('open');
+  document.getElementById('linkNameIn').focus();
 };
 
-window.closeLinkModal = function() {
-  document.getElementById('linkModal').classList.remove('open');
-  currentLinkId = null;
+window.hideLinkForm = function() {
+  editingLinkId = null;
+  document.getElementById('linkForm').classList.remove('visible');
 };
 
 window.saveLink = async function() {
-  const name = document.getElementById('linkName').value.trim();
-  const url  = document.getElementById('linkUrl').value.trim();
-  if (!name) { alert('Name cannot be empty.'); return; }
-  if (!url)  { alert('URL cannot be empty.');  return; }
-
+  const name = document.getElementById('linkNameIn').value.trim();
+  const url  = document.getElementById('linkUrlIn').value.trim();
+  if (!name || !url) { alert('Both name and URL are required.'); return; }
   try {
-    if (currentLinkId) {
-      await updateDoc(doc(db, 'links', currentLinkId), { name, url });
+    if (editingLinkId) {
+      await updateDoc(doc(db,'links',editingLinkId), {name,url});
     } else {
-      await addDoc(collection(db, 'links'), { name, url });
+      await addDoc(collection(db,'links'), {name,url});
     }
-    window.closeLinkModal();
-    // Reload only links
-    const snap = await getDocs(collection(db, 'links'));
-    allLinks = {};
-    snap.forEach(d => { allLinks[d.id] = d.data(); });
+    window.hideLinkForm();
+    const snap = await getDocs(collection(db,'links'));
+    allLinks={}; snap.forEach(d=>{ allLinks[d.id]=d.data(); });
     renderLinks();
-    setStatus('Link saved · ' + new Date().toLocaleTimeString());
-  } catch (err) {
-    alert('Error saving link: ' + err.message);
-  }
+  } catch(e) { alert('Error: '+e.message); }
 };
 
-document.getElementById('linkDeleteBtn').addEventListener('click', async () => {
-  if (!currentLinkId) return;
-  const name = allLinks[currentLinkId]?.name || 'this link';
-  if (!confirm(`Delete "${name}"?`)) return;
+window.deleteLink = async function() {
+  if (!editingLinkId) return;
+  if (!confirm(`Delete "${allLinks[editingLinkId]?.name}"?`)) return;
   try {
-    await deleteDoc(doc(db, 'links', currentLinkId));
-    window.closeLinkModal();
-    const snap = await getDocs(collection(db, 'links'));
-    allLinks = {};
-    snap.forEach(d => { allLinks[d.id] = d.data(); });
+    await deleteDoc(doc(db,'links',editingLinkId));
+    window.hideLinkForm();
+    const snap = await getDocs(collection(db,'links'));
+    allLinks={}; snap.forEach(d=>{ allLinks[d.id]=d.data(); });
     renderLinks();
-    setStatus('Link deleted · ' + new Date().toLocaleTimeString());
-  } catch (err) {
-    alert('Error deleting link: ' + err.message);
+  } catch(e) { alert('Error: '+e.message); }
+};
+
+// ── Populate ───────────────────────────────────
+document.getElementById('populateBtn').addEventListener('click', async () => {
+  if (populateUsed) return;
+  if (Object.keys(allDocs).length && !confirm('Database already has data. Add defaults on top?')) return;
+  populateUsed = true;
+  const btn = document.getElementById('populateBtn');
+  btn.disabled=true; btn.textContent='Adding...';
+  try {
+    const {docs,rootIds} = buildDefaultData();
+    const batch = writeBatch(db);
+    for (const [id,data] of Object.entries(docs)) batch.set(doc(db,'workflows',id),data);
+    for (const [wf,rid] of Object.entries(rootIds)) batch.set(doc(db,'meta',wf),{rootId:rid});
+    await batch.commit();
+    btn.style.display='none';
+    await loadAll();
+  } catch(e) {
+    populateUsed=false; btn.disabled=false; btn.textContent='+ Populate Default Data';
+    alert('Error: '+e.message);
   }
 });
 
-document.getElementById('linkModal').addEventListener('click', e => {
-  if (e.target.id === 'linkModal') window.closeLinkModal();
-});
-
-// ---------------------------------------------------------------------------
-// Filter buttons
-// ---------------------------------------------------------------------------
-document.querySelectorAll('.filter-btn').forEach(btn => {
-  btn.addEventListener('click', () => {
-    document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+// ── Filter ─────────────────────────────────────
+document.querySelectorAll('.filter-btn').forEach(btn=>{
+  btn.addEventListener('click',()=>{
+    document.querySelectorAll('.filter-btn').forEach(b=>b.classList.remove('active'));
     btn.classList.add('active');
-    currentFilter = btn.dataset.filter;
+    currentFilter=btn.dataset.filter;
     renderAll();
   });
 });
 
-// Close modal on backdrop click
-document.getElementById('editModal').addEventListener('click', e => {
-  if (e.target.id === 'editModal') window.closeModal();
-});
-
-// ---------------------------------------------------------------------------
-// Boot
-// ---------------------------------------------------------------------------
+// ── Boot ───────────────────────────────────────
 loadAll();
 </script>
 </body>
