@@ -6,137 +6,117 @@
   <title>Northumbria Department Workflow Map</title>
   <style>
     * { margin:0; padding:0; box-sizing:border-box; }
-    body { font-family: -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif; background:#f0f0f0; overflow:hidden; height:100vh; }
-    @media(prefers-color-scheme:dark){ body{background:#181818;color:#e0e0e0;} }
+    body { font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif; background:#eceef1; overflow:hidden; height:100vh; }
+    @media(prefers-color-scheme:dark){ body{background:#141416;} }
 
     /* ── Topbar ── */
     .topbar {
       position:fixed; top:0; left:0; right:0; height:48px;
-      background:#1f4e78; color:white; display:flex; align-items:center;
-      gap:12px; padding:0 20px; z-index:200;
+      background:#1f4e78; color:white;
+      display:flex; align-items:center; gap:12px; padding:0 20px; z-index:300;
+      box-shadow:0 2px 8px rgba(0,0,0,0.2);
     }
-    .topbar h1 { font-size:16px; font-weight:600; }
-    .tb-sep { width:1px; height:20px; background:rgba(255,255,255,0.25); }
+    .topbar h1 { font-size:16px; font-weight:600; letter-spacing:-0.01em; }
+    .tb-sep { width:1px; height:20px; background:rgba(255,255,255,0.2); }
     .tb-filters { display:flex; gap:6px; }
-    .fb { padding:3px 11px; border:1px solid rgba(255,255,255,0.35); border-radius:20px;
-          background:transparent; color:white; cursor:pointer; font-size:12px; font-weight:500; }
+    .fb { padding:3px 12px; border:1px solid rgba(255,255,255,0.3); border-radius:20px;
+          background:transparent; color:white; cursor:pointer; font-size:12px; font-weight:500;
+          transition:all 0.15s; }
     .fb:hover { background:rgba(255,255,255,0.15); }
     .fb.active { background:white; color:#1f4e78; border-color:white; }
     .tb-right { margin-left:auto; display:flex; align-items:center; gap:10px; }
-    .tb-status { font-size:11px; color:rgba(255,255,255,0.45); }
-    .btn-pop { padding:4px 12px; border:1px solid rgba(255,255,255,0.35);
-               border-radius:4px; background:rgba(255,255,255,0.1); color:white;
-               cursor:pointer; font-size:12px; }
+    .tb-status { font-size:11px; color:rgba(255,255,255,0.4); min-width:120px; text-align:right; }
+    .btn-pop { padding:4px 12px; border:1px solid rgba(255,255,255,0.3); border-radius:4px;
+               background:rgba(255,255,255,0.1); color:white; cursor:pointer; font-size:12px;
+               transition:all 0.15s; }
     .btn-pop:hover { background:rgba(255,255,255,0.2); }
     .btn-pop:disabled { opacity:0.4; cursor:not-allowed; }
 
-    /* ── Canvas area ── */
+    /* ── Canvas wrap ── */
     #canvasWrap {
       position:fixed; top:48px; left:0; right:300px; bottom:0; overflow:hidden;
     }
-    #canvas {
-      position:absolute; top:0; left:0;
-      width:4000px; height:4000px;
-      cursor:grab;
-    }
-    #canvas.grabbing { cursor:grabbing; }
-    #canvas.connecting { cursor:crosshair; }
 
-    /* SVG for edges - sits behind nodes */
-    #edgeSvg {
-      position:absolute; top:0; left:0;
-      width:4000px; height:4000px;
+    /* ── SVG for lanes + edges (behind nodes) ── */
+    #bgSvg {
+      position:absolute; top:0; left:0; width:4000px; height:4000px;
       pointer-events:none;
+    }
+
+    /* ── Node canvas ── */
+    #canvas {
+      position:absolute; top:0; left:0; width:4000px; height:4000px;
+      transform-origin:0 0;
     }
 
     /* ── Node ── */
     .node {
-      position:absolute;
-      width:200px;
-      background:white;
-      border:1.5px solid #d0d0d0;
-      border-radius:10px;
-      padding:10px 12px 28px;
-      cursor:pointer;
-      user-select:none;
+      position:absolute; width:200px;
+      background:white; border:1.5px solid #d4d8dd;
+      border-radius:10px; padding:10px 12px 30px;
+      cursor:pointer; user-select:none;
       transition:border-color 0.15s, box-shadow 0.15s;
       z-index:10;
     }
-    @media(prefers-color-scheme:dark){ .node{background:#242424;border-color:#424242;} }
-    .node:hover { border-color:#1f4e78; box-shadow:0 2px 12px rgba(31,78,120,0.15); }
+    @media(prefers-color-scheme:dark){ .node{background:#242428;border-color:#3a3a40;} }
+    .node:hover { box-shadow:0 4px 16px rgba(0,0,0,0.12); }
     .node.selected { border-color:#1f4e78; box-shadow:0 0 0 3px rgba(31,78,120,0.2); }
-    @media(prefers-color-scheme:dark){ .node.selected{box-shadow:0 0 0 3px rgba(91,155,213,0.3);} }
+    @media(prefers-color-scheme:dark){ .node.selected{border-color:#5b9bd5;box-shadow:0 0 0 3px rgba(91,155,213,0.25);} }
     .node.has-detail { border-color:#5b9bd5; }
-    .node.drag-over { border-color:#27ae60; box-shadow:0 0 0 3px rgba(39,174,96,0.3); }
+    .node.drag-over { border-color:#27ae60 !important; box-shadow:0 0 0 3px rgba(39,174,96,0.25) !important; }
+    .node.dragging { opacity:0.85; box-shadow:0 8px 32px rgba(0,0,0,0.2); z-index:50; }
 
-    .node-tag { font-size:9px; font-weight:700; letter-spacing:0.06em; text-transform:uppercase; color:#bbb; margin-bottom:4px; }
-    .node-task { font-size:13px; font-weight:500; color:#1a1a1a; line-height:1.45; }
-    @media(prefers-color-scheme:dark){ .node-task{color:#e0e0e0;} }
-
-    /* column badge */
-    .node-badge {
-      position:absolute; top:8px; right:8px;
-      font-size:9px; font-weight:700; letter-spacing:0.04em; text-transform:uppercase;
-      padding:1px 6px; border-radius:10px; background:#e8f0f8; color:#1f4e78;
+    .node-wf-strip {
+      position:absolute; top:0; left:0; right:0; height:4px;
+      border-radius:8px 8px 0 0;
     }
-    @media(prefers-color-scheme:dark){ .node-badge{background:#1a3a52;color:#5b9bd5;} }
+    .node-tag { font-size:9px; font-weight:700; letter-spacing:0.07em; text-transform:uppercase; color:#bbb; margin-bottom:5px; margin-top:2px; }
+    .node-task { font-size:13px; font-weight:500; color:#1a1a1a; line-height:1.45; word-break:break-word; }
+    @media(prefers-color-scheme:dark){ .node-task{color:#e0e0e0;} }
 
     /* ── Port handles ── */
     .ports {
-      position:absolute; bottom:4px; left:0; right:0;
-      display:flex; justify-content:space-between; padding:0 8px;
+      position:absolute; bottom:5px; left:0; right:0;
+      display:flex; justify-content:space-between; padding:0 10px;
       opacity:0; transition:opacity 0.15s; pointer-events:none;
     }
     .node:hover .ports { opacity:1; pointer-events:all; }
 
     .port {
       width:20px; height:20px; border-radius:50%;
-      background:#1f4e78; color:white;
-      font-size:15px; font-weight:300; line-height:20px; text-align:center;
-      cursor:crosshair; border:none; flex-shrink:0;
-      transition:transform 0.1s, background 0.1s;
+      color:white; font-size:15px; font-weight:300;
+      cursor:crosshair; border:none;
       display:flex; align-items:center; justify-content:center;
+      transition:transform 0.1s, background 0.1s; flex-shrink:0;
+      line-height:1; padding-bottom:1px;
     }
-    .port:hover { background:#163a5a; transform:scale(1.25); }
-    @media(prefers-color-scheme:dark){ .port{background:#5b9bd5;} .port:hover{background:#4a8ac4;} }
-    .port-ghost { width:20px; height:20px; flex-shrink:0; }
+    .port:hover { transform:scale(1.3); }
 
-    /* ── Inline new-node input ── */
+    /* ── Inline input ── */
     .node-input {
-      position:absolute;
-      width:200px;
-      background:white;
-      border:2px solid #1f4e78;
-      border-radius:10px;
-      padding:10px 12px;
-      z-index:20;
-      box-shadow:0 4px 16px rgba(31,78,120,0.2);
+      position:absolute; width:200px;
+      background:white; border:2px solid #1f4e78; border-radius:10px;
+      padding:10px 12px; z-index:60;
+      box-shadow:0 8px 24px rgba(31,78,120,0.2);
     }
-    @media(prefers-color-scheme:dark){ .node-input{background:#242424;} }
+    @media(prefers-color-scheme:dark){ .node-input{background:#242428;} }
     .node-input textarea {
       width:100%; min-height:60px; border:none; outline:none; resize:none;
       font-family:inherit; font-size:13px; font-weight:500; color:#1a1a1a;
       background:transparent; line-height:1.45;
     }
     @media(prefers-color-scheme:dark){ .node-input textarea{color:#e0e0e0;} }
-    .node-input-hint { font-size:10px; color:#bbb; margin-top:4px; }
-
-    /* ── Connecting line preview ── */
-    #connPreview { pointer-events:none; }
+    .node-input-hint { font-size:10px; color:#bbb; margin-top:6px; }
 
     /* ── Right panel ── */
     #rightPanel {
       position:fixed; top:48px; right:0; bottom:0; width:300px;
       background:white; border-left:1px solid #ddd;
-      display:flex; flex-direction:column; z-index:100;
+      display:flex; flex-direction:column; z-index:200;
     }
-    @media(prefers-color-scheme:dark){ #rightPanel{background:#1e1e1e;border-left-color:#333;} }
+    @media(prefers-color-scheme:dark){ #rightPanel{background:#1c1c20;border-left-color:#2e2e34;} }
 
-    /* Step detail (slides in) */
-    #stepDetail {
-      flex:1; overflow-y:auto; padding:20px;
-      display:none;
-    }
+    #stepDetail { flex:1; overflow-y:auto; padding:20px; display:none; }
     #stepDetail.visible { display:block; }
 
     .sd-title {
@@ -144,55 +124,51 @@
       padding-bottom:10px; border-bottom:1px solid #eee;
       display:flex; align-items:center; justify-content:space-between;
     }
-    @media(prefers-color-scheme:dark){ .sd-title{border-bottom-color:#333;} }
-    .sd-close { background:none; border:none; font-size:20px; cursor:pointer; color:#aaa; padding:0 2px; line-height:1; }
+    @media(prefers-color-scheme:dark){ .sd-title{border-bottom-color:#2e2e34;} }
+    .sd-close { background:none; border:none; font-size:20px; cursor:pointer; color:#aaa; padding:0; line-height:1; }
     .sd-close:hover { color:#333; background:none; }
     @media(prefers-color-scheme:dark){ .sd-close:hover{color:#ddd;} }
 
     .sf { margin-bottom:12px; }
     .sf label { display:block; font-size:10px; font-weight:700; letter-spacing:0.06em;
                 text-transform:uppercase; color:#bbb; margin-bottom:3px; }
-    .sf input, .sf textarea, .sf select {
-      width:100%; padding:6px 9px; border:1px solid #e0e0e0; border-radius:4px;
-      font-family:inherit; font-size:13px; background:white; color:#222;
-      transition:border-color 0.15s;
+    .sf input,.sf textarea,.sf select {
+      width:100%; padding:6px 9px; border:1px solid #e0e0e0; border-radius:5px;
+      font-family:inherit; font-size:13px; background:white; color:#222; transition:border-color 0.15s;
     }
-    .sf input:focus, .sf textarea:focus, .sf select:focus { border-color:#1f4e78; outline:none; }
+    .sf input:focus,.sf textarea:focus,.sf select:focus { border-color:#1f4e78; outline:none; }
     @media(prefers-color-scheme:dark){
-      .sf input,.sf textarea,.sf select{background:#2a2a2a;color:#ddd;border-color:#3a3a3a;}
+      .sf input,.sf textarea,.sf select { background:#2a2a2e; color:#ddd; border-color:#3a3a40; }
     }
     .sf textarea { resize:vertical; min-height:54px; }
     .sf-task textarea { font-size:14px; font-weight:500; min-height:72px; }
-
     .sd-hint { font-size:11px; color:#bbb; line-height:1.5; margin-top:4px; }
-
     .sd-btns { display:flex; gap:8px; margin-top:14px; padding-top:14px; border-top:1px solid #eee; }
-    @media(prefers-color-scheme:dark){ .sd-btns{border-top-color:#333;} }
+    @media(prefers-color-scheme:dark){ .sd-btns{border-top-color:#2e2e34;} }
     .btn-save { flex:1; padding:8px; background:#1f4e78; color:white; border:none;
-                border-radius:4px; font-size:13px; font-weight:500; cursor:pointer; }
+                border-radius:5px; font-size:13px; font-weight:500; cursor:pointer; }
     .btn-save:hover { background:#163a5a; }
     .btn-del { padding:8px 12px; background:transparent; color:#c0392b;
-               border:1px solid #e74c3c; border-radius:4px; font-size:13px; cursor:pointer; }
+               border:1px solid #e74c3c; border-radius:5px; font-size:13px; cursor:pointer; }
     .btn-del:hover { background:#fff0f0; }
     @media(prefers-color-scheme:dark){ .btn-del{color:#e57373;border-color:#c0392b;} .btn-del:hover{background:#2a1a1a;} }
 
-    /* Connections list in detail panel */
     .conn-section { margin-top:14px; padding-top:12px; border-top:1px solid #eee; }
-    @media(prefers-color-scheme:dark){ .conn-section{border-top-color:#333;} }
+    @media(prefers-color-scheme:dark){ .conn-section{border-top-color:#2e2e34;} }
     .conn-section h4 { font-size:10px; font-weight:700; letter-spacing:0.06em; text-transform:uppercase; color:#bbb; margin-bottom:8px; }
-    .conn-item { display:flex; align-items:center; justify-content:space-between; padding:4px 0;
-                 border-bottom:1px solid #f5f5f5; font-size:12px; }
-    @media(prefers-color-scheme:dark){ .conn-item{border-bottom-color:#2a2a2a;} }
+    .conn-item { display:flex; align-items:center; justify-content:space-between;
+                 padding:5px 0; border-bottom:1px solid #f5f5f5; font-size:12px; gap:6px; }
+    @media(prefers-color-scheme:dark){ .conn-item{border-bottom-color:#2a2a2e;} }
     .conn-item:last-child { border-bottom:none; }
+    .conn-label { flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:#555; }
+    @media(prefers-color-scheme:dark){ .conn-label{color:#aaa;} }
     .conn-del { font-size:10px; padding:1px 6px; border:1px solid #e0e0e0; border-radius:3px;
-                background:transparent; color:#bbb; cursor:pointer; }
+                background:transparent; color:#bbb; cursor:pointer; flex-shrink:0; }
     .conn-del:hover { border-color:#e74c3c; color:#c0392b; background:transparent; }
 
     /* ── Links panel ── */
-    #linksPanel {
-      border-top:1px solid #eee; padding:16px 20px; flex-shrink:0;
-    }
-    @media(prefers-color-scheme:dark){ #linksPanel{border-top-color:#333;} }
+    #linksPanel { border-top:1px solid #eee; padding:16px 20px; flex-shrink:0; }
+    @media(prefers-color-scheme:dark){ #linksPanel{border-top-color:#2e2e34;} }
     .lp-header { font-size:10px; font-weight:700; letter-spacing:0.07em; text-transform:uppercase;
                  color:#bbb; margin-bottom:10px; display:flex; align-items:center; justify-content:space-between; }
     .lp-add { font-size:11px; padding:2px 8px; border:1px solid #ddd; border-radius:3px;
@@ -200,7 +176,7 @@
     .lp-add:hover { border-color:#1f4e78; color:#1f4e78; background:transparent; }
     .li { display:flex; align-items:center; gap:6px; padding:4px 0; border-bottom:1px solid #f5f5f5; }
     .li:last-child { border-bottom:none; }
-    @media(prefers-color-scheme:dark){ .li{border-bottom-color:#2a2a2a;} }
+    @media(prefers-color-scheme:dark){ .li{border-bottom-color:#2a2a2e;} }
     .li a { font-size:12px; color:#1f4e78; text-decoration:none; flex:1;
              overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
     .li a:hover { text-decoration:underline; }
@@ -213,37 +189,37 @@
     .lp-form.vis { display:flex; }
     .lp-form input { width:100%; padding:5px 8px; border:1px solid #e0e0e0; border-radius:4px;
                      font-size:12px; font-family:inherit; background:white; color:#222; }
-    @media(prefers-color-scheme:dark){ .lp-form input{background:#2a2a2a;color:#ddd;border-color:#3a3a3a;} }
+    @media(prefers-color-scheme:dark){ .lp-form input{background:#2a2a2e;color:#ddd;border-color:#3a3a40;} }
     .lp-btns { display:flex; gap:6px; }
     .lp-btns button { flex:1; padding:5px; font-size:12px; border-radius:4px; cursor:pointer;
                       border:1px solid #ddd; background:white; color:#555; }
     .lp-btns .lp-save { background:#1f4e78; color:white; border-color:#1f4e78; }
     .lp-btns .lp-save:hover { background:#163a5a; }
     .lp-btns .lp-ddel { border-color:#e74c3c; color:#c0392b; }
-    @media(prefers-color-scheme:dark){ .lp-btns button{background:#2a2a2a;color:#ccc;border-color:#3a3a3a;} }
+    @media(prefers-color-scheme:dark){ .lp-btns button{background:#2a2a2e;color:#ccc;border-color:#3a3a40;} }
 
-    /* ── Toolbar overlay (bottom-left of canvas) ── */
+    /* ── Canvas toolbar ── */
     .canvas-toolbar {
       position:fixed; bottom:20px; left:20px;
-      display:flex; gap:8px; z-index:150;
+      display:flex; gap:8px; z-index:250;
     }
     .ct-btn {
-      padding:7px 14px; background:white; border:1px solid #ddd;
+      padding:7px 14px; background:white; border:1px solid #d4d8dd;
       border-radius:6px; font-size:12px; cursor:pointer; color:#555;
-      box-shadow:0 2px 6px rgba(0,0,0,0.1);
+      box-shadow:0 2px 8px rgba(0,0,0,0.1); transition:all 0.15s;
     }
-    .ct-btn:hover { border-color:#1f4e78; color:#1f4e78; }
+    .ct-btn:hover { border-color:#1f4e78; color:#1f4e78; box-shadow:0 2px 12px rgba(31,78,120,0.15); }
     @media(prefers-color-scheme:dark){
-      .ct-btn{background:#2a2a2a;border-color:#444;color:#ccc;}
+      .ct-btn{background:#242428;border-color:#3a3a40;color:#bbb;}
       .ct-btn:hover{border-color:#5b9bd5;color:#5b9bd5;}
     }
 
-    /* ── Hint overlay ── */
+    /* ── Hint bar ── */
     .hint-bar {
       position:fixed; bottom:20px; left:50%; transform:translateX(-50%);
-      background:rgba(0,0,0,0.65); color:white; font-size:12px;
-      padding:6px 16px; border-radius:20px; pointer-events:none;
-      opacity:0; transition:opacity 0.3s; z-index:300;
+      background:rgba(20,20,24,0.8); color:white; font-size:12px;
+      padding:7px 18px; border-radius:20px; pointer-events:none;
+      opacity:0; transition:opacity 0.25s; z-index:400; white-space:nowrap;
     }
     .hint-bar.vis { opacity:1; }
   </style>
@@ -266,22 +242,22 @@
 </div>
 
 <div id="canvasWrap">
-  <svg id="edgeSvg">
+  <svg id="bgSvg">
     <defs>
-      <marker id="arrowhead" viewBox="0 0 10 10" refX="8" refY="5"
-              markerWidth="6" markerHeight="6" orient="auto-start-reverse">
-        <path d="M2 1L8 5L2 9" fill="none" stroke="#aaa" stroke-width="1.5"
-              stroke-linecap="round" stroke-linejoin="round"/>
+      <marker id="arr" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+        <path d="M2 1L8 5L2 9" fill="none" stroke="#bbb" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
       </marker>
-      <marker id="arrowhead-green" viewBox="0 0 10 10" refX="8" refY="5"
-              markerWidth="6" markerHeight="6" orient="auto-start-reverse">
-        <path d="M2 1L8 5L2 9" fill="none" stroke="#27ae60" stroke-width="1.5"
-              stroke-linecap="round" stroke-linejoin="round"/>
+      <marker id="arr-cross" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+        <path d="M2 1L8 5L2 9" fill="none" stroke="#c0a060" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+      </marker>
+      <marker id="arr-green" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+        <path d="M2 1L8 5L2 9" fill="none" stroke="#27ae60" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
       </marker>
     </defs>
+    <g id="laneGroup"></g>
     <g id="edgeGroup"></g>
     <path id="connPreview" fill="none" stroke="#27ae60" stroke-width="2"
-          stroke-dasharray="6 4" marker-end="url(#arrowhead-green)" d=""/>
+          stroke-dasharray="6 4" marker-end="url(#arr-green)" d=""/>
   </svg>
   <div id="canvas"></div>
 </div>
@@ -294,7 +270,7 @@
     </div>
     <div class="sf sf-task"><label>Task</label><textarea id="sf-task"></textarea></div>
     <div class="sf"><label>Step label</label><input id="sf-step" placeholder="e.g. 1, 2a"></div>
-    <div class="sf"><label>Workflow</label>
+    <div class="sf"><label>Workflow / Lane</label>
       <select id="sf-workflow">
         <option>Teaching</option><option>Research</option><option>Admin</option>
       </select>
@@ -304,12 +280,12 @@
     <div class="sf"><label>Documents</label><input id="sf-documents"></div>
     <div class="sf"><label>Deadline</label><input id="sf-deadline"></div>
     <div class="sf"><label>Notes</label><textarea id="sf-notes"></textarea></div>
-    <p class="sd-hint">Blue outline = detail saved. Drag from + handles to connect boxes.</p>
+    <p class="sd-hint">Drag from + handles to connect boxes. Cross-lane connections draw as dashed.</p>
     <div class="sd-btns">
       <button class="btn-del" onclick="deleteNode()">Delete</button>
       <button class="btn-save" onclick="saveDetail()">Save</button>
     </div>
-    <div class="conn-section" id="connSection"></div>
+    <div id="connSection"></div>
   </div>
   <div id="linksPanel">
     <div class="lp-header">
@@ -340,7 +316,7 @@
 <script type="module">
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.0/firebase-app.js';
 import { getFirestore, collection, getDocs, updateDoc, deleteDoc,
-         doc, addDoc, writeBatch, setDoc } from 'https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore.js';
+         doc, addDoc, writeBatch } from 'https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore.js';
 
 const firebaseConfig = {
   apiKey:"AIzaSyDSK-2hI6ML1eykIed6E8S5Ve29phrEolI",
@@ -353,44 +329,45 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const db  = getFirestore(app);
 
-// ── State ──────────────────────────────────
-let nodes    = {};   // id -> {x,y,workflow,step,task,url,audience,documents,deadline,notes}
-let edges    = {};   // id -> {from,to}  (each edge is a directed connection)
-let links    = {};   // id -> {name,url}
-let selectedId   = null;
-let filter       = 'all';
-let populateUsed = false;
-let editLinkId   = null;
+// ── Lane config ──────────────────────────────
+const LANES = [
+  { wf:'Teaching', color:'#1f4e78', light:'#e8f0f8', x:40,  w:280 },
+  { wf:'Research', color:'#1e6b3c', light:'#e6f4ec', x:340, w:280 },
+  { wf:'Admin',    color:'#7b3f00', light:'#f5ede6', x:640, w:280 },
+];
+const LANE_HEIGHT = 3200;
+const LANE_MAP = {};
+LANES.forEach(l=>{ LANE_MAP[l.wf]=l; });
 
-// Canvas pan/zoom
-let panX=0, panY=0, zoom=1;
-let isPanning=false, panStartX=0, panStartY=0;
-
-// Drag node
-let draggingId=null, dragOffX=0, dragOffY=0, nodeMoved=false;
-
-// Connect mode
-let connecting=false, connectFromId=null, connectFromEl=null;
+// ── State ────────────────────────────────────
+let nodes = {}, edges = {}, links = {};
+let selectedId = null, filter = 'all', populateUsed = false, editLinkId = null;
+let panX = 0, panY = 0, zoom = 1;
+let isPanning = false, panSX = 0, panSY = 0;
+let draggingId = null, dragOX = 0, dragOY = 0, nodeMoved = false;
+let connecting = false, connectFrom = null;
 
 const canvas    = document.getElementById('canvas');
+const bgSvg     = document.getElementById('bgSvg');
+const laneGroup = document.getElementById('laneGroup');
 const edgeGroup = document.getElementById('edgeGroup');
 const preview   = document.getElementById('connPreview');
 const wrap      = document.getElementById('canvasWrap');
 
-const WF_COLORS = { Teaching:'#1f4e78', Research:'#1e6b3c', Admin:'#7b3f00' };
-
-// ── Firestore ──────────────────────────────
+// ── Firestore ────────────────────────────────
 function setStatus(m){ document.getElementById('statusBar').textContent=m; }
-function hint(m,ms=2000){
+let hintTimer;
+function hint(m,ms=2500){
   const h=document.getElementById('hintBar');
   h.textContent=m; h.classList.add('vis');
-  setTimeout(()=>h.classList.remove('vis'),ms);
+  clearTimeout(hintTimer);
+  hintTimer=setTimeout(()=>h.classList.remove('vis'),ms);
 }
 
 async function loadAll(){
   try{
     setStatus('Loading...');
-    const [ns,es,ls] = await Promise.all([
+    const [ns,es,ls]=await Promise.all([
       getDocs(collection(db,'nodes')),
       getDocs(collection(db,'edges')),
       getDocs(collection(db,'links')),
@@ -398,134 +375,217 @@ async function loadAll(){
     nodes={}; ns.forEach(d=>{ nodes[d.id]=d.data(); });
     edges={}; es.forEach(d=>{ edges[d.id]=d.data(); });
     links={}; ls.forEach(d=>{ links[d.id]=d.data(); });
-    setStatus(`${ns.size} boxes · ${new Date().toLocaleTimeString()}`);
+    setStatus(`${ns.size} box${ns.size!==1?'es':''} · ${new Date().toLocaleTimeString()}`);
+    renderLanes();
     renderAll();
     renderLinks();
-  }catch(e){
-    console.error(e);
-    setStatus('Error: '+e.message);
-  }
+  }catch(e){ console.error(e); setStatus('Error: '+e.message); }
 }
 
-// ── Render canvas ──────────────────────────
+// ── Transform ────────────────────────────────
 function applyTransform(){
-  canvas.style.transform=`translate(${panX}px,${panY}px) scale(${zoom})`;
-  canvas.style.transformOrigin='0 0';
-  const svg=document.getElementById('edgeSvg');
-  svg.style.transform=`translate(${panX}px,${panY}px) scale(${zoom})`;
-  svg.style.transformOrigin='0 0';
+  const t=`translate(${panX}px,${panY}px) scale(${zoom})`;
+  canvas.style.transform=t; canvas.style.transformOrigin='0 0';
+  bgSvg.style.transform=t; bgSvg.style.transformOrigin='0 0';
 }
 
+// ── Lane backgrounds ─────────────────────────
+function renderLanes(){
+  laneGroup.innerHTML='';
+  const dark = window.matchMedia('(prefers-color-scheme:dark)').matches;
+
+  LANES.forEach(l=>{
+    if(filter!=='all' && filter!==l.wf) return;
+
+    // Lane background rect
+    const rect=document.createElementNS('http://www.w3.org/2000/svg','rect');
+    rect.setAttribute('x',l.x); rect.setAttribute('y',0);
+    rect.setAttribute('width',l.w); rect.setAttribute('height',LANE_HEIGHT);
+    rect.setAttribute('fill', dark ? l.color+'18' : l.light);
+    rect.setAttribute('rx','0');
+    laneGroup.appendChild(rect);
+
+    // Lane border lines
+    const line=document.createElementNS('http://www.w3.org/2000/svg','line');
+    line.setAttribute('x1',l.x+l.w); line.setAttribute('y1',0);
+    line.setAttribute('x2',l.x+l.w); line.setAttribute('y2',LANE_HEIGHT);
+    line.setAttribute('stroke', dark ? '#2e2e38' : '#d8dce2');
+    line.setAttribute('stroke-width','1');
+    laneGroup.appendChild(line);
+
+    // Lane header pill
+    const hg=document.createElementNS('http://www.w3.org/2000/svg','g');
+
+    const hrect=document.createElementNS('http://www.w3.org/2000/svg','rect');
+    hrect.setAttribute('x',l.x+10); hrect.setAttribute('y',8);
+    hrect.setAttribute('width',l.w-20); hrect.setAttribute('height',28);
+    hrect.setAttribute('rx','6');
+    hrect.setAttribute('fill',l.color);
+    hrect.setAttribute('opacity','0.9');
+    hg.appendChild(hrect);
+
+    const txt=document.createElementNS('http://www.w3.org/2000/svg','text');
+    txt.setAttribute('x',l.x+l.w/2); txt.setAttribute('y',27);
+    txt.setAttribute('text-anchor','middle');
+    txt.setAttribute('fill','white');
+    txt.setAttribute('font-size','12');
+    txt.setAttribute('font-weight','700');
+    txt.setAttribute('letter-spacing','0.06em');
+    txt.setAttribute('font-family','-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif');
+    txt.textContent=l.wf.toUpperCase();
+    hg.appendChild(txt);
+
+    laneGroup.appendChild(hg);
+  });
+}
+
+// ── Render all nodes + edges ─────────────────
 function renderAll(){
   canvas.innerHTML='';
   edgeGroup.innerHTML='';
   const show = filter==='all'
     ? Object.keys(nodes)
     : Object.keys(nodes).filter(id=>nodes[id].workflow===filter);
-
   show.forEach(id=>renderNode(id));
   Object.keys(edges).forEach(id=>renderEdge(id));
 }
 
 function renderNode(id){
-  const n=nodes[id];
-  if(!n) return;
+  const n=nodes[id]; if(!n) return;
+  const lane=LANE_MAP[n.workflow]||LANE_MAP['Teaching'];
+
   const el=document.createElement('div');
-  el.className='node'+(id===selectedId?' selected':'')+(hasDetail(n)?' has-detail':'');
+  el.className='node'
+    +(id===selectedId?' selected':'')
+    +(hasDetail(n)?' has-detail':'');
   el.id='node-'+id;
   el.style.left=n.x+'px';
   el.style.top=n.y+'px';
 
-  const wf=n.workflow||'';
-  const col=WF_COLORS[wf]||'#555';
-
   el.innerHTML=`
-    <div class="node-badge" style="background:${col}22;color:${col};">${wf}</div>
-    <div class="node-tag">${n.step?'Step '+esc(n.step):'Step'}</div>
+    <div class="node-wf-strip" style="background:${lane.color};"></div>
+    <div class="node-tag">${n.step?'Step '+esc(n.step):'Box'}</div>
     <div class="node-task">${esc(n.task||'(empty)')}</div>
     <div class="ports">
-      <button class="port" data-id="${id}" title="Drag to connect">+</button>
-      <button class="port" data-id="${id}" title="Drag to connect">+</button>
-      <button class="port" data-id="${id}" title="Drag to connect">+</button>
+      <button class="port" style="background:${lane.color};" data-id="${id}" title="Drag to connect">+</button>
+      <button class="port" style="background:${lane.color};" data-id="${id}" title="Drag to connect">+</button>
+      <button class="port" style="background:${lane.color};" data-id="${id}" title="Drag to connect">+</button>
     </div>`;
 
-  // Node drag
+  // Drag node
   el.addEventListener('mousedown', e=>{
     if(e.target.classList.contains('port')) return;
     if(connecting) return;
     e.stopPropagation();
-    draggingId=id;
-    nodeMoved=false;
+    draggingId=id; nodeMoved=false;
     const r=wrap.getBoundingClientRect();
-    dragOffX=(e.clientX-r.left-panX)/zoom - n.x;
-    dragOffY=(e.clientY-r.top-panY)/zoom  - n.y;
-    el.style.zIndex=50;
+    dragOX=(e.clientX-r.left-panX)/zoom - n.x;
+    dragOY=(e.clientY-r.top-panY)/zoom  - n.y;
+    el.classList.add('dragging');
   });
 
-  // Click to select (only if not dragged)
   el.addEventListener('click', e=>{
     if(e.target.classList.contains('port')) return;
     if(nodeMoved) return;
-    if(connecting){
-      // complete connection to this node
-      finishConnect(id);
-      return;
-    }
+    if(connecting){ finishConnect(id); return; }
     selectNode(id);
   });
 
-  // Port mousedown = start connecting
   el.querySelectorAll('.port').forEach(p=>{
-    p.addEventListener('mousedown', e=>{
-      e.stopPropagation();
-      e.preventDefault();
-      startConnect(id, e);
-    });
+    p.addEventListener('mousedown', e=>{ e.stopPropagation(); e.preventDefault(); startConnect(id); });
   });
 
   canvas.appendChild(el);
 }
 
-function hasDetail(n){
-  return !!(n.url||n.audience||n.documents||n.deadline||n.notes);
+function hasDetail(n){ return !!(n.url||n.audience||n.documents||n.deadline||n.notes); }
+
+// ── Snap node into its lane ───────────────────
+function snapToLane(id){
+  const n=nodes[id];
+  const lane=LANE_MAP[n.workflow]||LANE_MAP['Teaching'];
+  const pad=8;
+  // Clamp x within lane bounds
+  n.x = Math.max(lane.x+pad, Math.min(lane.x+lane.w-200-pad, n.x));
+  // Clamp y below header
+  n.y = Math.max(48, n.y);
 }
 
+// ── Edges ────────────────────────────────────
 function renderEdge(id){
-  const e=edges[id];
-  if(!e||!nodes[e.from]||!nodes[e.to]) return;
-  // Skip if filtered out
-  if(filter!=='all' && nodes[e.from].workflow!==filter && nodes[e.to].workflow!==filter) return;
+  const e=edges[id]; if(!e||!nodes[e.from]||!nodes[e.to]) return;
+  if(filter!=='all'){
+    const fw=nodes[e.from].workflow, tw=nodes[e.to].workflow;
+    if(fw!==filter && tw!==filter) return;
+  }
 
   const f=nodes[e.from], t=nodes[e.to];
-  const x1=f.x+100, y1=f.y+80;   // bottom-centre of from
-  const x2=t.x+100, y2=t.y;      // top-centre of to
+  const crossLane = f.workflow!==t.workflow;
 
+  // From: bottom-centre, To: top-centre
+  const x1=f.x+100, y1=f.y+90;
+  const x2=t.x+100, y2=t.y;
+
+  const dy=Math.abs(y2-y1);
   const path=document.createElementNS('http://www.w3.org/2000/svg','path');
-  const cy1=y1+Math.abs(y2-y1)*0.5;
-  const cy2=y2-Math.abs(y2-y1)*0.5;
+  const cy1=y1+Math.max(40,dy*0.45);
+  const cy2=y2-Math.max(40,dy*0.45);
   path.setAttribute('d',`M${x1},${y1} C${x1},${cy1} ${x2},${cy2} ${x2},${y2}`);
   path.setAttribute('fill','none');
-  path.setAttribute('stroke','#aaa');
-  path.setAttribute('stroke-width','2');
-  path.setAttribute('marker-end','url(#arrowhead)');
+
+  if(crossLane){
+    path.setAttribute('stroke','#c0a060');
+    path.setAttribute('stroke-width','1.5');
+    path.setAttribute('stroke-dasharray','6 4');
+    path.setAttribute('marker-end','url(#arr-cross)');
+    path.setAttribute('opacity','0.7');
+  } else {
+    path.setAttribute('stroke','#aab');
+    path.setAttribute('stroke-width','2');
+    path.setAttribute('marker-end','url(#arr)');
+  }
   path.setAttribute('data-edge',id);
   edgeGroup.appendChild(path);
 }
 
-function esc(s){
-  return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+function renderEdges(){
+  edgeGroup.innerHTML='';
+  Object.keys(edges).forEach(id=>renderEdge(id));
 }
 
-// ── Canvas pan ──────────────────────────────
+function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+// ── Pan ──────────────────────────────────────
 wrap.addEventListener('mousedown', e=>{
-  if(e.target===wrap||e.target===canvas||e.target.id==='edgeSvg'){
-    if(connecting){ cancelConnect(); return; }
-    isPanning=true;
-    canvas.classList.add('grabbing');
-    panStartX=e.clientX-panX;
-    panStartY=e.clientY-panY;
+  if(connecting && (e.target===wrap||e.target.id==='bgSvg'||e.target===canvas)){
+    // Drop on empty canvas while connecting → create new node
+    const r=wrap.getBoundingClientRect();
+    const mx=(e.clientX-r.left-panX)/zoom;
+    const my=(e.clientY-r.top-panY)/zoom;
+    const fromWf=nodes[connectFrom]?.workflow||'Teaching';
+    const lane=LANE_MAP[fromWf];
+    const snapX=Math.max(lane.x+8, Math.min(lane.x+lane.w-208, mx-100));
+    cancelConnect();
+    showInlineInput(snapX, Math.max(48,my-20), connectFrom);
+    return;
+  }
+  if(!connecting && (e.target===wrap||e.target.id==='bgSvg'||e.target===canvas)){
+    isPanning=true; canvas.style.cursor='grabbing';
+    panSX=e.clientX-panX; panSY=e.clientY-panY;
+    if(selectedId){ selectedId=null; renderAll(); closeDetail(); }
   }
 });
+
+// Store connectFrom before cancelling for the empty-canvas drop
+let _pendingConnectFrom=null;
+
+function startConnect(fromId){
+  _pendingConnectFrom=fromId;
+  connecting=true; connectFrom=fromId;
+  canvas.style.cursor='crosshair';
+  hint('Drag to another box to connect — or release on empty canvas to create a new connected box');
+  preview.setAttribute('d','');
+}
 
 window.addEventListener('mousemove', e=>{
   const r=wrap.getBoundingClientRect();
@@ -533,32 +593,29 @@ window.addEventListener('mousemove', e=>{
   const my=(e.clientY-r.top-panY)/zoom;
 
   if(isPanning){
-    panX=e.clientX-panStartX;
-    panY=e.clientY-panStartY;
+    panX=e.clientX-panSX; panY=e.clientY-panSY;
     applyTransform();
   }
 
   if(draggingId){
     nodeMoved=true;
-    const nx=mx-dragOffX, ny=my-dragOffY;
-    nodes[draggingId].x=Math.max(0,nx);
-    nodes[draggingId].y=Math.max(0,ny);
+    const n=nodes[draggingId];
+    n.x=Math.max(0, mx-dragOX);
+    n.y=Math.max(48, my-dragOY);
     const el=document.getElementById('node-'+draggingId);
-    if(el){ el.style.left=nodes[draggingId].x+'px'; el.style.top=nodes[draggingId].y+'px'; }
+    if(el){ el.style.left=n.x+'px'; el.style.top=n.y+'px'; }
     renderEdges();
   }
 
-  if(connecting){
-    const fromN=nodes[connectFromId];
-    const x1=fromN.x+100, y1=fromN.y+80;
-    const dx=mx-x1, dy=my-y1;
-    const cy1=y1+Math.abs(dy)*0.4, cy2=my-Math.abs(dy)*0.4;
+  if(connecting && connectFrom){
+    const fn=nodes[connectFrom];
+    const x1=fn.x+100, y1=fn.y+90;
+    const dy=Math.abs(my-y1);
+    const cy1=y1+Math.max(40,dy*0.45), cy2=my-Math.max(40,dy*0.45);
     preview.setAttribute('d',`M${x1},${y1} C${x1},${cy1} ${mx},${cy2} ${mx},${my}`);
-
-    // Highlight potential drop target
     document.querySelectorAll('.node.drag-over').forEach(n=>n.classList.remove('drag-over'));
     const hit=nodeAtPoint(mx,my);
-    if(hit && hit!==connectFromId){
+    if(hit && hit!==connectFrom){
       const el=document.getElementById('node-'+hit);
       if(el) el.classList.add('drag-over');
     }
@@ -566,17 +623,19 @@ window.addEventListener('mousemove', e=>{
 });
 
 window.addEventListener('mouseup', async e=>{
-  if(isPanning){ isPanning=false; canvas.classList.remove('grabbing'); }
+  if(isPanning){ isPanning=false; canvas.style.cursor=''; }
 
   if(draggingId){
     if(nodeMoved){
-      // Save position
       const id=draggingId;
-      try{
-        await updateDoc(doc(db,'nodes',id),{x:nodes[id].x, y:nodes[id].y});
-      }catch(err){ console.error(err); }
+      snapToLane(id);
+      const el=document.getElementById('node-'+id);
+      if(el){ el.style.left=nodes[id].x+'px'; el.style.top=nodes[id].y+'px'; }
+      renderEdges();
+      try{ await updateDoc(doc(db,'nodes',id),{x:nodes[id].x,y:nodes[id].y}); }
+      catch(err){ console.error(err); }
     }
-    document.querySelectorAll('.node').forEach(n=>n.style.zIndex='');
+    document.querySelectorAll('.node.dragging').forEach(n=>n.classList.remove('dragging'));
     draggingId=null;
   }
 
@@ -585,113 +644,92 @@ window.addEventListener('mouseup', async e=>{
     const mx=(e.clientX-r.left-panX)/zoom;
     const my=(e.clientY-r.top-panY)/zoom;
     const hit=nodeAtPoint(mx,my);
-    if(hit && hit!==connectFromId){
-      await createEdge(connectFromId, hit);
-    } else if(!hit){
-      // Dropped on empty canvas - create new node here
-      await createNodeAndConnect(connectFromId, mx-100, my-20);
-    }
+    const fromId=connectFrom;
     cancelConnect();
+    if(hit && hit!==fromId){
+      await createEdge(fromId,hit);
+    } else if(!hit && e.target!==wrap && e.target.id!=='bgSvg' && e.target!==canvas){
+      // released on a non-canvas element, ignore
+    } else if(!hit){
+      const fromWf=nodes[fromId]?.workflow||'Teaching';
+      const lane=LANE_MAP[fromWf];
+      const snapX=Math.max(lane.x+8, Math.min(lane.x+lane.w-208, mx-100));
+      showInlineInput(snapX, Math.max(48,my-20), fromId);
+    }
   }
 });
 
-// ── Node at point ───────────────────────────
 function nodeAtPoint(mx,my){
   for(const id of Object.keys(nodes)){
     const n=nodes[id];
-    if(mx>=n.x && mx<=n.x+200 && my>=n.y && my<=n.y+100) return id;
+    if(mx>=n.x&&mx<=n.x+200&&my>=n.y&&my<=n.y+100) return id;
   }
   return null;
 }
 
-// ── Connect ─────────────────────────────────
-function startConnect(fromId, e){
-  connecting=true;
-  connectFromId=fromId;
-  canvas.classList.add('connecting');
-  hint('Drag to another box to connect, or drop on empty canvas to create a new box');
-  preview.setAttribute('d','');
-}
-
 async function finishConnect(toId){
-  if(toId===connectFromId){ cancelConnect(); return; }
-  await createEdge(connectFromId, toId);
+  if(toId===connectFrom){cancelConnect();return;}
+  const fromId=connectFrom;
   cancelConnect();
+  await createEdge(fromId,toId);
 }
 
 function cancelConnect(){
-  connecting=false;
-  connectFromId=null;
-  canvas.classList.remove('connecting');
+  connecting=false; connectFrom=null;
+  canvas.style.cursor='';
   preview.setAttribute('d','');
   document.querySelectorAll('.node.drag-over').forEach(n=>n.classList.remove('drag-over'));
 }
 
-async function createEdge(fromId, toId){
-  // Prevent duplicate edges
+async function createEdge(fromId,toId){
   const exists=Object.values(edges).find(e=>e.from===fromId&&e.to===toId);
-  if(exists){ hint('Connection already exists'); return; }
+  if(exists){ hint('Already connected'); return; }
   try{
     setStatus('Connecting...');
     const ref=await addDoc(collection(db,'edges'),{from:fromId,to:toId});
     edges[ref.id]={from:fromId,to:toId};
     renderEdges();
+    if(selectedId) renderConnSection(selectedId);
     setStatus('Connected · '+new Date().toLocaleTimeString());
   }catch(err){ alert('Error: '+err.message); }
 }
 
-// ── Render only edges (fast, no node re-render) ──
-function renderEdges(){
-  edgeGroup.innerHTML='';
-  Object.keys(edges).forEach(id=>renderEdge(id));
-}
-
-// ── Create node ─────────────────────────────
-async function createNodeAndConnect(fromId, x, y){
-  showInlineInput(x, y, fromId);
-}
-
-function showInlineInput(x, y, fromId){
-  // Remove any existing inline input
+// ── Inline input ─────────────────────────────
+function showInlineInput(x,y,fromId){
   document.querySelectorAll('.node-input').forEach(el=>el.remove());
+  const wf=fromId?(nodes[fromId]?.workflow||'Teaching'):'Teaching';
+  const lane=LANE_MAP[wf];
+  // Snap x into lane
+  const sx=Math.max(lane.x+8, Math.min(lane.x+lane.w-208, x));
+  const sy=Math.max(48,y);
 
   const el=document.createElement('div');
   el.className='node-input';
-  el.style.left=Math.max(0,x)+'px';
-  el.style.top=Math.max(0,y)+'px';
-
-  const wf = fromId ? (nodes[fromId]?.workflow||'Teaching') : 'Teaching';
-
+  el.style.left=sx+'px'; el.style.top=sy+'px';
   el.innerHTML=`<textarea placeholder="Type task… Enter to save, Esc to cancel" rows="2"></textarea>
     <div class="node-input-hint">Enter ↵ save &nbsp;·&nbsp; Esc cancel</div>`;
   canvas.appendChild(el);
-
   const ta=el.querySelector('textarea');
   ta.focus();
-
-  let committed=false;
-  ta.addEventListener('keydown', async ev=>{
+  let done=false;
+  ta.addEventListener('keydown',async ev=>{
     if(ev.key==='Enter'&&!ev.shiftKey){
-      ev.preventDefault();
-      if(committed) return; committed=true;
+      ev.preventDefault(); if(done)return; done=true;
       const task=ta.value.trim();
-      if(!task){ el.remove(); return; }
-      await commitNode(task, wf, x, y, fromId);
-      el.remove();
+      if(!task){el.remove();return;}
+      await commitNode(task,wf,sx,sy,fromId); el.remove();
     }
-    if(ev.key==='Escape'){ el.remove(); }
+    if(ev.key==='Escape'){el.remove();}
   });
-  ta.addEventListener('blur', ()=>{
-    setTimeout(()=>{
-      if(committed) return; committed=true;
-      const task=ta.value.trim();
-      if(task) commitNode(task, wf, x, y, fromId).then(()=>el.remove());
-      else el.remove();
-    }, 200);
-  });
+  ta.addEventListener('blur',()=>setTimeout(()=>{
+    if(done)return; done=true;
+    const task=ta.value.trim();
+    if(task) commitNode(task,wf,sx,sy,fromId).then(()=>el.remove());
+    else el.remove();
+  },200));
 }
 
-async function commitNode(task, wf, x, y, fromId){
+async function commitNode(task,wf,x,y,fromId){
   try{
     setStatus('Saving...');
     const data={workflow:wf,step:'',task,url:'',audience:'',documents:'',deadline:'',notes:'',x,y};
@@ -699,34 +737,32 @@ async function commitNode(task, wf, x, y, fromId){
     nodes[ref.id]=data;
     renderNode(ref.id);
     if(fromId){
-      const eRef=await addDoc(collection(db,'edges'),{from:fromId,to:ref.id});
-      edges[eRef.id]={from:fromId,to:ref.id};
+      const er=await addDoc(collection(db,'edges'),{from:fromId,to:ref.id});
+      edges[er.id]={from:fromId,to:ref.id};
       renderEdges();
     }
     setStatus('Saved · '+new Date().toLocaleTimeString());
     selectNode(ref.id);
-  }catch(e){ alert('Error: '+e.message); }
+  }catch(e){alert('Error: '+e.message);}
 }
 
-// ── Add free node ────────────────────────────
-window.addFreeNode = function(){
-  // Place in centre of current view
+window.addFreeNode=function(){
   const r=wrap.getBoundingClientRect();
-  const cx=(r.width/2-panX)/zoom - 100;
-  const cy=(r.height/2-panY)/zoom - 40;
-  showInlineInput(cx, cy, null);
+  const cx=(r.width/2-panX)/zoom-100;
+  const cy=(r.height/2-panY)/zoom-40;
+  // Snap to Teaching lane by default
+  const lane=LANE_MAP['Teaching'];
+  const sx=Math.max(lane.x+8,Math.min(lane.x+lane.w-208,cx));
+  showInlineInput(sx,Math.max(48,cy),null);
 };
 
-// ── Select / detail panel ───────────────────
+// ── Select / detail panel ────────────────────
 function selectNode(id){
-  selectedId=id;
-  renderAll();
-  openDetail(id);
+  selectedId=id; renderAll(); openDetail(id);
 }
 
 function openDetail(id){
-  const n=nodes[id];
-  if(!n) return;
+  const n=nodes[id]; if(!n)return;
   document.getElementById('stepDetail').classList.add('visible');
   document.getElementById('sf-task').value=n.task||'';
   document.getElementById('sf-step').value=n.step||'';
@@ -740,146 +776,144 @@ function openDetail(id){
 }
 
 function renderConnSection(id){
-  const outgoing=Object.entries(edges).filter(([,e])=>e.from===id);
-  const incoming=Object.entries(edges).filter(([,e])=>e.to===id);
+  const out=Object.entries(edges).filter(([,e])=>e.from===id);
+  const inc=Object.entries(edges).filter(([,e])=>e.to===id);
   let html='<div class="conn-section"><h4>Connections</h4>';
-  if(!outgoing.length&&!incoming.length){ html+='<div style="font-size:12px;color:#bbb;">None — drag from + handle to connect</div>'; }
-  outgoing.forEach(([eid,e])=>{
+  if(!out.length&&!inc.length){
+    html+='<div style="font-size:12px;color:#bbb;">None — drag from a + handle to connect</div>';
+  }
+  out.forEach(([eid,e])=>{
     const t=nodes[e.to];
-    html+=`<div class="conn-item">→ ${esc(t?.task||'?').slice(0,28)}<button class="conn-del" onclick="removeEdge('${eid}')">×</button></div>`;
+    const cross=t&&nodes[id]&&t.workflow!==nodes[id].workflow;
+    html+=`<div class="conn-item">
+      <span class="conn-label">→ ${esc((t?.task||'?').slice(0,26))}${cross?' <em style="color:#c0a060;font-style:normal;">(cross-lane)</em>':''}</span>
+      <button class="conn-del" onclick="removeEdge('${eid}')">×</button>
+    </div>`;
   });
-  incoming.forEach(([eid,e])=>{
+  inc.forEach(([eid,e])=>{
     const f=nodes[e.from];
-    html+=`<div class="conn-item">← ${esc(f?.task||'?').slice(0,28)}<button class="conn-del" onclick="removeEdge('${eid}')">×</button></div>`;
+    html+=`<div class="conn-item">
+      <span class="conn-label">← ${esc((f?.task||'?').slice(0,26))}</span>
+      <button class="conn-del" onclick="removeEdge('${eid}')">×</button>
+    </div>`;
   });
   html+='</div>';
   document.getElementById('connSection').innerHTML=html;
 }
 
-window.removeEdge = async function(eid){
+window.removeEdge=async function(eid){
   try{
     await deleteDoc(doc(db,'edges',eid));
-    delete edges[eid];
-    renderEdges();
-    if(selectedId) renderConnSection(selectedId);
-  }catch(e){ alert('Error: '+e.message); }
+    delete edges[eid]; renderEdges();
+    if(selectedId)renderConnSection(selectedId);
+  }catch(e){alert('Error: '+e.message);}
 };
 
-window.closeDetail = function(){
+window.closeDetail=function(){
   document.getElementById('stepDetail').classList.remove('visible');
-  selectedId=null;
-  renderAll();
+  selectedId=null; renderAll();
 };
 
-window.saveDetail = async function(){
-  if(!selectedId) return;
+window.saveDetail=async function(){
+  if(!selectedId)return;
   const task=document.getElementById('sf-task').value.trim();
-  if(!task){ alert('Task cannot be empty.'); return; }
+  if(!task){alert('Task cannot be empty.');return;}
+  const newWf=document.getElementById('sf-workflow').value;
   try{
     setStatus('Saving...');
-    const updates={
-      task, step:document.getElementById('sf-step').value.trim(),
-      workflow:document.getElementById('sf-workflow').value,
-      url:document.getElementById('sf-url').value.trim(),
+    const updates={task,step:document.getElementById('sf-step').value.trim(),
+      workflow:newWf,url:document.getElementById('sf-url').value.trim(),
       audience:document.getElementById('sf-audience').value.trim(),
       documents:document.getElementById('sf-documents').value.trim(),
       deadline:document.getElementById('sf-deadline').value.trim(),
-      notes:document.getElementById('sf-notes').value.trim(),
-    };
+      notes:document.getElementById('sf-notes').value.trim()};
     await updateDoc(doc(db,'nodes',selectedId),updates);
     Object.assign(nodes[selectedId],updates);
-    setStatus('Saved · '+new Date().toLocaleTimeString());
-    renderAll();
-    openDetail(selectedId);
-  }catch(e){ alert('Error: '+e.message); }
-};
-
-window.deleteNode = async function(){
-  if(!selectedId) return;
-  if(!confirm(`Delete "${nodes[selectedId]?.task||'this box'}"?\n\nConnections to/from it will also be removed.`)) return;
-  try{
-    // Remove all edges involving this node
-    const toDelete=Object.entries(edges).filter(([,e])=>e.from===selectedId||e.to===selectedId);
-    for(const [eid] of toDelete){
-      await deleteDoc(doc(db,'edges',eid));
-      delete edges[eid];
+    // If workflow changed, snap into new lane
+    if(newWf!==nodes[selectedId].workflow){
+      nodes[selectedId].workflow=newWf;
+      snapToLane(selectedId);
+      await updateDoc(doc(db,'nodes',selectedId),{x:nodes[selectedId].x,y:nodes[selectedId].y});
     }
-    await deleteDoc(doc(db,'nodes',selectedId));
-    delete nodes[selectedId];
-    window.closeDetail();
-    renderAll();
-  }catch(e){ alert('Error: '+e.message); }
+    setStatus('Saved · '+new Date().toLocaleTimeString());
+    renderAll(); openDetail(selectedId);
+  }catch(e){alert('Error: '+e.message);}
 };
 
-// ── Auto layout ─────────────────────────────
-window.autoLayout = function(){
-  const WFS=['Teaching','Research','Admin'];
-  const colW=280, startX=60, startY=80, rowH=130;
-  WFS.forEach((wf,ci)=>{
-    const wfNodes=Object.entries(nodes).filter(([,n])=>n.workflow===wf);
-    // Build adjacency to sort topologically
-    const ids=wfNodes.map(([id])=>id);
+window.deleteNode=async function(){
+  if(!selectedId)return;
+  if(!confirm(`Delete "${nodes[selectedId]?.task||'this box'}"?\n\nAll connections will also be removed.`))return;
+  try{
+    const toDelete=Object.entries(edges).filter(([,e])=>e.from===selectedId||e.to===selectedId);
+    for(const [eid] of toDelete){ await deleteDoc(doc(db,'edges',eid)); delete edges[eid]; }
+    await deleteDoc(doc(db,'nodes',selectedId)); delete nodes[selectedId];
+    window.closeDetail(); renderAll();
+  }catch(e){alert('Error: '+e.message);}
+};
+
+// ── Auto layout ───────────────────────────────
+window.autoLayout=function(){
+  const topY=52, rowH=130;
+  LANES.forEach(l=>{
+    const ids=Object.entries(nodes).filter(([,n])=>n.workflow===l.wf).map(([id])=>id);
     const inDeg={};
-    ids.forEach(id=>{ inDeg[id]=0; });
+    ids.forEach(id=>{inDeg[id]=0;});
     Object.values(edges).forEach(e=>{
       if(ids.includes(e.from)&&ids.includes(e.to)) inDeg[e.to]=(inDeg[e.to]||0)+1;
     });
-    // Kahn's toposort
-    const queue=ids.filter(id=>inDeg[id]===0);
-    const sorted=[];
+    const queue=ids.filter(id=>inDeg[id]===0), sorted=[];
     while(queue.length){
       const id=queue.shift(); sorted.push(id);
       Object.values(edges).forEach(e=>{
         if(e.from===id&&ids.includes(e.to)){
-          inDeg[e.to]--;
-          if(inDeg[e.to]===0) queue.push(e.to);
+          inDeg[e.to]--; if(inDeg[e.to]===0) queue.push(e.to);
         }
       });
     }
-    // Nodes not in topo (cycles) go at end
     ids.filter(id=>!sorted.includes(id)).forEach(id=>sorted.push(id));
 
-    // Simple column layout with branching offset
-    sorted.forEach((id,ri)=>{
-      // check if this node has siblings (multiple incoming from same parent)
-      const incomingFromSameWf=Object.values(edges).filter(e=>e.to===id&&ids.includes(e.from));
-      const x=startX+ci*colW;
-      const y=startY+ri*rowH;
-      nodes[id].x=x; nodes[id].y=y;
+    // Place nodes: detect branches (multiple children from same parent) and offset them
+    const placed={};
+    sorted.forEach((id,i)=>{
+      const children=sorted.filter(cid=>Object.values(edges).some(e=>e.from===id&&e.to===cid));
+      const parents=sorted.filter(pid=>Object.values(edges).some(e=>e.from===pid&&e.to===id));
+      // Main column x or offset for branch nodes
+      const siblingIndex=parents.length>0
+        ? sorted.filter(sid=>parents.some(pid=>Object.values(edges).some(e=>e.from===pid&&e.to===sid))).indexOf(id)
+        : 0;
+      const col=siblingIndex>0?1:0;
+      const colW=Math.floor((l.w-16)/2);
+      const nx=l.x+8+(col*(colW+8));
+      const ny=topY+i*rowH;
+      nodes[id].x=Math.min(nx,l.x+l.w-208);
+      nodes[id].y=ny;
+      placed[id]=true;
     });
   });
 
-  // Batch save positions
-  const batch=[];
-  Object.entries(nodes).forEach(([id,n])=>{
-    batch.push(updateDoc(doc(db,'nodes',id),{x:n.x,y:n.y}));
-  });
-  Promise.all(batch).then(()=>{ renderAll(); setStatus('Layout applied'); }).catch(e=>alert('Error: '+e.message));
+  const saves=Object.entries(nodes).map(([id,n])=>updateDoc(doc(db,'nodes',id),{x:n.x,y:n.y}));
+  Promise.all(saves).then(()=>{renderAll();setStatus('Layout applied');}).catch(e=>alert('Error: '+e.message));
 };
 
-// ── Reset view ───────────────────────────────
-window.resetView = function(){ panX=60; panY=20; zoom=1; applyTransform(); };
+window.resetView=function(){ panX=20; panY=20; zoom=1; applyTransform(); };
 
 // ── Zoom ─────────────────────────────────────
-wrap.addEventListener('wheel', e=>{
+wrap.addEventListener('wheel',e=>{
   e.preventDefault();
   const r=wrap.getBoundingClientRect();
   const mx=e.clientX-r.left, my=e.clientY-r.top;
   const delta=e.deltaY>0?0.9:1.1;
-  const newZoom=Math.min(2,Math.max(0.3,zoom*delta));
-  panX=mx-(mx-panX)*newZoom/zoom;
-  panY=my-(my-panY)*newZoom/zoom;
-  zoom=newZoom;
-  applyTransform();
+  const nz=Math.min(2,Math.max(0.25,zoom*delta));
+  panX=mx-(mx-panX)*nz/zoom; panY=my-(my-panY)*nz/zoom;
+  zoom=nz; applyTransform();
 },{passive:false});
 
-// ── Filter ───────────────────────────────────
+// ── Filter ────────────────────────────────────
 document.querySelectorAll('.fb').forEach(b=>{
   b.addEventListener('click',()=>{
     document.querySelectorAll('.fb').forEach(x=>x.classList.remove('active'));
-    b.classList.add('active');
-    filter=b.dataset.filter;
-    renderAll();
+    b.classList.add('active'); filter=b.dataset.filter;
+    renderLanes(); renderAll();
   });
 });
 
@@ -887,15 +921,14 @@ document.querySelectorAll('.fb').forEach(b=>{
 function renderLinks(){
   const list=document.getElementById('linksList');
   const entries=Object.entries(links).sort((a,b)=>(a[1].name||'').localeCompare(b[1].name||''));
-  if(!entries.length){ list.innerHTML='<span class="lp-empty">No links yet</span>'; return; }
+  if(!entries.length){list.innerHTML='<span class="lp-empty">No links yet</span>';return;}
   list.innerHTML=entries.map(([id,l])=>`
     <div class="li">
       <a href="${esc(l.url||'#')}" target="_blank" rel="noopener">${esc(l.name||'Untitled')}</a>
       <button class="li-edit" onclick="showLinkForm('${id}')">edit</button>
     </div>`).join('');
 }
-
-window.showLinkForm = function(id){
+window.showLinkForm=function(id){
   editLinkId=id;
   document.getElementById('lpName').value=id?(links[id]?.name||''):'';
   document.getElementById('lpUrl').value=id?(links[id]?.url||''):'';
@@ -903,88 +936,63 @@ window.showLinkForm = function(id){
   document.getElementById('lpForm').classList.add('vis');
   document.getElementById('lpName').focus();
 };
-window.hideLinkForm = function(){
-  editLinkId=null;
-  document.getElementById('lpForm').classList.remove('vis');
-};
-window.saveLink = async function(){
+window.hideLinkForm=function(){editLinkId=null;document.getElementById('lpForm').classList.remove('vis');};
+window.saveLink=async function(){
   const name=document.getElementById('lpName').value.trim();
   const url=document.getElementById('lpUrl').value.trim();
-  if(!name||!url){ alert('Both fields required.'); return; }
+  if(!name||!url){alert('Both fields required.');return;}
   try{
     if(editLinkId) await updateDoc(doc(db,'links',editLinkId),{name,url});
     else await addDoc(collection(db,'links'),{name,url});
     window.hideLinkForm();
     const snap=await getDocs(collection(db,'links'));
-    links={}; snap.forEach(d=>{ links[d.id]=d.data(); });
+    links={}; snap.forEach(d=>{links[d.id]=d.data();});
     renderLinks();
-  }catch(e){ alert('Error: '+e.message); }
+  }catch(e){alert('Error: '+e.message);}
 };
-window.deleteLink = async function(){
-  if(!editLinkId) return;
-  if(!confirm(`Delete "${links[editLinkId]?.name}"?`)) return;
+window.deleteLink=async function(){
+  if(!editLinkId)return;
+  if(!confirm(`Delete "${links[editLinkId]?.name}"?`))return;
   try{
     await deleteDoc(doc(db,'links',editLinkId));
     window.hideLinkForm();
     const snap=await getDocs(collection(db,'links'));
-    links={}; snap.forEach(d=>{ links[d.id]=d.data(); });
+    links={}; snap.forEach(d=>{links[d.id]=d.data();});
     renderLinks();
-  }catch(e){ alert('Error: '+e.message); }
+  }catch(e){alert('Error: '+e.message);}
 };
 
 // ── Populate ──────────────────────────────────
-document.getElementById('populateBtn').addEventListener('click', async()=>{
-  if(populateUsed) return;
-  if(Object.keys(nodes).length&&!confirm('Database already has data. Add defaults on top?')) return;
+document.getElementById('populateBtn').addEventListener('click',async()=>{
+  if(populateUsed)return;
+  if(Object.keys(nodes).length&&!confirm('Add default data on top of existing?'))return;
   populateUsed=true;
   const btn=document.getElementById('populateBtn');
   btn.disabled=true; btn.textContent='Adding...';
   try{
-    // Teaching column: x=60
-    // Research column: x=360
-    // Admin column: x=660
     const nd=(wf,s,t,x,y)=>({workflow:wf,step:s,task:t,url:'',audience:'',documents:'',deadline:'',notes:'',x,y});
     const batch=writeBatch(db);
-
-    const nRefs={};
     const nData={
-      t1: nd('Teaching','1','Do you have a PEP ready?',60,80),
-      t1a:nd('Teaching','1a','Get blank PEP template',260,200),
-      t1b:nd('Teaching','1b','Complete the PEP',260,340),
-      t2: nd('Teaching','2','Upload PEP to MS Teams',60,340),
-      t3: nd('Teaching','3','Record link in SEM spreadsheet',60,480),
-      r1: nd('Research','1','Do you have a PO form?',360,80),
-      r1a:nd('Research','1a','Get blank PO form',560,200),
-      r1b:nd('Research','1b','Complete the PO form',560,340),
-      r2: nd('Research','2','Upload PO & @ Liam for approval',360,340),
-      a1: nd('Admin','1','Admin step 1 (to be defined)',660,80),
+      t1: nd('Teaching','1','Do you have a PEP ready?',88,52),
+      t1a:nd('Teaching','1a','Get blank PEP template',168,182),
+      t1b:nd('Teaching','1b','Complete the PEP',168,312),
+      t2: nd('Teaching','2','Upload PEP to MS Teams',88,312),
+      t3: nd('Teaching','3','Record link in SEM spreadsheet',88,442),
+      r1: nd('Research','1','Do you have a PO form?',388,52),
+      r1a:nd('Research','1a','Get blank PO form',468,182),
+      r1b:nd('Research','1b','Complete the PO form',468,312),
+      r2: nd('Research','2','Upload PO & @ Liam for approval',388,312),
+      a1: nd('Admin','1','Admin step 1 (to be defined)',688,52),
     };
-
-    const nodeIds={};
+    const nIds={};
     for(const [k,data] of Object.entries(nData)){
-      const r=doc(collection(db,'nodes'));
-      batch.set(r,data);
-      nodeIds[k]=r.id;
-      nRefs[k]=r;
+      const r=doc(collection(db,'nodes')); batch.set(r,data); nIds[k]=r.id;
     }
-
-    // Edges
-    const edgeList=[
-      ['t1','t2'],   // yes path
-      ['t1','t1a'],  // no branch
-      ['t1a','t1b'],
-      ['t1b','t2'],  // rejoin
-      ['t2','t3'],
-      ['r1','r2'],
-      ['r1','r1a'],
-      ['r1a','r1b'],
-      ['r1b','r2'],
-    ];
+    const edgeList=[['t1','t2'],['t1','t1a'],['t1a','t1b'],['t1b','t2'],['t2','t3'],
+                    ['r1','r2'],['r1','r1a'],['r1a','r1b'],['r1b','r2']];
     for(const [a,b] of edgeList){
-      const r=doc(collection(db,'edges'));
-      batch.set(r,{from:nodeIds[a],to:nodeIds[b]});
+      batch.set(doc(collection(db,'edges')),{from:nIds[a],to:nIds[b]});
     }
-
     await batch.commit();
     btn.style.display='none';
     await loadAll();
@@ -994,7 +1002,7 @@ document.getElementById('populateBtn').addEventListener('click', async()=>{
   }
 });
 
-// ── Boot ───────────────────────────────────────
+// ── Boot ──────────────────────────────────────
 resetView();
 loadAll();
 </script>
