@@ -51,9 +51,11 @@
 
     /* ── Node ── */
     .node {
-      position:absolute; width:200px;
+      position:absolute;
+      min-width:160px; max-width:220px;
+      width:max-content;
       background:white; border:1.5px solid #d4d8dd;
-      border-radius:10px; padding:10px 12px 30px;
+      border-radius:8px; padding:8px 12px 28px;
       cursor:pointer; user-select:none;
       transition:border-color 0.15s, box-shadow 0.15s;
       z-index:10;
@@ -70,8 +72,8 @@
       position:absolute; top:0; left:0; right:0; height:4px;
       border-radius:8px 8px 0 0;
     }
-    .node-tag { font-size:9px; font-weight:700; letter-spacing:0.07em; text-transform:uppercase; color:#bbb; margin-bottom:5px; margin-top:2px; }
-    .node-task { font-size:13px; font-weight:500; color:#1a1a1a; line-height:1.45; word-break:break-word; }
+    .node-tag { font-size:9px; font-weight:700; letter-spacing:0.07em; text-transform:uppercase; color:#bbb; margin-bottom:3px; margin-top:2px; }
+    .node-task { font-size:12px; font-weight:500; color:#1a1a1a; line-height:1.4; word-break:break-word; max-width:196px; }
     @media(prefers-color-scheme:dark){ .node-task{color:#e0e0e0;} }
 
     /* ── Port handles ── */
@@ -94,9 +96,9 @@
 
     /* ── Inline input ── */
     .node-input {
-      position:absolute; width:200px;
-      background:white; border:2px solid #1f4e78; border-radius:10px;
-      padding:10px 12px; z-index:60;
+      position:absolute; width:180px;
+      background:white; border:2px solid #1f4e78; border-radius:8px;
+      padding:8px 12px; z-index:60;
       box-shadow:0 8px 24px rgba(31,78,120,0.2);
     }
     @media(prefers-color-scheme:dark){ .node-input{background:#242428;} }
@@ -216,12 +218,23 @@
 
     /* ── Hint bar ── */
     .hint-bar {
-      position:fixed; bottom:20px; left:50%; transform:translateX(-50%);
+      position:fixed; bottom:60px; left:50%; transform:translateX(-50%);
       background:rgba(20,20,24,0.8); color:white; font-size:12px;
       padding:7px 18px; border-radius:20px; pointer-events:none;
       opacity:0; transition:opacity 0.25s; z-index:400; white-space:nowrap;
     }
     .hint-bar.vis { opacity:1; }
+
+    /* ── Zoom hint (always visible until first scroll) ── */
+    .zoom-hint {
+      position:fixed; bottom:20px; left:50%; transform:translateX(-50%);
+      background:rgba(31,78,120,0.85); color:white; font-size:11px;
+      padding:5px 14px; border-radius:20px; pointer-events:none;
+      z-index:399; white-space:nowrap; display:flex; align-items:center; gap:6px;
+      transition:opacity 0.5s;
+    }
+    .zoom-hint.hidden { opacity:0; }
+    .zoom-hint-icon { font-size:14px; opacity:0.8; }
   </style>
 </head>
 <body>
@@ -312,6 +325,9 @@
 </div>
 
 <div class="hint-bar" id="hintBar"></div>
+<div class="zoom-hint" id="zoomHint">
+  <span class="zoom-hint-icon">🖱</span> Scroll to zoom · Drag canvas to pan
+</div>
 
 <script type="module">
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.0/firebase-app.js';
@@ -465,7 +481,11 @@ function renderAll(){
     ? Object.keys(nodes)
     : Object.keys(nodes).filter(id=>nodes[id].workflow===filter);
   show.forEach(id=>renderNode(id));
-  Object.keys(edges).forEach(id=>renderEdge(id));
+  // Edges rendered after a frame so node offsetWidth is available
+  requestAnimationFrame(()=>{
+    edgeGroup.innerHTML='';
+    Object.keys(edges).forEach(id=>renderEdge(id));
+  });
 }
 
 function renderNode(id){
@@ -530,10 +550,10 @@ function snapToLane(id){
   const n=nodes[id];
   const lane=LANE_MAP[n.workflow]||LANE_MAP['Teaching'];
   const pad=8;
-  // Clamp x within lane bounds
-  n.x = Math.max(lane.x+pad, Math.min(lane.x+lane.w-200-pad, n.x));
-  // Clamp y below header
-  n.y = Math.max(48, n.y);
+  const el=document.getElementById('node-'+id);
+  const nw=el?el.offsetWidth:180;
+  n.x = Math.max(lane.x+pad, Math.min(lane.x+lane.w-nw-pad, n.x));
+  n.y = Math.max(52, n.y);
 }
 
 // ── Edges ────────────────────────────────────
@@ -547,15 +567,39 @@ function renderEdge(id){
   const f=nodes[e.from], t=nodes[e.to];
   const crossLane = f.workflow!==t.workflow;
 
-  // From: bottom-centre, To: top-centre
-  const x1=f.x+100, y1=f.y+90;
-  const x2=t.x+100, y2=t.y;
+  // Use node's actual rendered width if available, else 180px default
+  const fromEl=document.getElementById('node-'+e.from);
+  const toEl=document.getElementById('node-'+e.to);
+  const fw=fromEl?fromEl.offsetWidth:180;
+  const tw=toEl?toEl.offsetWidth:180;
+  const fh=fromEl?fromEl.offsetHeight:70;
 
-  const dy=Math.abs(y2-y1);
+  // Exit: bottom-centre of from node. Enter: top-centre of to node.
+  const x1=f.x+fw/2, y1=f.y+fh;
+  const x2=t.x+tw/2, y2=t.y;
+
+  // Orthogonal path: down → horizontal → down (right-angle bends only)
+  // Midpoint Y for the horizontal segment
+  const midY=y1+Math.max(16,(y2-y1)/2);
+  const r=6; // corner radius for the bend
+
+  let d;
+  if(Math.abs(x2-x1)<2){
+    // Straight vertical line
+    d=`M${x1},${y1} L${x2},${y2}`;
+  } else {
+    // L-shaped with rounded corners: down to midY, across, down to y2
+    const dx=x2>x1?r:-r;
+    d=`M${x1},${y1} `
+     +`L${x1},${midY-r} `
+     +`Q${x1},${midY} ${x1+dx},${midY} `
+     +`L${x2-dx},${midY} `
+     +`Q${x2},${midY} ${x2},${midY+r} `
+     +`L${x2},${y2}`;
+  }
+
   const path=document.createElementNS('http://www.w3.org/2000/svg','path');
-  const cy1=y1+Math.max(40,dy*0.45);
-  const cy2=y2-Math.max(40,dy*0.45);
-  path.setAttribute('d',`M${x1},${y1} C${x1},${cy1} ${x2},${cy2} ${x2},${y2}`);
+  path.setAttribute('d',d);
   path.setAttribute('fill','none');
 
   if(crossLane){
@@ -565,8 +609,8 @@ function renderEdge(id){
     path.setAttribute('marker-end','url(#arr-cross)');
     path.setAttribute('opacity','0.7');
   } else {
-    path.setAttribute('stroke','#aab');
-    path.setAttribute('stroke-width','2');
+    path.setAttribute('stroke','#9aabb8');
+    path.setAttribute('stroke-width','1.5');
     path.setAttribute('marker-end','url(#arr)');
   }
   path.setAttribute('data-edge',id);
@@ -574,8 +618,10 @@ function renderEdge(id){
 }
 
 function renderEdges(){
-  edgeGroup.innerHTML='';
-  Object.keys(edges).forEach(id=>renderEdge(id));
+  requestAnimationFrame(()=>{
+    edgeGroup.innerHTML='';
+    Object.keys(edges).forEach(id=>renderEdge(id));
+  });
 }
 
 function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
@@ -625,10 +671,14 @@ window.addEventListener('mousemove', e=>{
   if(draggingId){
     nodeMoved=true;
     const n=nodes[draggingId];
-    n.x=Math.max(0, mx-dragOX);
-    n.y=Math.max(48, my-dragOY);
-    const el=document.getElementById('node-'+draggingId);
-    if(el){ el.style.left=n.x+'px'; el.style.top=n.y+'px'; }
+    const lane=LANE_MAP[n.workflow]||LANE_MAP['Teaching'];
+    const dEl=document.getElementById('node-'+draggingId);
+    const nw=dEl?dEl.offsetWidth:180;
+    const pad=8;
+    // Clamp x strictly within lane - no crossing allowed during drag
+    n.x=Math.max(lane.x+pad, Math.min(lane.x+lane.w-nw-pad, mx-dragOX));
+    n.y=Math.max(52, my-dragOY);
+    if(dEl){ dEl.style.left=n.x+'px'; dEl.style.top=n.y+'px'; }
     renderEdges();
   }
 
@@ -980,8 +1030,13 @@ window.autoLayout=function(){
 window.resetView=function(){ panX=20; panY=20; zoom=1; applyTransform(); };
 
 // ── Zoom ─────────────────────────────────────
+let zoomHintDismissed=false;
 wrap.addEventListener('wheel',e=>{
   e.preventDefault();
+  if(!zoomHintDismissed){
+    zoomHintDismissed=true;
+    document.getElementById('zoomHint').classList.add('hidden');
+  }
   const r=wrap.getBoundingClientRect();
   const mx=e.clientX-r.left, my=e.clientY-r.top;
   const delta=e.deltaY>0?0.9:1.1;
