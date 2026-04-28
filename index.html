@@ -34,7 +34,7 @@
 
     /* ── Canvas wrap ── */
     #canvasWrap {
-      position:fixed; top:48px; left:0; right:300px; bottom:0; overflow:hidden;
+      position:fixed; top:48px; left:0; right:260px; bottom:0; overflow:hidden;
     }
 
     /* ── SVG for lanes + edges (behind nodes) ── */
@@ -111,17 +111,33 @@
 
     /* ── Right panel ── */
     #rightPanel {
-      position:fixed; top:48px; right:0; bottom:0; width:300px;
+      position:fixed; top:48px; right:0; bottom:0; width:260px;
       background:white; border-left:1px solid #ddd;
       display:flex; flex-direction:column; z-index:200;
     }
     @media(prefers-color-scheme:dark){ #rightPanel{background:#1c1c20;border-left-color:#2e2e34;} }
 
-    #stepDetail { flex:1; overflow-y:auto; padding:20px; display:none; }
+    /* ── Floating popup ── */
+    #stepDetail {
+      position:fixed;
+      width:280px;
+      background:white;
+      border:1px solid #d4d8dd;
+      border-radius:10px;
+      padding:16px;
+      box-shadow:0 8px 32px rgba(0,0,0,0.18);
+      z-index:500;
+      display:none;
+      max-height:calc(100vh - 80px);
+      overflow-y:auto;
+    }
     #stepDetail.visible { display:block; }
+    @media(prefers-color-scheme:dark){
+      #stepDetail{background:#1e1e22;border-color:#3a3a42;box-shadow:0 8px 32px rgba(0,0,0,0.5);}
+    }
 
     .sd-title {
-      font-size:13px; font-weight:600; margin-bottom:16px;
+      font-size:13px; font-weight:600; margin-bottom:14px;
       padding-bottom:10px; border-bottom:1px solid #eee;
       display:flex; align-items:center; justify-content:space-between;
     }
@@ -168,8 +184,7 @@
     .conn-del:hover { border-color:#e74c3c; color:#c0392b; background:transparent; }
 
     /* ── Links panel ── */
-    #linksPanel { border-top:1px solid #eee; padding:16px 20px; flex-shrink:0; }
-    @media(prefers-color-scheme:dark){ #linksPanel{border-top-color:#2e2e34;} }
+    #linksPanel { padding:16px 20px; flex:1; overflow-y:auto; }
     .lp-header { font-size:10px; font-weight:700; letter-spacing:0.07em; text-transform:uppercase;
                  color:#bbb; margin-bottom:10px; display:flex; align-items:center; justify-content:space-between; }
     .lp-add { font-size:11px; padding:2px 8px; border:1px solid #ddd; border-radius:3px;
@@ -286,31 +301,33 @@
   <div id="canvas"></div>
 </div>
 
-<div id="rightPanel">
-  <div id="stepDetail">
-    <div class="sd-title">
-      <span>Step detail</span>
-      <button class="sd-close" onclick="closeDetail()">×</button>
-    </div>
-    <div class="sf sf-task"><label>Task</label><textarea id="sf-task"></textarea></div>
-    <div class="sf"><label>Step label</label><input id="sf-step" placeholder="e.g. 1, 2a"></div>
-    <div class="sf"><label>Workflow / Lane</label>
-      <select id="sf-workflow">
-        <option>Teaching</option><option>Research</option>
-      </select>
-    </div>
-    <div class="sf"><label>URL</label><input id="sf-url" placeholder="https://..."></div>
-    <div class="sf"><label>Audience</label><input id="sf-audience"></div>
-    <div class="sf"><label>Documents</label><input id="sf-documents"></div>
-    <div class="sf"><label>Deadline</label><input id="sf-deadline"></div>
-    <div class="sf"><label>Notes</label><textarea id="sf-notes"></textarea></div>
-    <p class="sd-hint">Drag from + handles to connect boxes. Cross-lane connections draw as dashed.</p>
-    <div class="sd-btns">
-      <button class="btn-del" onclick="deleteNode()">Delete</button>
-      <button class="btn-save" onclick="saveDetail()">Save</button>
-    </div>
-    <div id="connSection"></div>
+<!-- Floating step detail popup (positioned by JS next to clicked box) -->
+<div id="stepDetail">
+  <div class="sd-title">
+    <span>Edit step</span>
+    <button class="sd-close" onclick="closeDetail()">×</button>
   </div>
+  <div class="sf sf-task"><label>Task</label><textarea id="sf-task"></textarea></div>
+  <div class="sf"><label>Step label</label><input id="sf-step" placeholder="e.g. 1, 2a"></div>
+  <div class="sf"><label>Workflow / Lane</label>
+    <select id="sf-workflow">
+      <option>Teaching</option><option>Research</option>
+    </select>
+  </div>
+  <div class="sf"><label>URL</label><input id="sf-url" placeholder="https://..."></div>
+  <div class="sf"><label>Audience</label><input id="sf-audience"></div>
+  <div class="sf"><label>Documents</label><input id="sf-documents"></div>
+  <div class="sf"><label>Deadline</label><input id="sf-deadline"></div>
+  <div class="sf"><label>Notes</label><textarea id="sf-notes"></textarea></div>
+  <p class="sd-hint">Drag from + handles to connect. Cross-lane lines draw as dashed.</p>
+  <div class="sd-btns">
+    <button class="btn-del" onclick="deleteNode()">Delete</button>
+    <button class="btn-save" onclick="saveDetail()">Save</button>
+  </div>
+  <div id="connSection"></div>
+</div>
+
+<div id="rightPanel">
   <div id="linksPanel">
     <div class="lp-header">
       <span>Useful Links</span>
@@ -326,7 +343,6 @@
         <button class="lp-save" onclick="saveLink()">Save</button>
       </div>
     </div>
-  </div>
 </div>
 
 <div class="canvas-toolbar">
@@ -775,7 +791,7 @@ wrap.addEventListener('mousedown', e => {
   if (!connecting && !dragId && (e.target===wrap||e.target.id==='bgSvg'||e.target===canvas)) {
     isPanning = true; canvas.style.cursor = 'grabbing';
     panSX = e.clientX-panX; panSY = e.clientY-panY;
-    if (selectedId) { selectedId = null; renderAll(); closeDetail(); }
+    if (selectedId) { window.closeDetail(); }
     if (selectedEdgeId) clearEdgeSelect();
   }
 });
@@ -1004,7 +1020,9 @@ function selectNode(id) {
 }
 function openDetail(id) {
   const n = nodes[id]; if (!n) return;
-  document.getElementById('stepDetail').classList.add('visible');
+  const popup = document.getElementById('stepDetail');
+
+  // Fill fields
   document.getElementById('sf-task').value     = n.task||'';
   document.getElementById('sf-step').value     = n.step||'';
   document.getElementById('sf-workflow').value = n.workflow||'Teaching';
@@ -1014,6 +1032,32 @@ function openDetail(id) {
   document.getElementById('sf-deadline').value = n.deadline||'';
   document.getElementById('sf-notes').value    = n.notes||'';
   renderConnSection(id);
+
+  // Show first so we can measure it
+  popup.classList.add('visible');
+
+  // Position next to the box in screen coordinates
+  const nodeEl = document.getElementById('node-'+id);
+  if (nodeEl) {
+    const nr  = nodeEl.getBoundingClientRect();
+    const wr  = document.getElementById('canvasWrap').getBoundingClientRect();
+    const pw  = popup.offsetWidth  || 280;
+    const ph  = popup.offsetHeight || 400;
+    const margin = 12;
+
+    // Try right of box first, then left, then below
+    let left, top;
+    if (nr.right + pw + margin < wr.right) {
+      left = nr.right + margin;
+    } else {
+      left = Math.max(wr.left + 4, nr.left - pw - margin);
+    }
+    top = Math.min(nr.top, window.innerHeight - ph - 8);
+    top = Math.max(52, top);
+
+    popup.style.left = left + 'px';
+    popup.style.top  = top  + 'px';
+  }
 }
 function renderConnSection(id) {
   const out = Object.entries(edges).filter(([,e])=>e.from===id);
@@ -1040,6 +1084,8 @@ window.closeDetail = function() {
   document.getElementById('stepDetail').classList.remove('visible');
   selectedId = null; renderAll();
 };
+// Close popup when clicking canvas background
+
 window.saveDetail = async function() {
   if (!selectedId) return;
   const task = document.getElementById('sf-task').value.trim();
