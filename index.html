@@ -54,7 +54,7 @@
       position:absolute;
       width: var(--node-w, 180px);
       background:white; border:1.5px solid #d4d8dd;
-      border-radius:8px; padding:8px 12px 28px;
+      border-radius:8px; padding:6px 10px 24px;
       cursor:pointer; user-select:none;
       transition:border-color 0.15s, box-shadow 0.15s;
       z-index:10;
@@ -71,25 +71,35 @@
       position:absolute; top:0; left:0; right:0; height:4px;
       border-radius:8px 8px 0 0;
     }
-    .node-tag { font-size:9px; font-weight:700; letter-spacing:0.07em; text-transform:uppercase; color:#bbb; margin-bottom:3px; margin-top:2px; }
-    .node-task { font-size:12px; font-weight:500; color:#1a1a1a; line-height:1.4; word-break:break-word; }
+    .node-tag { font-size:9px; font-weight:700; letter-spacing:0.07em; text-transform:uppercase; color:#bbb; margin-bottom:2px; margin-top:1px; }
+    .node-task { font-size:11px; font-weight:500; color:#1a1a1a; line-height:1.35; word-break:break-word; }
     @media(prefers-color-scheme:dark){ .node-task{color:#e0e0e0;} }
 
     /* ── Port handles ── */
+    /* Bottom ports row */
     .ports {
-      position:absolute; bottom:5px; left:0; right:0;
-      display:flex; justify-content:space-between; padding:0 10px;
+      position:absolute; bottom:3px; left:0; right:0;
+      display:flex; justify-content:space-between; padding:0 8px;
       opacity:0; transition:opacity 0.15s; pointer-events:none;
     }
     .node:hover .ports { opacity:1; pointer-events:all; }
+    /* Side ports */
+    .port-left, .port-right {
+      position:absolute; top:50%; transform:translateY(-50%);
+      opacity:0; transition:opacity 0.15s; pointer-events:none;
+    }
+    .port-left  { left:-10px; }
+    .port-right { right:-10px; }
+    .node:hover .port-left,
+    .node:hover .port-right { opacity:1; pointer-events:all; }
 
     .port {
-      width:20px; height:20px; border-radius:50%;
-      color:white; font-size:15px; font-weight:300;
+      width:18px; height:18px; border-radius:50%;
+      color:white; font-size:14px; font-weight:300;
       cursor:crosshair; border:none;
       display:flex; align-items:center; justify-content:center;
       transition:transform 0.1s, background 0.1s; flex-shrink:0;
-      line-height:1; padding-bottom:1px;
+      line-height:1; padding-bottom:1px; z-index:15;
     }
     .port:hover { transform:scale(1.3); }
 
@@ -232,6 +242,58 @@
       .ct-btn:hover{border-color:#5b9bd5;color:#5b9bd5;}
     }
 
+    /* ── Link toolbar (appears on text selection in task field) ── */
+    #linkToolbar {
+      position:fixed; display:none;
+      background:#1f4e78; border-radius:5px;
+      padding:4px 6px; gap:4px;
+      align-items:center; z-index:600;
+      box-shadow:0 3px 10px rgba(0,0,0,0.25);
+    }
+    #linkToolbar.visible { display:flex; }
+    #linkToolbar button {
+      background:transparent; border:none; color:white;
+      font-size:11px; font-weight:600; cursor:pointer; padding:2px 6px;
+      border-radius:3px; white-space:nowrap;
+    }
+    #linkToolbar button:hover { background:rgba(255,255,255,0.2); }
+    #linkToolbar input {
+      font-size:11px; padding:2px 6px; border:none; border-radius:3px;
+      width:160px; outline:none; color:#222;
+    }
+
+    /* Contenteditable task field */
+    #sf-task {
+      width:100%; min-height:64px;
+      padding:6px 9px; border:1px solid #e0e0e0; border-radius:5px;
+      font-family:inherit; font-size:13px; font-weight:500; color:#222;
+      line-height:1.45; word-break:break-word; outline:none;
+      background:white;
+    }
+    #sf-task:focus { border-color:#1f4e78; }
+    #sf-task a { color:#1f4e78; text-decoration:underline; cursor:pointer; }
+    @media(prefers-color-scheme:dark){
+      #sf-task { background:#2a2a2e; color:#ddd; border-color:#3a3a40; }
+      #sf-task a { color:#5b9bd5; }
+    }
+
+    /* ── Selection rectangle ── */
+    #selRect {
+      position:absolute; border:1.5px dashed #1f4e78;
+      background:rgba(31,78,120,0.06); pointer-events:none; z-index:8;
+      display:none;
+    }
+    @media(prefers-color-scheme:dark){
+      #selRect{border-color:#5b9bd5;background:rgba(91,155,213,0.08);}
+    }
+    .node.multi-selected {
+      border-color:#1f4e78 !important;
+      box-shadow:0 0 0 2px rgba(31,78,120,0.3) !important;
+    }
+    @media(prefers-color-scheme:dark){
+      .node.multi-selected{border-color:#5b9bd5 !important;box-shadow:0 0 0 2px rgba(91,155,213,0.3) !important;}
+    }
+
     /* ── Edge delete button ── */
     .edge-del-btn {
       position:absolute;
@@ -300,7 +362,16 @@
     <path id="connPreview" fill="none" stroke="#27ae60" stroke-width="2"
           stroke-dasharray="6 4" marker-end="url(#arr-green)" d=""/>
   </svg>
+  <div id="selRect" id="selRect"></div>
   <div id="canvas"></div>
+</div>
+
+<!-- Link formatting toolbar -->
+<div id="linkToolbar">
+  <input id="linkUrlInput" type="text" placeholder="https://...">
+  <button onclick="applyLink()">Link</button>
+  <button onclick="removeLink()">Unlink</button>
+  <button onclick="hideLinkToolbar()">✕</button>
 </div>
 
 <!-- Floating step detail popup (positioned by JS next to clicked box) -->
@@ -309,7 +380,7 @@
     <span>Edit step</span>
     <button class="sd-close" onclick="closeDetail()">×</button>
   </div>
-  <div class="sf sf-task"><label>Task</label><textarea id="sf-task"></textarea></div>
+  <div class="sf sf-task"><label>Task</label><div id="sf-task" contenteditable="true" spellcheck="true"></div></div>
   <div class="sf"><label>URL</label><input id="sf-url" placeholder="https://..."></div>
   <div class="sf"><label>Notes</label><textarea id="sf-notes"></textarea></div>
   <p class="sd-hint">Drag from + handles to connect. Cross-lane lines draw as dashed.</p>
@@ -340,7 +411,7 @@
 
 <div class="canvas-toolbar">
   <button class="ct-btn" onclick="addFreeNode()">+ Add Box</button>
-  <button class="ct-btn" onclick="autoLayout()">Auto Layout</button>
+  <button class="ct-btn" id="undoBtn" onclick="undoAction()" title="Undo (Ctrl+Z)">↩ Undo</button>
   <button class="ct-btn" onclick="resetView()">Reset View</button>
 </div>
 
@@ -378,10 +449,10 @@ const LANE_DEFS = [
   { wf:'Research', color:'#1e6b3c', light:'#e6f4ec' },
 ];
 const LANE_HEIGHT = 3200;
-const ROW_TOP  = 56;   // y of row 0 (below lane header)
-const ROW_H    = 110;  // px per row
+const ROW_TOP  = 50;   // y of row 0 (below lane header)
+const ROW_H    = 90;   // px per row
 let   NODE_W   = 180;  // node width - updated dynamically in computeLanes()
-const NODE_H   = 72;   // approximate node height for edge calc
+const NODE_H   = 60;   // approximate node height for edge calc
 const COL_PAD  = 8;    // padding inside each sub-lane
 const SUB_LANES = 5;   // sub-lanes per workflow column
 
@@ -437,6 +508,15 @@ let dragId = null, dragGhost = null, dragTargetCol = 0, dragTargetRow = 0;
 let pendingDragId = null, pendingDragE = null;
 const DRAG_THRESHOLD = 5; // px movement before drag starts
 
+// Multi-select state
+let selectedIds = new Set();   // set of selected node IDs
+let isSelecting = false;       // rubber-band selection in progress
+let selStart = {x:0,y:0};     // canvas coords where selection started
+
+// Undo history stack - each entry is a snapshot before the action
+const undoStack = [];
+const MAX_UNDO = 50;
+
 const canvas    = document.getElementById('canvas');
 const bgSvg     = document.getElementById('bgSvg');
 const laneGroup = document.getElementById('laneGroup');
@@ -453,6 +533,64 @@ function hint(m, ms=2500) {
   clearTimeout(hintTimer);
   hintTimer = setTimeout(() => h.classList.remove('vis'), ms);
 }
+
+// ── Undo ─────────────────────────────────────────────
+function pushUndo(description) {
+  // Snapshot current nodes and edges
+  undoStack.push({
+    description,
+    nodes: JSON.parse(JSON.stringify(nodes)),
+    edges: JSON.parse(JSON.stringify(edges)),
+  });
+  if (undoStack.length > MAX_UNDO) undoStack.shift();
+  document.getElementById('undoBtn').disabled = false;
+}
+
+window.undoAction = async function() {
+  if (!undoStack.length) return;
+  const snapshot = undoStack.pop();
+  setStatus('Undoing: ' + snapshot.description + '...');
+
+  try {
+    const batch = writeBatch(db);
+
+    // Restore nodes: update changed, delete removed, add new
+    for (const [id, data] of Object.entries(snapshot.nodes)) {
+      if (!nodes[id]) {
+        // Was deleted - restore
+        batch.set(doc(db,'nodes',id), data);
+      } else {
+        // May have changed
+        batch.set(doc(db,'nodes',id), data);
+      }
+    }
+    // Delete nodes that didn't exist in snapshot
+    for (const id of Object.keys(nodes)) {
+      if (!snapshot.nodes[id]) batch.delete(doc(db,'nodes',id));
+    }
+
+    // Restore edges
+    for (const [id, data] of Object.entries(snapshot.edges)) {
+      batch.set(doc(db,'edges',id), data);
+    }
+    for (const id of Object.keys(edges)) {
+      if (!snapshot.edges[id]) batch.delete(doc(db,'edges',id));
+    }
+
+    await batch.commit();
+    if (!undoStack.length) document.getElementById('undoBtn').disabled = true;
+    await loadAll();
+    setStatus('Undone · ' + new Date().toLocaleTimeString());
+  } catch(err) {
+    setStatus('Undo error: ' + err.message);
+    console.error(err);
+  }
+};
+
+// Ctrl+Z keyboard shortcut
+document.addEventListener('keydown', e => {
+  if ((e.ctrlKey||e.metaKey) && e.key==='z') { e.preventDefault(); window.undoAction(); }
+});
 
 // ── Load ─────────────────────────────────────────────
 async function loadAll() {
@@ -575,12 +713,14 @@ function renderNode(id) {
   el.innerHTML = `
     <div class="node-wf-strip" style="background:${lane.color};"></div>
     <div class="node-tag">${n.step ? 'Step '+esc(n.step) : 'Box'}</div>
-    <div class="node-task">${esc(n.task||'(empty)')}</div>
+    <div class="node-task">${safeTask(n.task||'(empty)')}</div>
     <div class="ports">
-      <button class="port" style="background:${lane.color};" data-dir="bl" title="Branch below-left">+</button>
-      <button class="port" style="background:${lane.color};" data-dir="down" title="Next step">+</button>
-      <button class="port" style="background:${lane.color};" data-dir="br" title="Branch below-right">+</button>
-    </div>`;
+      <button class="port" style="background:${lane.color};" data-dir="bl"   title="Below-left">+</button>
+      <button class="port" style="background:${lane.color};" data-dir="down" title="Below">+</button>
+      <button class="port" style="background:${lane.color};" data-dir="br"   title="Below-right">+</button>
+    </div>
+    <button class="port port-left"  style="background:${lane.color};" data-dir="left"  title="Same row, left">+</button>
+    <button class="port port-right" style="background:${lane.color};" data-dir="right" title="Same row, right">+</button>`;
 
   // Record pending drag on mousedown - only commits if mouse moves DRAG_THRESHOLD px
   el.addEventListener('mousedown', e => {
@@ -591,21 +731,53 @@ function renderNode(id) {
     pendingDragE = e;
   });
 
+  // Mouseup on node body while connecting = finish connection
+  el.addEventListener('mouseup', e => {
+    if (e.target.classList.contains('port')) return;
+    if (connecting && connectFrom !== id) {
+      e.stopPropagation();
+      finishConnect(id);
+    }
+  });
+
   el.addEventListener('click', e => {
     if (e.target.classList.contains('port')) return;
     if (connecting) { finishConnect(id); return; }
-    if (!dragId) selectNode(id);
+    if (!dragId) {
+      if (e.ctrlKey || e.metaKey) {
+        // Toggle this node in multi-selection
+        if (selectedIds.has(id)) {
+          selectedIds.delete(id);
+          el.classList.remove('multi-selected');
+        } else {
+          selectedIds.add(id);
+          el.classList.add('multi-selected');
+        }
+      } else {
+        // Clear multi-selection and open detail
+        selectedIds.clear();
+        document.querySelectorAll('.node.multi-selected').forEach(n=>n.classList.remove('multi-selected'));
+        selectNode(id);
+      }
+    }
   });
 
-  // Port: click = spawn, mousedown = drag-connect
+  // Port: click = spawn new box; mousedown+drag = connect to existing box
   el.querySelectorAll('.port').forEach(p => {
     p.addEventListener('click', e => {
       e.stopPropagation();
-      spawnFromPort(id, p.dataset.dir);
+      // Only spawn if we weren't in a drag-connect gesture
+      if (!connecting) spawnFromPort(id, p.dataset.dir);
     });
     p.addEventListener('mousedown', e => {
       e.stopPropagation(); e.preventDefault();
+      pendingDragId = null; pendingDragE = null; // cancel any node drag
       startConnect(id);
+    });
+    // Mouseup on a port while connecting = connect to that node
+    p.addEventListener('mouseup', e => {
+      e.stopPropagation();
+      if (connecting && connectFrom !== id) finishConnect(id);
     });
   });
 
@@ -768,6 +940,28 @@ function clearEdgeSelect() {
 
 function esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 
+// Render task HTML safely - allow <a> tags, strip everything else
+function safeTask(html) {
+  const div = document.createElement('div');
+  div.innerHTML = html;
+  // Walk all elements, remove anything that isn't <a> or a text node
+  div.querySelectorAll('*:not(a)').forEach(el => {
+    el.replaceWith(...el.childNodes);
+  });
+  // Sanitise <a> tags - keep href, strip other attributes, force target=_blank
+  div.querySelectorAll('a').forEach(a => {
+    const href = a.getAttribute('href') || '';
+    a.setAttribute('href', href);
+    a.setAttribute('target', '_blank');
+    a.setAttribute('rel', 'noopener');
+    // Remove all other attributes
+    Array.from(a.attributes)
+      .filter(attr => !['href','target','rel'].includes(attr.name))
+      .forEach(attr => a.removeAttribute(attr.name));
+  });
+  return div.innerHTML || esc(html);
+}
+
 // ── Pan ───────────────────────────────────────────────
 wrap.addEventListener('mousedown', e => {
   if (connecting && (e.target===wrap||e.target.id==='bgSvg'||e.target===canvas)) {
@@ -782,8 +976,26 @@ wrap.addEventListener('mousedown', e => {
     return;
   }
   if (!connecting && !dragId && (e.target===wrap||e.target.id==='bgSvg'||e.target===canvas)) {
+    // If Ctrl/Meta held: start rubber-band selection
+    if (e.ctrlKey || e.metaKey) {
+      const r = wrap.getBoundingClientRect();
+      const mx = (e.clientX-r.left-panX)/zoom;
+      const my = (e.clientY-r.top-panY)/zoom;
+      isSelecting = true;
+      selStart = {x:mx, y:my};
+      const sr = document.getElementById('selRect');
+      sr.style.left=mx+'px'; sr.style.top=my+'px';
+      sr.style.width='0px'; sr.style.height='0px';
+      sr.style.display='block';
+      return;
+    }
     isPanning = true; canvas.style.cursor = 'grabbing';
     panSX = e.clientX-panX; panSY = e.clientY-panY;
+    // Clear multi-selection and detail popup on canvas click
+    if (!e.ctrlKey && !e.metaKey) {
+      selectedIds.clear();
+      document.querySelectorAll('.node.multi-selected').forEach(n=>n.classList.remove('multi-selected'));
+    }
     if (selectedId) { window.closeDetail(); }
     if (selectedEdgeId) clearEdgeSelect();
   }
@@ -817,6 +1029,16 @@ window.addEventListener('mousemove', e => {
     updateGhost(wf);
   }
 
+  if (isSelecting) {
+    const rx = Math.min(mx, selStart.x);
+    const ry = Math.min(my, selStart.y);
+    const rw = Math.abs(mx - selStart.x);
+    const rh = Math.abs(my - selStart.y);
+    const sr = document.getElementById('selRect');
+    sr.style.left=rx+'px'; sr.style.top=ry+'px';
+    sr.style.width=rw+'px'; sr.style.height=rh+'px';
+  }
+
   if (connecting && connectFrom) {
     const fn = nodes[connectFrom];
     const x1 = nodeX(fn.workflow, fn.col??0) + NODE_W/2;
@@ -838,6 +1060,29 @@ window.addEventListener('mouseup', async e => {
   // If mouse released before drag threshold, it was a click - cancel pending
   pendingDragId = null; pendingDragE = null;
 
+  if (isSelecting) {
+    isSelecting = false;
+    const sr = document.getElementById('selRect');
+    sr.style.display='none';
+    // Find all nodes within the selection rect
+    const rx = parseFloat(sr.style.left), ry = parseFloat(sr.style.top);
+    const rw = parseFloat(sr.style.width), rh = parseFloat(sr.style.height);
+    if (rw > 5 || rh > 5) {
+      selectedIds.clear();
+      document.querySelectorAll('.node.multi-selected').forEach(n=>n.classList.remove('multi-selected'));
+      for (const [id, n] of Object.entries(nodes)) {
+        const nx = nodeX(n.workflow, n.col??0);
+        const ny = nodeY(n.row??0);
+        if (nx >= rx-5 && nx+NODE_W <= rx+rw+5 && ny >= ry-5 && ny+NODE_H <= ry+rh+5) {
+          selectedIds.add(id);
+          document.getElementById('node-'+id)?.classList.add('multi-selected');
+        }
+      }
+      if (selectedIds.size > 0) hint(`${selectedIds.size} box${selectedIds.size>1?'es':''} selected — drag any to move all`);
+    }
+    return;
+  }
+
   if (dragId) {
     const id = dragId;
     const n = nodes[id];
@@ -848,11 +1093,28 @@ window.addEventListener('mouseup', async e => {
       (on.col??0) === dragTargetCol && (on.row??0) === dragTargetRow
     );
     if (!occupied) {
-      n.col = dragTargetCol;
-      n.row = dragTargetRow;
-      try {
-        await updateDoc(doc(db,'nodes',id), { col: n.col, row: n.row });
-      } catch(err) { console.error(err); }
+      pushUndo('move box');
+      if (selectedIds.has(id) && selectedIds.size > 1) {
+        // Move all selected nodes by the same col/row delta
+        const dCol = dragTargetCol - (n.col??0);
+        const dRow = dragTargetRow - (n.row??0);
+        const saves = [];
+        for (const sid of selectedIds) {
+          const sn = nodes[sid];
+          if (!sn) continue;
+          const newCol = Math.min(SUB_LANES-1, Math.max(0, (sn.col??0)+dCol));
+          const newRow = Math.max(0, (sn.row??0)+dRow);
+          sn.col = newCol; sn.row = newRow;
+          saves.push(updateDoc(doc(db,'nodes',sid), {col:newCol, row:newRow}));
+        }
+        try { await Promise.all(saves); } catch(err) { console.error(err); }
+      } else {
+        n.col = dragTargetCol;
+        n.row = dragTargetRow;
+        try {
+          await updateDoc(doc(db,'nodes',id), { col: n.col, row: n.row });
+        } catch(err) { console.error(err); }
+      }
     } else {
       hint('That cell is already occupied');
     }
@@ -911,6 +1173,7 @@ function cancelConnect() {
 async function createEdge(fromId, toId) {
   const exists = Object.values(edges).find(e=>e.from===fromId&&e.to===toId);
   if (exists) { hint('Already connected'); return; }
+  pushUndo('connect');
   try {
     setStatus('Connecting...');
     const ref = await addDoc(collection(db,'edges'), {from:fromId,to:toId});
@@ -928,16 +1191,30 @@ function spawnFromPort(fromId, dir) {
   const parentCol = n.col ?? 0;
   const parentRow = n.row ?? 0;
 
-  let targetCol;
-  if (dir === 'down')      targetCol = parentCol;
-  else if (dir === 'bl')   targetCol = Math.max(0, parentCol-1);
-  else                     targetCol = Math.min(SUB_LANES-1, parentCol+1);
+  let targetCol, targetRow;
 
-  // Find next free row in that col (same wf)
-  let targetRow = parentRow+1;
-  while (Object.values(nodes).some(nd =>
-    nd.workflow===wf && (nd.col??0)===targetCol && (nd.row??0)===targetRow
-  )) { targetRow++; }
+  if (dir === 'left' || dir === 'right') {
+    // Same row, adjacent sub-lane
+    targetRow = parentRow;
+    targetCol = dir === 'left'
+      ? Math.max(0, parentCol-1)
+      : Math.min(SUB_LANES-1, parentCol+1);
+    // If same row/col occupied, shift row down
+    let tries = 0;
+    while (tries < 20 && Object.values(nodes).some(nd =>
+      nd.workflow===wf && (nd.col??0)===targetCol && (nd.row??0)===targetRow
+    )) { targetRow++; tries++; }
+  } else {
+    // Below variants
+    if (dir === 'down')    targetCol = parentCol;
+    else if (dir === 'bl') targetCol = Math.max(0, parentCol-1);
+    else                   targetCol = Math.min(SUB_LANES-1, parentCol+1);
+    targetRow = parentRow+1;
+    // Find next free row in that col
+    while (Object.values(nodes).some(nd =>
+      nd.workflow===wf && (nd.col??0)===targetCol && (nd.row??0)===targetRow
+    )) { targetRow++; }
+  }
 
   showInlineInput(wf, targetCol, targetRow, fromId);
 }
@@ -981,6 +1258,7 @@ function showInlineInput(wf, col, row, fromId) {
 }
 
 async function commitNode(task, wf, col, row, fromId) {
+  pushUndo('add box');
   try {
     setStatus('Saving...');
     const data = { workflow:wf, col, row, step:'', task,
@@ -1016,7 +1294,7 @@ function openDetail(id) {
   const popup = document.getElementById('stepDetail');
 
   // Fill fields
-  document.getElementById('sf-task').value     = n.task||'';
+  document.getElementById('sf-task').innerHTML = n.task||'';
   document.getElementById('sf-url').value      = n.url||'';
   document.getElementById('sf-notes').value    = n.notes||'';
   renderConnSection(id);
@@ -1065,6 +1343,7 @@ function renderConnSection(id) {
   document.getElementById('connSection').innerHTML = html;
 }
 window.removeEdge = async function(eid) {
+  pushUndo('remove connection');
   try { await deleteDoc(doc(db,'edges',eid)); delete edges[eid]; renderEdges(); if(selectedId)renderConnSection(selectedId); }
   catch(e) { alert('Error: '+e.message); }
 };
@@ -1076,17 +1355,21 @@ window.closeDetail = function() {
 
 window.saveDetail = async function() {
   if (!selectedId) return;
-  const task = document.getElementById('sf-task').value.trim();
-  if (!task) { alert('Task cannot be empty.'); return; }
+  const taskEl = document.getElementById('sf-task');
+  const task = taskEl.innerHTML.trim();
+  const taskText = taskEl.innerText.trim();
+  if (!taskText) { alert('Task cannot be empty.'); return; }
+  pushUndo('edit box');
   try {
     setStatus('Saving...');
-    const updates = { task,
+    const updates = { task,  // store as HTML so links are preserved
       url:document.getElementById('sf-url').value.trim(),
       notes:document.getElementById('sf-notes').value.trim() };
     await updateDoc(doc(db,'nodes',selectedId), updates);
     Object.assign(nodes[selectedId], updates);
     setStatus('Saved · '+new Date().toLocaleTimeString());
-    renderAll(); openDetail(selectedId);
+    window.closeDetail();  // auto-close on save
+    renderAll();
   } catch(e) { alert('Error: '+e.message); }
 };
 window.deleteNode = async function() {
@@ -1101,34 +1384,6 @@ window.deleteNode = async function() {
 };
 
 // ── Auto layout ───────────────────────────────────────
-window.autoLayout = function() {
-  LANES.forEach(l => {
-    const ids = Object.entries(nodes).filter(([,n])=>n.workflow===l.wf).map(([id])=>id);
-    const inDeg = {}; ids.forEach(id=>{inDeg[id]=0;});
-    Object.values(edges).forEach(e => {
-      if (ids.includes(e.from)&&ids.includes(e.to)) inDeg[e.to]=(inDeg[e.to]||0)+1;
-    });
-    const queue = ids.filter(id=>inDeg[id]===0), sorted = [];
-    while (queue.length) {
-      const id = queue.shift(); sorted.push(id);
-      Object.values(edges).forEach(e => {
-        if (e.from===id && ids.includes(e.to)) { inDeg[e.to]--; if(inDeg[e.to]===0)queue.push(e.to); }
-      });
-    }
-    ids.filter(id=>!sorted.includes(id)).forEach(id=>sorted.push(id));
-    sorted.forEach((id, i) => {
-      const parents = sorted.filter(pid=>Object.values(edges).some(e=>e.from===pid&&e.to===id));
-      const sibIdx = parents.length > 0
-        ? sorted.filter(sid=>parents.some(pid=>Object.values(edges).some(e=>e.from===pid&&e.to===sid))).indexOf(id)
-        : 0;
-      nodes[id].col = Math.min(2, sibIdx > 0 ? sibIdx : 0);
-      nodes[id].row = i;
-    });
-  });
-  const saves = Object.entries(nodes).map(([id,n]) => updateDoc(doc(db,'nodes',id),{col:n.col,row:n.row}));
-  Promise.all(saves).then(()=>{ renderAll(); setStatus('Layout applied'); }).catch(e=>alert('Error: '+e.message));
-};
-
 window.resetView = function() { panX = 20; panY = 10; zoom = 1; applyTransform(); };
 
 // ── Zoom ─────────────────────────────────────────────
@@ -1234,7 +1489,74 @@ document.getElementById('populateBtn').addEventListener('click', async () => {
   }
 });
 
+// ── Link toolbar ─────────────────────────────────────
+let _savedRange = null;
+
+document.getElementById('sf-task').addEventListener('mouseup', showLinkToolbarIfSelected);
+document.getElementById('sf-task').addEventListener('keyup',   showLinkToolbarIfSelected);
+
+function showLinkToolbarIfSelected() {
+  const sel = window.getSelection();
+  if (!sel || sel.isCollapsed || sel.toString().trim() === '') {
+    hideLinkToolbar(); return;
+  }
+  // Check selection is inside sf-task
+  const taskEl = document.getElementById('sf-task');
+  if (!taskEl.contains(sel.anchorNode)) { hideLinkToolbar(); return; }
+
+  // Save the range so we can restore it after clicking the toolbar button
+  _savedRange = sel.getRangeAt(0).cloneRange();
+
+  // Check if selection is already a link
+  const anchor = sel.anchorNode.parentElement?.closest('a');
+  document.getElementById('linkUrlInput').value = anchor ? anchor.href : '';
+
+  // Position toolbar above the selection
+  const rect = sel.getRangeAt(0).getBoundingClientRect();
+  const tb = document.getElementById('linkToolbar');
+  tb.classList.add('visible');
+  tb.style.left = Math.max(4, rect.left) + 'px';
+  tb.style.top  = (rect.top - tb.offsetHeight - 6) + 'px';
+}
+
+window.applyLink = function() {
+  const url = document.getElementById('linkUrlInput').value.trim();
+  if (!url) return;
+  const fullUrl = url.startsWith('http') ? url : 'https://' + url;
+  // Restore saved selection
+  const sel = window.getSelection();
+  if (_savedRange) { sel.removeAllRanges(); sel.addRange(_savedRange); }
+  document.execCommand('createLink', false, fullUrl);
+  // Set target=_blank on newly created links
+  document.getElementById('sf-task').querySelectorAll('a').forEach(a => {
+    a.target = '_blank'; a.rel = 'noopener';
+  });
+  hideLinkToolbar();
+};
+
+window.removeLink = function() {
+  const sel = window.getSelection();
+  if (_savedRange) { sel.removeAllRanges(); sel.addRange(_savedRange); }
+  document.execCommand('unlink', false, null);
+  hideLinkToolbar();
+};
+
+window.hideLinkToolbar = function() {
+  document.getElementById('linkToolbar').classList.remove('visible');
+  _savedRange = null;
+};
+
+// Hide toolbar when clicking outside
+document.addEventListener('mousedown', e => {
+  const tb = document.getElementById('linkToolbar');
+  const taskEl = document.getElementById('sf-task');
+  if (!tb.contains(e.target) && !taskEl.contains(e.target)) {
+    hideLinkToolbar();
+  }
+});
+
 // ── Boot ─────────────────────────────────────────────
+document.getElementById('undoBtn').disabled = true;
 resetView();
 loadAll();
 
