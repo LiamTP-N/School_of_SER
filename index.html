@@ -3,1602 +3,472 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Northumbria Department Workflow Map</title>
+  <title>Sport, Exercise &amp; Rehabilitation — Technical Team</title>
   <style>
-    * { margin:0; padding:0; box-sizing:border-box; }
-    body { font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif; background:#eceef1; overflow:hidden; height:100vh; }
-    @media(prefers-color-scheme:dark){ body{background:#141416;} }
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
 
-    /* ── Topbar ── */
-    .topbar {
-      position:fixed; top:0; left:0; right:0; height:48px;
-      background:#1f4e78; color:white;
-      display:flex; align-items:center; gap:12px; padding:0 20px; z-index:300;
-      box-shadow:0 2px 8px rgba(0,0,0,0.2);
-    }
-    .topbar h1 { font-size:16px; font-weight:600; letter-spacing:-0.01em; }
-    .tb-sep { width:1px; height:20px; background:rgba(255,255,255,0.2); }
-    .tb-filters { display:flex; gap:6px; }
-    .fb { padding:3px 12px; border:1px solid rgba(255,255,255,0.3); border-radius:20px;
-          background:transparent; color:white; cursor:pointer; font-size:12px; font-weight:500;
-          transition:all 0.15s; }
-    .fb:hover { background:rgba(255,255,255,0.15); }
-    .fb.active { background:white; color:#1f4e78; border-color:white; }
-    .tb-right { margin-left:auto; display:flex; align-items:center; gap:10px; }
-    .tb-status { font-size:11px; color:rgba(255,255,255,0.4); min-width:120px; text-align:right; }
-    .btn-pop { padding:4px 12px; border:1px solid rgba(255,255,255,0.3); border-radius:4px;
-               background:rgba(255,255,255,0.1); color:white; cursor:pointer; font-size:12px;
-               transition:all 0.15s; }
-    .btn-pop:hover { background:rgba(255,255,255,0.2); }
-    .btn-pop:disabled { opacity:0.4; cursor:not-allowed; }
-
-    /* ── Canvas wrap ── */
-    #canvasWrap {
-      position:fixed; top:48px; left:0; right:260px; bottom:0; overflow:hidden;
+    :root {
+      --black:  #111111;
+      --dark:   #222222;
+      --mid:    #555555;
+      --light:  #888888;
+      --border: #dddddd;
+      --bg:     #f7f7f7;
+      --white:  #ffffff;
     }
 
-    /* ── SVG for lanes + edges (behind nodes) ── */
-    #bgSvg {
-      position:absolute; top:0; left:0; width:4000px; height:4000px;
-      pointer-events:none;
+    html { scroll-behavior: smooth; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif;
+      background: var(--white);
+      color: var(--black);
+      line-height: 1.5;
     }
 
-    /* ── Node canvas ── */
-    #canvas {
-      position:absolute; top:0; left:0; width:4000px; height:4000px;
-      transform-origin:0 0;
+    /* ── Header ── */
+    header {
+      border-bottom: 1px solid var(--border);
+      background: var(--white);
+      position: sticky;
+      top: 0;
+      z-index: 100;
     }
 
-    /* ── Node ── */
-    .node {
-      position:absolute;
-      width: var(--node-w, 180px);
-      background:white; border:1.5px solid #d4d8dd;
-      border-radius:7px; padding:5px 9px 20px;
-      cursor:pointer; user-select:none;
-      transition:border-color 0.15s, box-shadow 0.15s;
-      z-index:10;
-    }
-    @media(prefers-color-scheme:dark){ .node{background:#242428;border-color:#3a3a40;} }
-    .node:hover { box-shadow:0 4px 16px rgba(0,0,0,0.12); }
-    .node.selected { border-color:#1f4e78; box-shadow:0 0 0 3px rgba(31,78,120,0.2); }
-    @media(prefers-color-scheme:dark){ .node.selected{border-color:#5b9bd5;box-shadow:0 0 0 3px rgba(91,155,213,0.25);} }
-    .node.has-detail { border-color:#5b9bd5; }
-    .node.drag-over { border-color:#27ae60 !important; box-shadow:0 0 0 3px rgba(39,174,96,0.25) !important; }
-    .node.dragging { opacity:0.85; box-shadow:0 8px 32px rgba(0,0,0,0.2); z-index:50; }
-
-    .node-wf-strip {
-      position:absolute; top:0; left:0; right:0; height:4px;
-      border-radius:8px 8px 0 0;
-    }
-    .node-tag { font-size:9px; font-weight:700; letter-spacing:0.07em; text-transform:uppercase; color:#bbb; margin-bottom:2px; margin-top:1px; }
-    .node-task { font-size:11px; font-weight:500; color:#1a1a1a; line-height:1.35; word-break:break-word; }
-    @media(prefers-color-scheme:dark){ .node-task{color:#e0e0e0;} }
-
-    /* ── Port handles ── */
-    /* Bottom ports row */
-    .ports {
-      position:absolute; bottom:3px; left:0; right:0;
-      display:flex; justify-content:space-between; padding:0 8px;
-      opacity:0; transition:opacity 0.15s; pointer-events:none;
-    }
-    .node:hover .ports { opacity:1; pointer-events:all; }
-    /* Side ports */
-    .port-left, .port-right {
-      position:absolute; top:50%; transform:translateY(-50%);
-      opacity:0; transition:opacity 0.15s; pointer-events:none;
-    }
-    .port-left  { left:-10px; }
-    .port-right { right:-10px; }
-    .node:hover .port-left,
-    .node:hover .port-right { opacity:1; pointer-events:all; }
-
-    .port {
-      width:18px; height:18px; border-radius:50%;
-      color:white; font-size:14px; font-weight:300;
-      cursor:crosshair; border:none;
-      display:flex; align-items:center; justify-content:center;
-      transition:transform 0.1s, background 0.1s; flex-shrink:0;
-      line-height:1; padding-bottom:1px; z-index:15;
-    }
-    .port:hover { transform:scale(1.3); }
-
-    /* ── Inline input ── */
-    .node-input {
-      position:absolute; width:var(--node-w,180px);
-      background:white; border:2px solid #1f4e78; border-radius:8px;
-      padding:8px 12px; z-index:60;
-      box-shadow:0 8px 24px rgba(31,78,120,0.2);
-    }
-    @media(prefers-color-scheme:dark){ .node-input{background:#242428;} }
-    .node-input textarea {
-      width:100%; min-height:60px; border:none; outline:none; resize:none;
-      font-family:inherit; font-size:13px; font-weight:500; color:#1a1a1a;
-      background:transparent; line-height:1.45;
-    }
-    @media(prefers-color-scheme:dark){ .node-input textarea{color:#e0e0e0;} }
-    .node-input-hint { font-size:10px; color:#bbb; margin-top:6px; }
-
-    /* ── Right panel ── */
-    #rightPanel {
-      position:fixed; top:48px; right:0; bottom:0; width:260px;
-      background:white; border-left:1px solid #ddd;
-      display:flex; flex-direction:column; z-index:200;
-    }
-    @media(prefers-color-scheme:dark){ #rightPanel{background:#1c1c20;border-left-color:#2e2e34;} }
-
-    /* ── Floating popup ── */
-    #stepDetail {
-      position:fixed;
-      width:280px;
-      background:white;
-      border:1px solid #d4d8dd;
-      border-radius:10px;
-      padding:16px;
-      box-shadow:0 8px 32px rgba(0,0,0,0.18);
-      z-index:500;
-      display:none;
-      max-height:calc(100vh - 80px);
-      overflow-y:auto;
-      color:#333;
-    }
-    @media(prefers-color-scheme:dark){ #stepDetail{ color:#e0e0e0; } }
-    #stepDetail.visible { display:block; }
-    @media(prefers-color-scheme:dark){
-      #stepDetail{background:#1e1e22;border-color:#3a3a42;box-shadow:0 8px 32px rgba(0,0,0,0.5);}
+    .header-inner {
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 0 32px;
+      height: 56px;
+      display: flex;
+      align-items: center;
+      gap: 24px;
     }
 
-    .sd-title {
-      font-size:13px; font-weight:600; margin-bottom:14px;
-      padding-bottom:10px; border-bottom:1px solid #eee;
-      display:flex; align-items:center; justify-content:space-between;
-    }
-    @media(prefers-color-scheme:dark){ .sd-title{border-bottom-color:#2e2e34;} }
-    .sd-close { background:none; border:none; font-size:20px; cursor:pointer; color:#aaa; padding:0; line-height:1; }
-    .sd-close:hover { color:#333; background:none; }
-    @media(prefers-color-scheme:dark){ .sd-close:hover{color:#ddd;} }
-
-    .sf { margin-bottom:12px; }
-    .sf label { display:block; font-size:10px; font-weight:700; letter-spacing:0.06em;
-                text-transform:uppercase; color:#bbb; margin-bottom:3px; }
-    .sf input,.sf textarea,.sf select {
-      width:100%; padding:6px 9px; border:1px solid #e0e0e0; border-radius:5px;
-      font-family:inherit; font-size:13px; background:white; color:#222; transition:border-color 0.15s;
-    }
-    .sf input:focus,.sf textarea:focus,.sf select:focus { border-color:#1f4e78; outline:none; }
-    @media(prefers-color-scheme:dark){
-      .sf input,.sf textarea,.sf select { background:#2a2a2e; color:#ddd; border-color:#3a3a40; }
-    }
-    .sf textarea { resize:vertical; min-height:54px; }
-    .sf-task textarea { font-size:14px; font-weight:500; min-height:72px; }
-    .sd-hint { font-size:11px; color:#bbb; line-height:1.5; margin-top:4px; }
-    .sd-btns { display:flex; gap:8px; margin-top:14px; padding-top:14px; border-top:1px solid #eee; }
-    @media(prefers-color-scheme:dark){ .sd-btns{border-top-color:#2e2e34;} }
-    .btn-save { flex:1; padding:8px; background:#1f4e78; color:white; border:none;
-                border-radius:5px; font-size:13px; font-weight:500; cursor:pointer; }
-    .btn-save:hover { background:#163a5a; }
-    .btn-del { padding:8px 12px; background:transparent; color:#c0392b;
-               border:1px solid #e74c3c; border-radius:5px; font-size:13px; cursor:pointer; }
-    .btn-del:hover { background:#fff0f0; }
-    @media(prefers-color-scheme:dark){ .btn-del{color:#e57373;border-color:#c0392b;} .btn-del:hover{background:#2a1a1a;} }
-
-    .conn-section { margin-top:14px; padding-top:12px; border-top:1px solid #eee; }
-    @media(prefers-color-scheme:dark){ .conn-section{border-top-color:#2e2e34;} }
-    .conn-section h4 { font-size:10px; font-weight:700; letter-spacing:0.06em; text-transform:uppercase; color:#bbb; margin-bottom:8px; }
-    .conn-item { display:flex; align-items:center; justify-content:space-between;
-                 padding:5px 0; border-bottom:1px solid #f5f5f5; font-size:12px; gap:6px; }
-    @media(prefers-color-scheme:dark){ .conn-item{border-bottom-color:#2a2a2e;} }
-    .conn-item:last-child { border-bottom:none; }
-    .conn-label { flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:#555; }
-    @media(prefers-color-scheme:dark){ .conn-label{color:#aaa;} }
-    .conn-del { font-size:10px; padding:1px 6px; border:1px solid #e0e0e0; border-radius:3px;
-                background:transparent; color:#bbb; cursor:pointer; flex-shrink:0; }
-    .conn-del:hover { border-color:#e74c3c; color:#c0392b; background:transparent; }
-
-    /* ── Links panel ── */
-    #linksPanel { padding:16px 20px; flex:1; overflow-y:auto; }
-    .lp-header { font-size:10px; font-weight:700; letter-spacing:0.07em; text-transform:uppercase;
-                 color:#bbb; margin-bottom:10px; display:flex; align-items:center; justify-content:space-between; }
-    .lp-add { font-size:11px; padding:2px 8px; border:1px solid #ddd; border-radius:3px;
-              background:transparent; color:#888; cursor:pointer; }
-    .lp-add:hover { border-color:#1f4e78; color:#1f4e78; background:transparent; }
-    .li { display:flex; align-items:center; gap:6px; padding:4px 0; border-bottom:1px solid #f5f5f5; }
-    .li:last-child { border-bottom:none; }
-    @media(prefers-color-scheme:dark){ .li{border-bottom-color:#2a2a2e;} }
-    .li a { font-size:12px; color:#1f4e78; text-decoration:none; flex:1;
-             overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-    .li a:hover { text-decoration:underline; }
-    @media(prefers-color-scheme:dark){ .li a{color:#5b9bd5;} }
-    .li-edit { font-size:10px; padding:1px 6px; border:1px solid #e0e0e0; border-radius:3px;
-               background:transparent; color:#bbb; cursor:pointer; flex-shrink:0; }
-    .li-edit:hover { border-color:#1f4e78; color:#1f4e78; background:transparent; }
-    .lp-empty { font-size:12px; color:#ccc; }
-    .lp-form { display:none; flex-direction:column; gap:6px; margin-top:8px; }
-    .lp-form.vis { display:flex; }
-    .lp-form input { width:100%; padding:5px 8px; border:1px solid #e0e0e0; border-radius:4px;
-                     font-size:12px; font-family:inherit; background:white; color:#222; }
-    @media(prefers-color-scheme:dark){ .lp-form input{background:#2a2a2e;color:#ddd;border-color:#3a3a40;} }
-    .lp-btns { display:flex; gap:6px; }
-    .lp-btns button { flex:1; padding:5px; font-size:12px; border-radius:4px; cursor:pointer;
-                      border:1px solid #ddd; background:white; color:#555; }
-    .lp-btns .lp-save { background:#1f4e78; color:white; border-color:#1f4e78; }
-    .lp-btns .lp-save:hover { background:#163a5a; }
-    .lp-btns .lp-ddel { border-color:#e74c3c; color:#c0392b; }
-    @media(prefers-color-scheme:dark){ .lp-btns button{background:#2a2a2e;color:#ccc;border-color:#3a3a40;} }
-
-    /* ── Canvas toolbar ── */
-    .canvas-toolbar {
-      position:fixed; bottom:20px; left:20px;
-      display:flex; gap:8px; z-index:250;
-    }
-    .ct-btn {
-      padding:7px 14px; background:white; border:1px solid #d4d8dd;
-      border-radius:6px; font-size:12px; cursor:pointer; color:#555;
-      box-shadow:0 2px 8px rgba(0,0,0,0.1); transition:all 0.15s;
-    }
-    .ct-btn:hover { border-color:#1f4e78; color:#1f4e78; box-shadow:0 2px 12px rgba(31,78,120,0.15); }
-    @media(prefers-color-scheme:dark){
-      .ct-btn{background:#242428;border-color:#3a3a40;color:#bbb;}
-      .ct-btn:hover{border-color:#5b9bd5;color:#5b9bd5;}
+    .logo {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      text-decoration: none;
     }
 
-    /* ── Link toolbar (appears on text selection in task field) ── */
-    #linkToolbar {
-      position:fixed; display:none;
-      background:#1f4e78; border-radius:5px;
-      padding:4px 6px; gap:4px;
-      align-items:center; z-index:600;
-      box-shadow:0 3px 10px rgba(0,0,0,0.25);
-    }
-    #linkToolbar.visible { display:flex; }
-    #linkToolbar button {
-      background:transparent; border:none; color:white;
-      font-size:11px; font-weight:600; cursor:pointer; padding:2px 6px;
-      border-radius:3px; white-space:nowrap;
-    }
-    #linkToolbar button:hover { background:rgba(255,255,255,0.2); }
-    #linkToolbar input {
-      font-size:11px; padding:2px 6px; border:none; border-radius:3px;
-      width:160px; outline:none; color:#222;
+    .logo-mark {
+      width: 32px;
+      height: 32px;
+      border: 2px solid var(--black);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
     }
 
-    /* Contenteditable task field */
-    #sf-task {
-      width:100%; min-height:64px;
-      padding:6px 9px; border:1px solid #e0e0e0; border-radius:5px;
-      font-family:inherit; font-size:13px; font-weight:500; color:#222;
-      line-height:1.45; word-break:break-word; outline:none;
-      background:white;
-    }
-    #sf-task:focus { border-color:#1f4e78; }
-    #sf-task a { color:#1f4e78; text-decoration:underline; cursor:pointer; }
-    @media(prefers-color-scheme:dark){
-      #sf-task { background:#2a2a2e; color:#ddd; border-color:#3a3a40; }
-      #sf-task a { color:#5b9bd5; }
+    .logo-mark span {
+      font-size: 11px;
+      font-weight: 900;
+      color: var(--black);
+      letter-spacing: -0.05em;
     }
 
-    /* ── Selection rectangle ── */
-    #selRect {
-      position:absolute; border:1.5px dashed #1f4e78;
-      background:rgba(31,78,120,0.06); pointer-events:none; z-index:8;
-      display:none;
-    }
-    @media(prefers-color-scheme:dark){
-      #selRect{border-color:#5b9bd5;background:rgba(91,155,213,0.08);}
-    }
-    .node.multi-selected {
-      border-color:#1f4e78 !important;
-      box-shadow:0 0 0 2px rgba(31,78,120,0.3) !important;
-    }
-    @media(prefers-color-scheme:dark){
-      .node.multi-selected{border-color:#5b9bd5 !important;box-shadow:0 0 0 2px rgba(91,155,213,0.3) !important;}
+    .logo-text {
+      display: flex;
+      flex-direction: column;
+      line-height: 1.15;
     }
 
-    /* ── Edge delete button ── */
-    .edge-del-btn {
-      position:absolute;
-      width:22px; height:22px; border-radius:50%;
-      background:#e74c3c; color:white; border:none;
-      font-size:13px; line-height:1; cursor:pointer;
-      display:flex; align-items:center; justify-content:center;
-      z-index:150; box-shadow:0 2px 6px rgba(0,0,0,0.3);
-      transform:translate(-50%,-50%);
-      transition:background 0.15s, transform 0.1s;
+    .logo-text strong {
+      font-size: 14px;
+      font-weight: 800;
+      color: var(--black);
+      letter-spacing: -0.01em;
     }
-    .edge-del-btn:hover { background:#c0392b; transform:translate(-50%,-50%) scale(1.15); }
 
-    /* ── Hint bar ── */
-    .hint-bar {
-      position:fixed; bottom:60px; left:50%; transform:translateX(-50%);
-      background:rgba(20,20,24,0.8); color:white; font-size:12px;
-      padding:7px 18px; border-radius:20px; pointer-events:none;
-      opacity:0; transition:opacity 0.25s; z-index:400; white-space:nowrap;
+    .logo-text small {
+      font-size: 10px;
+      color: var(--mid);
+      font-weight: 400;
+      letter-spacing: 0.02em;
+      text-transform: uppercase;
     }
-    .hint-bar.vis { opacity:1; }
 
-    /* ── Zoom hint (always visible until first scroll) ── */
-    .zoom-hint {
-      position:fixed; bottom:20px; left:50%; transform:translateX(-50%);
-      background:rgba(31,78,120,0.85); color:white; font-size:11px;
-      padding:5px 14px; border-radius:20px; pointer-events:none;
-      z-index:399; white-space:nowrap; display:flex; align-items:center; gap:6px;
-      transition:opacity 0.5s;
+    .header-sep {
+      width: 1px;
+      height: 24px;
+      background: var(--border);
     }
-    .zoom-hint.hidden { opacity:0; }
-    .zoom-hint-icon { font-size:14px; opacity:0.8; }
+
+    .header-dept {
+      font-size: 13px;
+      color: var(--mid);
+      font-weight: 500;
+    }
+
+    .header-right {
+      margin-left: auto;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+
+    .header-link {
+      font-size: 13px;
+      color: var(--mid);
+      text-decoration: none;
+      font-weight: 500;
+    }
+    .header-link:hover { color: var(--black); }
+
+    /* ── Page heading band ── */
+    .page-band {
+      border-bottom: 3px solid var(--black);
+      padding: 48px 32px 40px;
+    }
+
+    .page-band-inner {
+      max-width: 1100px;
+      margin: 0 auto;
+    }
+
+    .page-band .dept-label {
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--mid);
+      margin-bottom: 10px;
+    }
+
+    .page-band h1 {
+      font-size: clamp(26px, 4vw, 42px);
+      font-weight: 900;
+      letter-spacing: -0.03em;
+      line-height: 1.1;
+      color: var(--black);
+      margin-bottom: 14px;
+    }
+
+    .page-band .strapline {
+      font-size: 15px;
+      color: var(--mid);
+      max-width: 520px;
+      line-height: 1.6;
+    }
+
+    /* ── Main layout ── */
+    .main {
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 48px 32px;
+    }
+
+    .section-heading {
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--light);
+      border-top: 1px solid var(--border);
+      padding-top: 12px;
+      margin-bottom: 24px;
+    }
+
+    /* ── Primary action block ── */
+    .primary-action {
+      border: 2px solid var(--black);
+      padding: 32px 36px;
+      margin-bottom: 48px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 32px;
+      flex-wrap: wrap;
+    }
+
+    .primary-action-text h2 {
+      font-size: 22px;
+      font-weight: 800;
+      letter-spacing: -0.02em;
+      margin-bottom: 6px;
+    }
+
+    .primary-action-text p {
+      font-size: 14px;
+      color: var(--mid);
+      max-width: 480px;
+      line-height: 1.55;
+    }
+
+    .btn-primary {
+      display: inline-block;
+      background: var(--black);
+      color: var(--white);
+      font-size: 14px;
+      font-weight: 700;
+      padding: 12px 28px;
+      text-decoration: none;
+      letter-spacing: -0.01em;
+      white-space: nowrap;
+      transition: background 0.15s;
+      flex-shrink: 0;
+    }
+    .btn-primary:hover { background: var(--dark); }
+
+    /* ── Link grid ── */
+    .link-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+      gap: 1px;
+      background: var(--border);
+      border: 1px solid var(--border);
+      margin-bottom: 48px;
+    }
+
+    .link-card {
+      background: var(--white);
+      padding: 24px 26px;
+      text-decoration: none;
+      color: var(--black);
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      transition: background 0.12s;
+    }
+    .link-card:hover { background: var(--bg); }
+
+    .link-card-title {
+      font-size: 15px;
+      font-weight: 700;
+      color: var(--black);
+      letter-spacing: -0.01em;
+    }
+
+    .link-card-desc {
+      font-size: 13px;
+      color: var(--mid);
+      line-height: 1.5;
+    }
+
+    .link-card-url {
+      font-size: 11px;
+      color: var(--light);
+      margin-top: 8px;
+      font-weight: 500;
+    }
+
+    .link-card-arrow {
+      font-size: 16px;
+      color: var(--light);
+      margin-top: auto;
+      padding-top: 10px;
+    }
+
+    /* ── Plain list ── */
+    .plain-list {
+      list-style: none;
+      margin-bottom: 48px;
+    }
+
+    .plain-list li {
+      border-top: 1px solid var(--border);
+      padding: 14px 0;
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 16px;
+    }
+    .plain-list li:last-child { border-bottom: 1px solid var(--border); }
+
+    .plain-list a {
+      font-size: 15px;
+      font-weight: 600;
+      color: var(--black);
+      text-decoration: none;
+    }
+    .plain-list a:hover { text-decoration: underline; }
+
+    .plain-list .list-meta {
+      font-size: 12px;
+      color: var(--light);
+      flex-shrink: 0;
+    }
+
+    /* ── Footer ── */
+    footer {
+      border-top: 3px solid var(--black);
+      padding: 32px;
+      margin-top: 24px;
+    }
+
+    .footer-inner {
+      max-width: 1100px;
+      margin: 0 auto;
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 32px;
+      flex-wrap: wrap;
+    }
+
+    .footer-left {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .footer-left strong {
+      font-size: 13px;
+      font-weight: 800;
+    }
+
+    .footer-left span {
+      font-size: 12px;
+      color: var(--mid);
+    }
+
+    .footer-links {
+      display: flex;
+      gap: 24px;
+      flex-wrap: wrap;
+      align-items: flex-start;
+    }
+
+    .footer-links a {
+      font-size: 12px;
+      color: var(--mid);
+      text-decoration: none;
+    }
+    .footer-links a:hover { color: var(--black); }
+
+    /* ── Responsive ── */
+    @media (max-width: 600px) {
+      .page-band, .main { padding-left: 20px; padding-right: 20px; }
+      .header-inner { padding: 0 20px; }
+      .header-dept, .header-sep { display: none; }
+      .primary-action { padding: 24px; }
+      footer { padding: 24px 20px; }
+    }
   </style>
 </head>
 <body>
 
-<div class="topbar">
-  <h1>Northumbria Workflow Map</h1>
-  <div class="tb-sep"></div>
-  <div class="tb-filters">
-    <button class="fb active" data-filter="all">All</button>
-    <button class="fb" data-filter="Teaching">Teaching</button>
-    <button class="fb" data-filter="Research">Research</button>
-  </div>
-  <div class="tb-right">
-    <span class="tb-status" id="statusBar"></span>
-    <button class="btn-pop" id="populateBtn">+ Default Data</button>
-  </div>
-</div>
-
-<div id="canvasWrap">
-  <svg id="bgSvg">
-    <defs>
-      <marker id="arr" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
-        <path d="M2 1L8 5L2 9" fill="none" stroke="#bbb" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-      </marker>
-      <marker id="arr-cross" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
-        <path d="M2 1L8 5L2 9" fill="none" stroke="#c0a060" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-      </marker>
-      <marker id="arr-green" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
-        <path d="M2 1L8 5L2 9" fill="none" stroke="#27ae60" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-      </marker>
-    </defs>
-    <g id="laneGroup"></g>
-    <g id="edgeGroup"></g>
-    <path id="connPreview" fill="none" stroke="#27ae60" stroke-width="2"
-          stroke-dasharray="6 4" marker-end="url(#arr-green)" d=""/>
-  </svg>
-  <div id="selRect" id="selRect"></div>
-  <div id="canvas"></div>
-</div>
-
-<!-- Link formatting toolbar -->
-<div id="linkToolbar">
-  <input id="linkUrlInput" type="text" placeholder="https://...">
-  <button onclick="applyLink()">Link</button>
-  <button onclick="removeLink()">Unlink</button>
-  <button onclick="hideLinkToolbar()">✕</button>
-</div>
-
-<!-- Floating step detail popup (positioned by JS next to clicked box) -->
-<div id="stepDetail">
-  <div class="sd-title">
-    <span>Edit step</span>
-    <button class="sd-close" onclick="closeDetail()">×</button>
-  </div>
-  <div class="sf sf-task"><label>Task</label><div id="sf-task" contenteditable="true" spellcheck="true"></div></div>
-  <div class="sf"><label>URL</label><input id="sf-url" placeholder="https://..."></div>
-  <div class="sf"><label>Notes</label><textarea id="sf-notes"></textarea></div>
-  <p class="sd-hint">Drag from + handles to connect. Cross-lane lines draw as dashed.</p>
-  <div class="sd-btns">
-    <button class="btn-del" onclick="deleteNode()">Delete</button>
-    <button class="btn-save" onclick="saveDetail()">Save</button>
-  </div>
-  <div id="connSection"></div>
-</div>
-
-<div id="rightPanel">
-  <div id="linksPanel">
-    <div class="lp-header">
-      <span>Useful Links</span>
-      <button class="lp-add" onclick="showLinkForm(null)">+ Add</button>
-    </div>
-    <div id="linksList"><span class="lp-empty">No links yet</span></div>
-    <div class="lp-form" id="lpForm">
-      <input id="lpName" placeholder="Name (e.g. Timetabling)">
-      <input id="lpUrl"  placeholder="https://...">
-      <div class="lp-btns">
-        <button id="lpDel" class="lp-ddel" style="display:none" onclick="deleteLink()">Delete</button>
-        <button onclick="hideLinkForm()">Cancel</button>
-        <button class="lp-save" onclick="saveLink()">Save</button>
+<header>
+  <div class="header-inner">
+    <a class="logo" href="https://www.northumbria.ac.uk/" target="_blank" rel="noopener">
+      <div class="logo-mark"><span>NU</span></div>
+      <div class="logo-text">
+        <strong>Northumbria University</strong>
+        <small>Newcastle</small>
       </div>
+    </a>
+    <div class="header-sep"></div>
+    <span class="header-dept">Sport, Exercise &amp; Rehabilitation</span>
+    <div class="header-right">
+      <a class="header-link" href="https://mynorthumbria.northumbria.ac.uk/" target="_blank" rel="noopener">MyNorthumbria</a>
+      <a class="header-link" href="https://www.northumbria.ac.uk/" target="_blank" rel="noopener">University website</a>
     </div>
+  </div>
+</header>
+
+<div class="page-band">
+  <div class="page-band-inner">
+    <p class="dept-label">Technical Team &mdash; Internal Staff Portal</p>
+    <h1>Sport, Exercise &amp; Rehabilitation</h1>
+    <p class="strapline">Resources, tools and workflows for the SER technical team at Sport Central.</p>
+  </div>
 </div>
 
-<div class="canvas-toolbar">
-  <button class="ct-btn" onclick="addFreeNode()">+ Add Box</button>
-  <button class="ct-btn" id="undoBtn" onclick="undoAction()" title="Undo (Ctrl+Z)">↩ Undo</button>
-  <button class="ct-btn" onclick="fitAll()" title="Zoom to fit all boxes">⊞ Fit All</button>
-  <button class="ct-btn" onclick="resetView()">Reset View</button>
-</div>
+<div class="main">
 
-<div class="hint-bar" id="hintBar"></div>
-<div class="zoom-hint" id="zoomHint">
-  <span class="zoom-hint-icon">🖱</span> Scroll to zoom · Drag canvas to pan
-</div>
+  <p class="section-heading">Workflows &amp; Processes</p>
 
-<script type="module">
-import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.0/firebase-app.js';
-import { getFirestore, collection, getDocs, updateDoc, deleteDoc,
-         doc, addDoc, writeBatch } from 'https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore.js';
-
-const firebaseConfig = {
-  apiKey:"AIzaSyDSK-2hI6ML1eykIed6E8S5Ve29phrEolI",
-  authDomain:"nu-school-of-sport.firebaseapp.com",
-  projectId:"nu-school-of-sport",
-  storageBucket:"nu-school-of-sport.firebasestorage.app",
-  messagingSenderId:"396866213410",
-  appId:"1:396866213410:web:bc7f31d1eb1833306d1c7b"
-};
-const app = initializeApp(firebaseConfig);
-const db  = getFirestore(app);
-
-// ═══════════════════════════════════════════════════════
-// GRID SYSTEM
-// Every node is positioned by (workflow, col, row).
-// col = 0|1|2  (sub-lane within the workflow column)
-// row = 0,1,2… (global horizontal row shared across all workflows)
-// Pixel x/y are computed on render - never stored.
-// ═══════════════════════════════════════════════════════
-
-const LANE_DEFS = [
-  { wf:'Teaching', color:'#1f4e78', light:'#e8f0f8' },
-  { wf:'Research', color:'#1e6b3c', light:'#e6f4ec' },
-];
-const LANE_HEIGHT = 3200;
-const ROW_TOP  = 48;
-const ROW_H    = 76;   // px per row - tighter vertical spacing
-let   NODE_W   = 180;  // node width - updated dynamically in computeLanes()
-const NODE_H   = 54;   // approximate node height for edge calc
-const COL_PAD  = 8;    // padding inside each sub-lane
-const SUB_LANES = 5;   // sub-lanes per workflow column
-
-let LANES = [], LANE_MAP = {};
-
-function computeLanes() {
-  const totalW = window.innerWidth - 300;
-  const n = LANE_DEFS.length;
-  const laneW = Math.floor(totalW / n);
-  LANES = LANE_DEFS.map((def, i) => ({
-    ...def,
-    x: i * laneW,
-    w: i === n-1 ? totalW - i*laneW : laneW,
-  }));
-  LANE_MAP = {};
-  LANES.forEach(l => { LANE_MAP[l.wf] = l; });
-  // Node width = sub-lane width minus padding on both sides
-  const subW = Math.floor(laneW / SUB_LANES);
-  NODE_W = Math.max(100, subW - COL_PAD * 2);
-  document.documentElement.style.setProperty('--node-w', NODE_W + 'px');
-}
-window.addEventListener('resize', () => { computeLanes(); renderLanes(); renderAll(); });
-computeLanes();
-
-// ── Grid helpers ─────────────────────────────────────
-function nodeX(wf, col) {
-  const l = LANE_MAP[wf] || LANES[0];
-  const subW = Math.floor(l.w / SUB_LANES);
-  return l.x + col * subW + Math.floor((subW - NODE_W) / 2);
-}
-function nodeY(row) {
-  return ROW_TOP + row * ROW_H;
-}
-function colFromX(wf, px) {
-  const l = LANE_MAP[wf] || LANES[0];
-  const subW = Math.floor(l.w / SUB_LANES);
-  return Math.min(SUB_LANES-1, Math.max(0, Math.floor((px - l.x) / subW)));
-}
-function rowFromY(py) {
-  return Math.max(0, Math.round((py - ROW_TOP) / ROW_H));
-}
-
-// ── State ─────────────────────────────────────────────
-let nodes = {}, edges = {}, links = {};
-let selectedId = null, selectedEdgeId = null, filter = 'all', populateUsed = false, editLinkId = null;
-let panX = 0, panY = 0, zoom = 1;
-let isPanning = false, panSX = 0, panSY = 0;
-let connecting = false, connectFrom = null;
-
-// Drag state: we drag a ghost, not the real node
-let dragId = null, dragGhost = null, dragTargetCol = 0, dragTargetRow = 0;
-// Pending drag: mousedown recorded but not yet committed to dragging
-let pendingDragId = null, pendingDragE = null;
-const DRAG_THRESHOLD = 5; // px movement before drag starts
-
-// Multi-select state
-let selectedIds = new Set();   // set of selected node IDs
-let isSelecting = false;       // rubber-band selection in progress
-let selStart = {x:0,y:0};     // canvas coords where selection started
-
-// Undo history stack - each entry is a snapshot before the action
-const undoStack = [];
-const MAX_UNDO = 50;
-
-const canvas    = document.getElementById('canvas');
-const bgSvg     = document.getElementById('bgSvg');
-const laneGroup = document.getElementById('laneGroup');
-const edgeGroup = document.getElementById('edgeGroup');
-const preview   = document.getElementById('connPreview');
-const wrap      = document.getElementById('canvasWrap');
-
-// ── Status / hint ─────────────────────────────────────
-function setStatus(m) { document.getElementById('statusBar').textContent = m; }
-let hintTimer;
-function hint(m, ms=2500) {
-  const h = document.getElementById('hintBar');
-  h.textContent = m; h.classList.add('vis');
-  clearTimeout(hintTimer);
-  hintTimer = setTimeout(() => h.classList.remove('vis'), ms);
-}
-
-// ── Undo ─────────────────────────────────────────────
-function pushUndo(description) {
-  // Snapshot current nodes and edges
-  undoStack.push({
-    description,
-    nodes: JSON.parse(JSON.stringify(nodes)),
-    edges: JSON.parse(JSON.stringify(edges)),
-  });
-  if (undoStack.length > MAX_UNDO) undoStack.shift();
-  document.getElementById('undoBtn').disabled = false;
-}
-
-window.undoAction = async function() {
-  if (!undoStack.length) return;
-  const snapshot = undoStack.pop();
-  setStatus('Undoing: ' + snapshot.description + '...');
-
-  try {
-    const batch = writeBatch(db);
-
-    // Restore nodes: update changed, delete removed, add new
-    for (const [id, data] of Object.entries(snapshot.nodes)) {
-      if (!nodes[id]) {
-        // Was deleted - restore
-        batch.set(doc(db,'nodes',id), data);
-      } else {
-        // May have changed
-        batch.set(doc(db,'nodes',id), data);
-      }
-    }
-    // Delete nodes that didn't exist in snapshot
-    for (const id of Object.keys(nodes)) {
-      if (!snapshot.nodes[id]) batch.delete(doc(db,'nodes',id));
-    }
-
-    // Restore edges
-    for (const [id, data] of Object.entries(snapshot.edges)) {
-      batch.set(doc(db,'edges',id), data);
-    }
-    for (const id of Object.keys(edges)) {
-      if (!snapshot.edges[id]) batch.delete(doc(db,'edges',id));
-    }
-
-    await batch.commit();
-    if (!undoStack.length) document.getElementById('undoBtn').disabled = true;
-    await loadAll();
-    setStatus('Undone · ' + new Date().toLocaleTimeString());
-  } catch(err) {
-    setStatus('Undo error: ' + err.message);
-    console.error(err);
-  }
-};
-
-// Ctrl+Z keyboard shortcut
-document.addEventListener('keydown', e => {
-  if ((e.ctrlKey||e.metaKey) && e.key==='z') { e.preventDefault(); window.undoAction(); }
-});
-
-// ── Load ─────────────────────────────────────────────
-async function loadAll() {
-  try {
-    setStatus('Loading...');
-    const [ns, es, ls] = await Promise.all([
-      getDocs(collection(db,'nodes')),
-      getDocs(collection(db,'edges')),
-      getDocs(collection(db,'links')),
-    ]);
-    nodes = {}; ns.forEach(d => { nodes[d.id] = d.data(); });
-    edges = {}; es.forEach(d => { edges[d.id] = d.data(); });
-    links = {}; ls.forEach(d => { links[d.id] = d.data(); });
-    setStatus(`${ns.size} box${ns.size!==1?'es':''} · ${new Date().toLocaleTimeString()}`);
-    renderLanes();
-    renderAll();
-    renderLinks();
-  } catch(e) { console.error(e); setStatus('Error: '+e.message); }
-}
-
-// ── Transform ─────────────────────────────────────────
-function applyTransform() {
-  const t = `translate(${panX}px,${panY}px) scale(${zoom})`;
-  canvas.style.transform = t; canvas.style.transformOrigin = '0 0';
-  bgSvg.style.transform = t; bgSvg.style.transformOrigin = '0 0';
-}
-
-// ── Lane + grid rendering ─────────────────────────────
-function renderLanes() {
-  laneGroup.innerHTML = '';
-  const dark = window.matchMedia('(prefers-color-scheme:dark)').matches;
-
-  LANES.forEach(l => {
-    if (filter !== 'all' && filter !== l.wf) return;
-
-    // Lane background
-    const rect = document.createElementNS('http://www.w3.org/2000/svg','rect');
-    rect.setAttribute('x', l.x); rect.setAttribute('y', 0);
-    rect.setAttribute('width', l.w); rect.setAttribute('height', LANE_HEIGHT);
-    rect.setAttribute('fill', dark ? l.color+'18' : l.light);
-    laneGroup.appendChild(rect);
-
-    // Lane right border
-    const line = document.createElementNS('http://www.w3.org/2000/svg','line');
-    line.setAttribute('x1', l.x+l.w); line.setAttribute('y1', 0);
-    line.setAttribute('x2', l.x+l.w); line.setAttribute('y2', LANE_HEIGHT);
-    line.setAttribute('stroke', dark ? '#2e2e38' : '#d0d4da');
-    line.setAttribute('stroke-width','1');
-    laneGroup.appendChild(line);
-
-    // Header pill
-    const hrect = document.createElementNS('http://www.w3.org/2000/svg','rect');
-    hrect.setAttribute('x', l.x+10); hrect.setAttribute('y', 6);
-    hrect.setAttribute('width', l.w-20); hrect.setAttribute('height', 30);
-    hrect.setAttribute('rx','6'); hrect.setAttribute('fill', l.color);
-    laneGroup.appendChild(hrect);
-
-    const txt = document.createElementNS('http://www.w3.org/2000/svg','text');
-    txt.setAttribute('x', l.x+l.w/2); txt.setAttribute('y', 26);
-    txt.setAttribute('text-anchor','middle'); txt.setAttribute('fill','white');
-    txt.setAttribute('font-size','12'); txt.setAttribute('font-weight','700');
-    txt.setAttribute('letter-spacing','0.06em');
-    txt.setAttribute('font-family','-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif');
-    txt.textContent = l.wf.toUpperCase();
-    laneGroup.appendChild(txt);
-
-    // Sub-lane dividers (dashed, very subtle)
-    Array.from({length:SUB_LANES-1},(_,i)=>i+1).forEach(s => {
-      const sx = l.x + Math.floor(l.w/3)*s;
-      const sl = document.createElementNS('http://www.w3.org/2000/svg','line');
-      sl.setAttribute('x1', sx); sl.setAttribute('y1', 44);
-      sl.setAttribute('x2', sx); sl.setAttribute('y2', LANE_HEIGHT);
-      sl.setAttribute('stroke', dark ? '#232328' : '#e0e4ea');
-      sl.setAttribute('stroke-width','1');
-      sl.setAttribute('stroke-dasharray','4 8');
-      laneGroup.appendChild(sl);
-    });
-
-    // Row grid lines (very faint horizontal lines)
-    for (let r = 0; r < 30; r++) {
-      const ry = nodeY(r) - 6;
-      const rl = document.createElementNS('http://www.w3.org/2000/svg','line');
-      rl.setAttribute('x1', l.x+4); rl.setAttribute('y1', ry);
-      rl.setAttribute('x2', l.x+l.w-4); rl.setAttribute('y2', ry);
-      rl.setAttribute('stroke', dark ? '#1e1e22' : '#e8eaed');
-      rl.setAttribute('stroke-width','1');
-      laneGroup.appendChild(rl);
-    }
-  });
-}
-
-// ── Render nodes + edges ──────────────────────────────
-function renderAll() {
-  canvas.innerHTML = '';
-  edgeGroup.innerHTML = '';
-  const show = filter === 'all'
-    ? Object.keys(nodes)
-    : Object.keys(nodes).filter(id => nodes[id].workflow === filter);
-  show.forEach(id => renderNode(id));
-  requestAnimationFrame(() => {
-    edgeGroup.innerHTML = '';
-    Object.keys(edges).forEach(id => renderEdge(id));
-  });
-}
-
-function renderNode(id) {
-  const n = nodes[id]; if (!n) return;
-  const lane = LANE_MAP[n.workflow] || LANES[0];
-  const px = nodeX(n.workflow, n.col ?? 0);
-  const py = nodeY(n.row ?? 0);
-
-  const el = document.createElement('div');
-  el.className = 'node'
-    + (id === selectedId ? ' selected' : '')
-    + (hasDetail(n) ? ' has-detail' : '');
-  el.id = 'node-'+id;
-  el.style.left = px+'px';
-  el.style.top  = py+'px';
-
-  el.innerHTML = `
-    <div class="node-wf-strip" style="background:${lane.color};"></div>
-    <div class="node-tag">${n.step ? 'Step '+esc(n.step) : 'Box'}</div>
-    <div class="node-task">${safeTask(n.task||'(empty)')}</div>
-    <div class="ports">
-      <button class="port" style="background:${lane.color};" data-dir="bl"   title="Below-left">+</button>
-      <button class="port" style="background:${lane.color};" data-dir="down" title="Below">+</button>
-      <button class="port" style="background:${lane.color};" data-dir="br"   title="Below-right">+</button>
+  <div class="primary-action">
+    <div class="primary-action-text">
+      <h2>Workflow Map</h2>
+      <p>Interactive map of departmental workflows for Teaching and Research. Add and edit process steps, connect stages, and include notes and links for each step.</p>
     </div>
-    <button class="port port-left"  style="background:${lane.color};" data-dir="left"  title="Same row, left">+</button>
-    <button class="port port-right" style="background:${lane.color};" data-dir="right" title="Same row, right">+</button>`;
+    <a href="workflow.html" class="btn-primary">Open Workflow Map</a>
+  </div>
+
+  <p class="section-heading">Frequently Used Systems</p>
+
+  <div class="link-grid">
+
+    <a href="https://siso.northumbria.ac.uk/" class="link-card" target="_blank" rel="noopener">
+      <span class="link-card-title">SiSo / Online Booking</span>
+      <span class="link-card-desc">Room and equipment booking for Sport Central labs.</span>
+      <span class="link-card-url">siso.northumbria.ac.uk</span>
+      <span class="link-card-arrow">&#8599;</span>
+    </a>
+
+    <a href="https://mytimetable.northumbria.ac.uk/" class="link-card" target="_blank" rel="noopener">
+      <span class="link-card-title">MyTimetable</span>
+      <span class="link-card-desc">View scheduled sessions and semester room allocations.</span>
+      <span class="link-card-url">mytimetable.northumbria.ac.uk</span>
+      <span class="link-card-arrow">&#8599;</span>
+    </a>
+
+    <a href="https://panopto.northumbria.ac.uk/" class="link-card" target="_blank" rel="noopener">
+      <span class="link-card-title">Panopto</span>
+      <span class="link-card-desc">Video recording and lecture capture platform.</span>
+      <span class="link-card-url">panopto.northumbria.ac.uk</span>
+      <span class="link-card-arrow">&#8599;</span>
+    </a>
+
+    <a href="https://mynorthumbria.northumbria.ac.uk/" class="link-card" target="_blank" rel="noopener">
+      <span class="link-card-title">MyNorthumbria</span>
+      <span class="link-card-desc">Staff and student portal for modules, HR and admin.</span>
+      <span class="link-card-url">mynorthumbria.northumbria.ac.uk</span>
+      <span class="link-card-arrow">&#8599;</span>
+    </a>
+
+    <a href="https://worktribe.com/" class="link-card" target="_blank" rel="noopener">
+      <span class="link-card-title">WorkTribe</span>
+      <span class="link-card-desc">Research management and workload planning system.</span>
+      <span class="link-card-url">worktribe.com</span>
+      <span class="link-card-arrow">&#8599;</span>
+    </a>
+
+    <a href="https://northumbria.sharepoint.com/" class="link-card" target="_blank" rel="noopener">
+      <span class="link-card-title">Teams / SharePoint</span>
+      <span class="link-card-desc">Shared files, PEP documents, and team communication.</span>
+      <span class="link-card-url">northumbria.sharepoint.com</span>
+      <span class="link-card-arrow">&#8599;</span>
+    </a>
+
+  </div>
+
+  <p class="section-heading">Additional Resources</p>
+
+  <ul class="plain-list">
+    <li>
+      <a href="https://www.northumbria.ac.uk/" target="_blank" rel="noopener">Northumbria University main website</a>
+      <span class="list-meta">northumbria.ac.uk</span>
+    </li>
+    <li>
+      <a href="https://library.northumbria.ac.uk/" target="_blank" rel="noopener">University Library</a>
+      <span class="list-meta">library.northumbria.ac.uk</span>
+    </li>
+    <li>
+      <a href="https://www.northumbria.ac.uk/about-us/our-staff/" target="_blank" rel="noopener">Staff directory</a>
+      <span class="list-meta">northumbria.ac.uk</span>
+    </li>
+  </ul>
+
+</div>
+
+<footer>
+  <div class="footer-inner">
+    <div class="footer-left">
+      <strong>Northumbria University</strong>
+      <span>Department of Sport, Exercise &amp; Rehabilitation</span>
+      <span>Internal staff portal &mdash; maintained by the SER Technical Team</span>
+    </div>
+    <div class="footer-links">
+      <a href="https://www.northumbria.ac.uk/" target="_blank" rel="noopener">University website</a>
+      <a href="https://mynorthumbria.northumbria.ac.uk/" target="_blank" rel="noopener">MyNorthumbria</a>
+      <a href="workflow.html">Workflow Map</a>
+    </div>
+  </div>
+</footer>
 
-  // Record pending drag on mousedown - only commits if mouse moves DRAG_THRESHOLD px
-  el.addEventListener('mousedown', e => {
-    if (e.target.classList.contains('port')) return;
-    if (connecting) return;
-    e.stopPropagation();
-    pendingDragId = id;
-    pendingDragE = e;
-  });
-
-  // Mouseup on node body while connecting = finish connection
-  el.addEventListener('mouseup', e => {
-    if (e.target.classList.contains('port')) return;
-    if (connecting && connectFrom !== id) {
-      e.stopPropagation();
-      finishConnect(id);
-    }
-  });
-
-  el.addEventListener('click', e => {
-    if (e.target.classList.contains('port')) return;
-    if (connecting) { finishConnect(id); return; }
-    if (!dragId) {
-      if (e.ctrlKey || e.metaKey) {
-        // Toggle this node in multi-selection
-        if (selectedIds.has(id)) {
-          selectedIds.delete(id);
-          el.classList.remove('multi-selected');
-        } else {
-          selectedIds.add(id);
-          el.classList.add('multi-selected');
-        }
-      } else {
-        // Clear multi-selection and open detail
-        selectedIds.clear();
-        document.querySelectorAll('.node.multi-selected').forEach(n=>n.classList.remove('multi-selected'));
-        selectNode(id);
-      }
-    }
-  });
-
-  // Port: click = spawn new box; mousedown+drag = connect to existing box
-  el.querySelectorAll('.port').forEach(p => {
-    p.addEventListener('click', e => {
-      e.stopPropagation();
-      // Only spawn if we weren't in a drag-connect gesture
-      if (!connecting) spawnFromPort(id, p.dataset.dir);
-    });
-    p.addEventListener('mousedown', e => {
-      e.stopPropagation(); e.preventDefault();
-      pendingDragId = null; pendingDragE = null; // cancel any node drag
-      startConnect(id);
-    });
-    // Mouseup on a port while connecting = connect to that node
-    p.addEventListener('mouseup', e => {
-      e.stopPropagation();
-      if (connecting && connectFrom !== id) finishConnect(id);
-    });
-  });
-
-  canvas.appendChild(el);
-}
-
-function hasDetail(n) { return !!(n.url||n.audience||n.documents||n.deadline||n.notes); }
-
-// ── Node dragging (grid-snapped ghost) ────────────────
-function startDragNode(id, e) {
-  dragId = id;
-  const n = nodes[id];
-
-  // Create ghost highlight div
-  dragGhost = document.createElement('div');
-  dragGhost.style.cssText = `
-    position:absolute; width:${NODE_W}px; height:${NODE_H}px;
-    border:2px dashed #1f4e78; border-radius:8px;
-    background:rgba(31,78,120,0.08); pointer-events:none; z-index:5;
-    transition:left 0.08s, top 0.08s;`;
-  canvas.appendChild(dragGhost);
-
-  dragTargetCol = n.col ?? 0;
-  dragTargetRow = n.row ?? 0;
-  updateGhost(n.workflow);
-
-  document.getElementById('node-'+id)?.classList.add('dragging');
-}
-
-function updateGhost(wf) {
-  if (!dragGhost) return;
-  dragGhost.style.left = nodeX(wf, dragTargetCol) + 'px';
-  dragGhost.style.top  = nodeY(dragTargetRow) + 'px';
-}
-
-// ── Edges ─────────────────────────────────────────────
-function renderEdge(id) {
-  const e = edges[id]; if (!e || !nodes[e.from] || !nodes[e.to]) return;
-  if (filter !== 'all') {
-    const fw = nodes[e.from].workflow, tw = nodes[e.to].workflow;
-    if (fw !== filter && tw !== filter) return;
-  }
-  const f = nodes[e.from], t = nodes[e.to];
-  const crossLane = f.workflow !== t.workflow;
-
-  const fromEl = document.getElementById('node-'+e.from);
-  const toEl   = document.getElementById('node-'+e.to);
-  const fh = fromEl ? fromEl.offsetHeight : NODE_H;
-  const fw2 = fromEl ? fromEl.offsetWidth : NODE_W;
-  const tw2 = toEl   ? toEl.offsetWidth   : NODE_W;
-
-  const x1 = nodeX(f.workflow, f.col??0) + fw2/2;
-  const y1 = nodeY(f.row??0) + fh;
-  const x2 = nodeX(t.workflow, t.col??0) + tw2/2;
-  const y2 = nodeY(t.row??0);
-
-  // Orthogonal: straight down, jog horizontally at midpoint, straight down
-  const midY = y1 + Math.max(12, (y2-y1)/2);
-  const r = 6;
-  let d;
-  if (Math.abs(x2-x1) < 2) {
-    d = `M${x1},${y1} L${x2},${y2}`;
-  } else {
-    const dx = x2 > x1 ? r : -r;
-    d = `M${x1},${y1} L${x1},${midY-r} Q${x1},${midY} ${x1+dx},${midY} L${x2-dx},${midY} Q${x2},${midY} ${x2},${midY+r} L${x2},${y2}`;
-  }
-
-  const isSelected = id === selectedEdgeId;
-
-  // Visible path
-  const path = document.createElementNS('http://www.w3.org/2000/svg','path');
-  path.setAttribute('d', d);
-  path.setAttribute('fill','none');
-  if (isSelected) {
-    path.setAttribute('stroke','#e74c3c'); path.setAttribute('stroke-width','2.5');
-    path.setAttribute('marker-end','url(#arr)');
-  } else if (crossLane) {
-    path.setAttribute('stroke','#c0a060'); path.setAttribute('stroke-width','1.5');
-    path.setAttribute('stroke-dasharray','6 4'); path.setAttribute('marker-end','url(#arr-cross)');
-    path.setAttribute('opacity','0.75');
-  } else {
-    path.setAttribute('stroke','#9aabb8'); path.setAttribute('stroke-width','1.5');
-    path.setAttribute('marker-end','url(#arr)');
-  }
-  edgeGroup.appendChild(path);
-
-  // Wide invisible hit area (easier to click)
-  const hit = document.createElementNS('http://www.w3.org/2000/svg','path');
-  hit.setAttribute('d', d);
-  hit.setAttribute('fill','none');
-  hit.setAttribute('stroke','transparent');
-  hit.setAttribute('stroke-width','14');
-  hit.style.cursor = 'pointer';
-  hit.addEventListener('click', ev => {
-    ev.stopPropagation();
-    selectEdge(id, x1, y1, x2, y2);
-  });
-  edgeGroup.appendChild(hit);
-}
-
-function renderEdges() {
-  requestAnimationFrame(() => {
-    edgeGroup.innerHTML = '';
-    Object.keys(edges).forEach(id => renderEdge(id));
-    if (selectedEdgeId) showEdgeDeleteBtn();
-  });
-}
-
-function selectEdge(id, x1, y1, x2, y2) {
-  selectedEdgeId = id;
-  // Re-render to highlight selected edge
-  edgeGroup.innerHTML = '';
-  Object.keys(edges).forEach(eid => renderEdge(eid));
-  showEdgeDeleteBtn();
-}
-
-function showEdgeDeleteBtn() {
-  // Remove any existing button
-  document.querySelectorAll('.edge-del-btn').forEach(b => b.remove());
-  const e = edges[selectedEdgeId]; if (!e) return;
-  const f = nodes[e.from], t = nodes[e.to]; if (!f || !t) return;
-
-  const fromEl = document.getElementById('node-'+e.from);
-  const toEl   = document.getElementById('node-'+e.to);
-  const fh  = fromEl ? fromEl.offsetHeight : NODE_H;
-  const fw2 = fromEl ? fromEl.offsetWidth  : NODE_W;
-  const tw2 = toEl   ? toEl.offsetWidth    : NODE_W;
-
-  const x1 = nodeX(f.workflow, f.col??0) + fw2/2;
-  const y1 = nodeY(f.row??0) + fh;
-  const x2 = nodeX(t.workflow, t.col??0) + tw2/2;
-  const y2 = nodeY(t.row??0);
-
-  // Place button at midpoint of the edge
-  const mx = (x1+x2)/2;
-  const my = y1 + Math.max(12,(y2-y1)/2);
-
-  // Button lives on the canvas div (transformed with pan/zoom)
-  const btn = document.createElement('button');
-  btn.className = 'edge-del-btn';
-  btn.title = 'Delete connection';
-  btn.textContent = '×';
-  btn.style.left = mx + 'px';
-  btn.style.top  = my + 'px';
-  btn.addEventListener('click', async ev => {
-    ev.stopPropagation();
-    if (!confirm('Delete this connection?')) return;
-    await window.removeEdge(selectedEdgeId);
-    selectedEdgeId = null;
-    btn.remove();
-  });
-  canvas.appendChild(btn);
-}
-
-function clearEdgeSelect() {
-  selectedEdgeId = null;
-  document.querySelectorAll('.edge-del-btn').forEach(b => b.remove());
-  renderEdges();
-}
-
-function esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
-
-// Render task HTML safely - allow <a> tags, strip everything else
-function safeTask(html) {
-  const div = document.createElement('div');
-  div.innerHTML = html;
-  // Walk all elements, remove anything that isn't <a> or a text node
-  div.querySelectorAll('*:not(a)').forEach(el => {
-    el.replaceWith(...el.childNodes);
-  });
-  // Sanitise <a> tags - keep href, strip other attributes, force target=_blank
-  div.querySelectorAll('a').forEach(a => {
-    const href = a.getAttribute('href') || '';
-    a.setAttribute('href', href);
-    a.setAttribute('target', '_blank');
-    a.setAttribute('rel', 'noopener');
-    // Remove all other attributes
-    Array.from(a.attributes)
-      .filter(attr => !['href','target','rel'].includes(attr.name))
-      .forEach(attr => a.removeAttribute(attr.name));
-  });
-  return div.innerHTML || esc(html);
-}
-
-// ── Pan ───────────────────────────────────────────────
-wrap.addEventListener('mousedown', e => {
-  if (connecting && (e.target===wrap||e.target.id==='bgSvg'||e.target===canvas)) {
-    const r = wrap.getBoundingClientRect();
-    const mx = (e.clientX-r.left-panX)/zoom;
-    const my = (e.clientY-r.top-panY)/zoom;
-    const fromWf = nodes[connectFrom]?.workflow || 'Teaching';
-    const col = colFromX(fromWf, mx);
-    const row = rowFromY(my);
-    cancelConnect();
-    showInlineInput(fromWf, col, row, connectFrom);
-    return;
-  }
-  if (!connecting && !dragId && (e.target===wrap||e.target.id==='bgSvg'||e.target===canvas)) {
-    // If Ctrl/Meta held: start rubber-band selection
-    if (e.ctrlKey || e.metaKey) {
-      const r = wrap.getBoundingClientRect();
-      const mx = (e.clientX-r.left-panX)/zoom;
-      const my = (e.clientY-r.top-panY)/zoom;
-      isSelecting = true;
-      selStart = {x:mx, y:my};
-      const sr = document.getElementById('selRect');
-      sr.style.left=mx+'px'; sr.style.top=my+'px';
-      sr.style.width='0px'; sr.style.height='0px';
-      sr.style.display='block';
-      return;
-    }
-    isPanning = true; canvas.style.cursor = 'grabbing';
-    panSX = e.clientX-panX; panSY = e.clientY-panY;
-    // Clear multi-selection and detail popup on canvas click
-    if (!e.ctrlKey && !e.metaKey) {
-      selectedIds.clear();
-      document.querySelectorAll('.node.multi-selected').forEach(n=>n.classList.remove('multi-selected'));
-    }
-    if (selectedId) { window.closeDetail(); }
-    if (selectedEdgeId) clearEdgeSelect();
-  }
-});
-
-window.addEventListener('mousemove', e => {
-  const r = wrap.getBoundingClientRect();
-  const mx = (e.clientX-r.left-panX)/zoom;
-  const my = (e.clientY-r.top-panY)/zoom;
-
-  if (isPanning) {
-    panX = e.clientX-panSX; panY = e.clientY-panSY;
-    applyTransform();
-  }
-
-  // Commit pending drag once mouse has moved enough
-  if (pendingDragId && !dragId) {
-    const r2 = wrap.getBoundingClientRect();
-    const dx = e.clientX - pendingDragE.clientX;
-    const dy = e.clientY - pendingDragE.clientY;
-    if (Math.sqrt(dx*dx+dy*dy) > DRAG_THRESHOLD) {
-      startDragNode(pendingDragId, pendingDragE);
-      pendingDragId = null; pendingDragE = null;
-    }
-  }
-
-  if (dragId) {
-    const wf = nodes[dragId]?.workflow || 'Teaching';
-    dragTargetCol = colFromX(wf, mx);
-    dragTargetRow = rowFromY(my);
-    updateGhost(wf);
-  }
-
-  if (isSelecting) {
-    const rx = Math.min(mx, selStart.x);
-    const ry = Math.min(my, selStart.y);
-    const rw = Math.abs(mx - selStart.x);
-    const rh = Math.abs(my - selStart.y);
-    const sr = document.getElementById('selRect');
-    sr.style.left=rx+'px'; sr.style.top=ry+'px';
-    sr.style.width=rw+'px'; sr.style.height=rh+'px';
-  }
-
-  if (connecting && connectFrom) {
-    const fn = nodes[connectFrom];
-    const x1 = nodeX(fn.workflow, fn.col??0) + NODE_W/2;
-    const y1 = nodeY(fn.row??0) + NODE_H;
-    const dy = Math.abs(my-y1);
-    const cy1 = y1+Math.max(30,dy*0.4), cy2 = my-Math.max(30,dy*0.4);
-    preview.setAttribute('d',`M${x1},${y1} C${x1},${cy1} ${mx},${cy2} ${mx},${my}`);
-    document.querySelectorAll('.node.drag-over').forEach(n=>n.classList.remove('drag-over'));
-    const hit = nodeAtPoint(mx, my);
-    if (hit && hit !== connectFrom) {
-      document.getElementById('node-'+hit)?.classList.add('drag-over');
-    }
-  }
-});
-
-window.addEventListener('mouseup', async e => {
-  if (isPanning) { isPanning = false; canvas.style.cursor = ''; }
-
-  // If mouse released before drag threshold, it was a click - cancel pending
-  pendingDragId = null; pendingDragE = null;
-
-  if (isSelecting) {
-    isSelecting = false;
-    const sr = document.getElementById('selRect');
-    sr.style.display='none';
-    // Find all nodes within the selection rect
-    const rx = parseFloat(sr.style.left), ry = parseFloat(sr.style.top);
-    const rw = parseFloat(sr.style.width), rh = parseFloat(sr.style.height);
-    if (rw > 5 || rh > 5) {
-      selectedIds.clear();
-      document.querySelectorAll('.node.multi-selected').forEach(n=>n.classList.remove('multi-selected'));
-      for (const [id, n] of Object.entries(nodes)) {
-        const nx = nodeX(n.workflow, n.col??0);
-        const ny = nodeY(n.row??0);
-        if (nx >= rx-5 && nx+NODE_W <= rx+rw+5 && ny >= ry-5 && ny+NODE_H <= ry+rh+5) {
-          selectedIds.add(id);
-          document.getElementById('node-'+id)?.classList.add('multi-selected');
-        }
-      }
-      if (selectedIds.size > 0) hint(`${selectedIds.size} box${selectedIds.size>1?'es':''} selected — drag any to move all`);
-    }
-    return;
-  }
-
-  if (dragId) {
-    const id = dragId;
-    const n = nodes[id];
-    const wf = n.workflow;
-    // Check if target cell is free (or same cell)
-    const occupied = Object.entries(nodes).some(([oid, on]) =>
-      oid !== id && on.workflow === wf &&
-      (on.col??0) === dragTargetCol && (on.row??0) === dragTargetRow
-    );
-    if (!occupied) {
-      pushUndo('move box');
-      if (selectedIds.has(id) && selectedIds.size > 1) {
-        // Move all selected nodes by the same col/row delta
-        const dCol = dragTargetCol - (n.col??0);
-        const dRow = dragTargetRow - (n.row??0);
-        const saves = [];
-        for (const sid of selectedIds) {
-          const sn = nodes[sid];
-          if (!sn) continue;
-          const newCol = Math.min(SUB_LANES-1, Math.max(0, (sn.col??0)+dCol));
-          const newRow = Math.max(0, (sn.row??0)+dRow);
-          sn.col = newCol; sn.row = newRow;
-          saves.push(updateDoc(doc(db,'nodes',sid), {col:newCol, row:newRow}));
-        }
-        try { await Promise.all(saves); } catch(err) { console.error(err); }
-      } else {
-        n.col = dragTargetCol;
-        n.row = dragTargetRow;
-        try {
-          await updateDoc(doc(db,'nodes',id), { col: n.col, row: n.row });
-        } catch(err) { console.error(err); }
-      }
-    } else {
-      hint('That cell is already occupied');
-    }
-    dragGhost?.remove(); dragGhost = null;
-    dragId = null;
-    document.querySelectorAll('.node.dragging').forEach(n=>n.classList.remove('dragging'));
-    renderAll();
-    return;
-  }
-
-  if (connecting) {
-    const r = wrap.getBoundingClientRect();
-    const mx = (e.clientX-r.left-panX)/zoom;
-    const my = (e.clientY-r.top-panY)/zoom;
-    const hit = nodeAtPoint(mx, my);
-    const fromId = connectFrom;
-    cancelConnect();
-    if (hit && hit !== fromId) {
-      await createEdge(fromId, hit);
-    } else if (!hit) {
-      const fromWf = nodes[fromId]?.workflow || 'Teaching';
-      const col = colFromX(fromWf, mx);
-      const row = rowFromY(my);
-      showInlineInput(fromWf, col, row, fromId);
-    }
-  }
-});
-
-function nodeAtPoint(mx, my) {
-  for (const id of Object.keys(nodes)) {
-    const n = nodes[id];
-    const px = nodeX(n.workflow, n.col??0);
-    const py = nodeY(n.row??0);
-    if (mx>=px && mx<=px+NODE_W && my>=py && my<=py+NODE_H+20) return id;
-  }
-  return null;
-}
-
-// ── Connect ───────────────────────────────────────────
-function startConnect(fromId) {
-  connecting = true; connectFrom = fromId;
-  canvas.style.cursor = 'crosshair';
-  hint('Drag to another box to connect — or release on empty canvas');
-  preview.setAttribute('d','');
-}
-async function finishConnect(toId) {
-  if (toId === connectFrom) { cancelConnect(); return; }
-  const fromId = connectFrom; cancelConnect();
-  await createEdge(fromId, toId);
-}
-function cancelConnect() {
-  connecting = false; connectFrom = null; canvas.style.cursor = '';
-  preview.setAttribute('d','');
-  document.querySelectorAll('.node.drag-over').forEach(n=>n.classList.remove('drag-over'));
-}
-async function createEdge(fromId, toId) {
-  const exists = Object.values(edges).find(e=>e.from===fromId&&e.to===toId);
-  if (exists) { hint('Already connected'); return; }
-  pushUndo('connect');
-  try {
-    setStatus('Connecting...');
-    const ref = await addDoc(collection(db,'edges'), {from:fromId,to:toId});
-    edges[ref.id] = {from:fromId,to:toId};
-    renderEdges();
-    if (selectedId) renderConnSection(selectedId);
-    setStatus('Connected · '+new Date().toLocaleTimeString());
-  } catch(err) { alert('Error: '+err.message); }
-}
-
-// ── Spawn from port ───────────────────────────────────
-function spawnFromPort(fromId, dir) {
-  const n = nodes[fromId];
-  const wf = n.workflow;
-  const parentCol = n.col ?? 0;
-  const parentRow = n.row ?? 0;
-
-  let targetCol, targetRow;
-
-  if (dir === 'left' || dir === 'right') {
-    // Same row, adjacent sub-lane
-    targetRow = parentRow;
-    targetCol = dir === 'left'
-      ? Math.max(0, parentCol-1)
-      : Math.min(SUB_LANES-1, parentCol+1);
-    // If same row/col occupied, shift row down
-    let tries = 0;
-    while (tries < 20 && Object.values(nodes).some(nd =>
-      nd.workflow===wf && (nd.col??0)===targetCol && (nd.row??0)===targetRow
-    )) { targetRow++; tries++; }
-  } else {
-    // Below variants
-    if (dir === 'down')    targetCol = parentCol;
-    else if (dir === 'bl') targetCol = Math.max(0, parentCol-1);
-    else                   targetCol = Math.min(SUB_LANES-1, parentCol+1);
-    targetRow = parentRow+1;
-    // Find next free row in that col
-    while (Object.values(nodes).some(nd =>
-      nd.workflow===wf && (nd.col??0)===targetCol && (nd.row??0)===targetRow
-    )) { targetRow++; }
-  }
-
-  showInlineInput(wf, targetCol, targetRow, fromId);
-}
-
-// ── Inline input ──────────────────────────────────────
-function showInlineInput(wf, col, row, fromId) {
-  document.querySelectorAll('.node-input').forEach(el=>el.remove());
-
-  // If cell is occupied, find the next free row in that col
-  while (Object.values(nodes).some(nd =>
-    nd.workflow===wf && (nd.col??0)===col && (nd.row??0)===row
-  )) { row++; }
-
-  const px = nodeX(wf, col);
-  const py = nodeY(row);
-
-  const el = document.createElement('div');
-  el.className = 'node-input';
-  el.style.left = px+'px'; el.style.top = py+'px';
-  el.innerHTML = `<textarea placeholder="Type task… Enter to save, Esc to cancel" rows="2"></textarea>
-    <div class="node-input-hint">Enter ↵ save &nbsp;·&nbsp; Esc cancel</div>`;
-  canvas.appendChild(el);
-  const ta = el.querySelector('textarea');
-  ta.focus();
-  let done = false;
-  ta.addEventListener('keydown', async ev => {
-    if (ev.key==='Enter' && !ev.shiftKey) {
-      ev.preventDefault(); if (done) return; done = true;
-      const task = ta.value.trim();
-      if (!task) { el.remove(); return; }
-      await commitNode(task, wf, col, row, fromId); el.remove();
-    }
-    if (ev.key==='Escape') { el.remove(); }
-  });
-  ta.addEventListener('blur', () => setTimeout(() => {
-    if (done) return; done = true;
-    const task = ta.value.trim();
-    if (task) commitNode(task, wf, col, row, fromId).then(()=>el.remove());
-    else el.remove();
-  }, 200));
-}
-
-async function commitNode(task, wf, col, row, fromId) {
-  pushUndo('add box');
-  try {
-    setStatus('Saving...');
-    const data = { workflow:wf, col, row, step:'', task,
-                   url:'', audience:'', documents:'', deadline:'', notes:'' };
-    const ref = await addDoc(collection(db,'nodes'), data);
-    nodes[ref.id] = data;
-    if (fromId) {
-      const er = await addDoc(collection(db,'edges'), {from:fromId,to:ref.id});
-      edges[er.id] = {from:fromId,to:ref.id};
-    }
-    setStatus('Saved · '+new Date().toLocaleTimeString());
-    renderAll();
-    selectNode(ref.id);
-  } catch(e) { alert('Error: '+e.message); }
-}
-
-// ── Add free box ──────────────────────────────────────
-window.addFreeNode = function() {
-  // Find first free cell in Teaching col 0
-  let row = 0;
-  while (Object.values(nodes).some(nd =>
-    nd.workflow==='Teaching' && (nd.col??0)===0 && (nd.row??0)===row
-  )) { row++; }
-  showInlineInput('Teaching', 0, row, null);
-};
-
-// ── Select / detail panel ─────────────────────────────
-function selectNode(id) {
-  selectedId = id; renderAll(); openDetail(id);
-}
-function openDetail(id) {
-  const n = nodes[id]; if (!n) return;
-  const popup = document.getElementById('stepDetail');
-
-  // Fill fields
-  document.getElementById('sf-task').innerHTML = n.task||'';
-  document.getElementById('sf-url').value      = n.url||'';
-  document.getElementById('sf-notes').value    = n.notes||'';
-  renderConnSection(id);
-
-  // Show first so we can measure it
-  popup.classList.add('visible');
-
-  // Position next to the box in screen coordinates
-  const nodeEl = document.getElementById('node-'+id);
-  if (nodeEl) {
-    const nr  = nodeEl.getBoundingClientRect();
-    const wr  = document.getElementById('canvasWrap').getBoundingClientRect();
-    const pw  = popup.offsetWidth  || 280;
-    const ph  = popup.offsetHeight || 400;
-    const margin = 12;
-
-    // Try right of box first, then left, then below
-    let left, top;
-    if (nr.right + pw + margin < wr.right) {
-      left = nr.right + margin;
-    } else {
-      left = Math.max(wr.left + 4, nr.left - pw - margin);
-    }
-    top = Math.min(nr.top, window.innerHeight - ph - 8);
-    top = Math.max(52, top);
-
-    popup.style.left = left + 'px';
-    popup.style.top  = top  + 'px';
-  }
-}
-function renderConnSection(id) {
-  const out = Object.entries(edges).filter(([,e])=>e.from===id);
-  const inc = Object.entries(edges).filter(([,e])=>e.to===id);
-  let html = '<div class="conn-section"><h4>Connections</h4>';
-  if (!out.length && !inc.length) html += '<div style="font-size:12px;color:#bbb;">None — drag from a + handle to connect</div>';
-  out.forEach(([eid,e]) => {
-    const t = nodes[e.to];
-    const cross = t && nodes[id] && t.workflow!==nodes[id].workflow;
-    html += `<div class="conn-item"><span class="conn-label">→ ${esc((t?.task||'?').slice(0,26))}${cross?' <em style="color:#c0a060;font-style:normal;">(cross-lane)</em>':''}</span><button class="conn-del" onclick="removeEdge('${eid}')">×</button></div>`;
-  });
-  inc.forEach(([eid,e]) => {
-    const f = nodes[e.from];
-    html += `<div class="conn-item"><span class="conn-label">← ${esc((f?.task||'?').slice(0,26))}</span><button class="conn-del" onclick="removeEdge('${eid}')">×</button></div>`;
-  });
-  html += '</div>';
-  document.getElementById('connSection').innerHTML = html;
-}
-window.removeEdge = async function(eid) {
-  pushUndo('remove connection');
-  try { await deleteDoc(doc(db,'edges',eid)); delete edges[eid]; renderEdges(); if(selectedId)renderConnSection(selectedId); }
-  catch(e) { alert('Error: '+e.message); }
-};
-window.closeDetail = function() {
-  document.getElementById('stepDetail').classList.remove('visible');
-  selectedId = null; renderAll();
-};
-// Close popup when clicking canvas background
-
-window.saveDetail = async function() {
-  if (!selectedId) return;
-  const taskEl = document.getElementById('sf-task');
-  const task = taskEl.innerHTML.trim();
-  const taskText = taskEl.innerText.trim();
-  if (!taskText) { alert('Task cannot be empty.'); return; }
-  pushUndo('edit box');
-  try {
-    setStatus('Saving...');
-    const updates = { task,  // store as HTML so links are preserved
-      url:document.getElementById('sf-url').value.trim(),
-      notes:document.getElementById('sf-notes').value.trim() };
-    await updateDoc(doc(db,'nodes',selectedId), updates);
-    Object.assign(nodes[selectedId], updates);
-    setStatus('Saved · '+new Date().toLocaleTimeString());
-    window.closeDetail();  // auto-close on save
-    renderAll();
-  } catch(e) { alert('Error: '+e.message); }
-};
-window.deleteNode = async function() {
-  if (!selectedId) return;
-  if (!confirm(`Delete "${nodes[selectedId]?.task||'this box'}"?\n\nAll connections will also be removed.`)) return;
-  try {
-    const toDelete = Object.entries(edges).filter(([,e])=>e.from===selectedId||e.to===selectedId);
-    for (const [eid] of toDelete) { await deleteDoc(doc(db,'edges',eid)); delete edges[eid]; }
-    await deleteDoc(doc(db,'nodes',selectedId)); delete nodes[selectedId];
-    window.closeDetail(); renderAll();
-  } catch(e) { alert('Error: '+e.message); }
-};
-
-// ── Auto layout ───────────────────────────────────────
-window.resetView = function() { panX = 20; panY = 10; zoom = 1; applyTransform(); };
-
-window.fitAll = function() {
-  if (!Object.keys(nodes).length) return;
-
-  // Find bounding box of all visible nodes
-  const visible = filter === 'all'
-    ? Object.values(nodes)
-    : Object.values(nodes).filter(n => n.workflow === filter);
-  if (!visible.length) return;
-
-  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-  visible.forEach(n => {
-    const x = nodeX(n.workflow, n.col ?? 0);
-    const y = nodeY(n.row ?? 0);
-    if (x < minX) minX = x;
-    if (y < minY) minY = y;
-    if (x + NODE_W > maxX) maxX = x + NODE_W;
-    if (y + NODE_H > maxY) maxY = y + NODE_H;
-  });
-
-  const margin = 40;
-  const contentW = maxX - minX + margin * 2;
-  const contentH = maxY - minY + margin * 2;
-
-  const wrapEl = document.getElementById('canvasWrap');
-  const viewW = wrapEl.offsetWidth;
-  const viewH = wrapEl.offsetHeight;
-
-  // Zoom to fit, capped between 0.2 and 1.2
-  const newZoom = Math.min(1.2, Math.max(0.2, Math.min(viewW / contentW, viewH / contentH)));
-
-  // Pan to centre content
-  panX = (viewW - contentW * newZoom) / 2 - (minX - margin) * newZoom;
-  panY = (viewH - contentH * newZoom) / 2 - (minY - margin) * newZoom;
-  zoom = newZoom;
-  applyTransform();
-};
-
-// ── Zoom ─────────────────────────────────────────────
-let zoomHintDismissed = false;
-wrap.addEventListener('wheel', e => {
-  e.preventDefault();
-  if (!zoomHintDismissed) { zoomHintDismissed=true; document.getElementById('zoomHint').classList.add('hidden'); }
-  const r = wrap.getBoundingClientRect();
-  const mx = e.clientX-r.left, my = e.clientY-r.top;
-  const delta = e.deltaY>0?0.9:1.1;
-  const nz = Math.min(2, Math.max(0.25, zoom*delta));
-  panX = mx-(mx-panX)*nz/zoom; panY = my-(my-panY)*nz/zoom;
-  zoom = nz; applyTransform();
-}, {passive:false});
-
-// ── Filter ────────────────────────────────────────────
-document.querySelectorAll('.fb').forEach(b => {
-  b.addEventListener('click', () => {
-    document.querySelectorAll('.fb').forEach(x=>x.classList.remove('active'));
-    b.classList.add('active'); filter = b.dataset.filter;
-    renderLanes(); renderAll();
-  });
-});
-
-// ── Links ─────────────────────────────────────────────
-function renderLinks() {
-  const list = document.getElementById('linksList');
-  const entries = Object.entries(links).sort((a,b)=>(a[1].name||'').localeCompare(b[1].name||''));
-  if (!entries.length) { list.innerHTML='<span class="lp-empty">No links yet</span>'; return; }
-  list.innerHTML = entries.map(([id,l])=>`
-    <div class="li"><a href="${esc(l.url||'#')}" target="_blank" rel="noopener">${esc(l.name||'Untitled')}</a>
-    <button class="li-edit" onclick="showLinkForm('${id}')">edit</button></div>`).join('');
-}
-window.showLinkForm = function(id) {
-  editLinkId=id;
-  document.getElementById('lpName').value=id?(links[id]?.name||''):'';
-  document.getElementById('lpUrl').value=id?(links[id]?.url||''):'';
-  document.getElementById('lpDel').style.display=id?'':'none';
-  document.getElementById('lpForm').classList.add('vis');
-  document.getElementById('lpName').focus();
-};
-window.hideLinkForm = function() { editLinkId=null; document.getElementById('lpForm').classList.remove('vis'); };
-window.saveLink = async function() {
-  const name=document.getElementById('lpName').value.trim();
-  const url=document.getElementById('lpUrl').value.trim();
-  if (!name||!url) { alert('Both fields required.'); return; }
-  try {
-    if (editLinkId) await updateDoc(doc(db,'links',editLinkId),{name,url});
-    else await addDoc(collection(db,'links'),{name,url});
-    window.hideLinkForm();
-    const snap=await getDocs(collection(db,'links'));
-    links={}; snap.forEach(d=>{links[d.id]=d.data();}); renderLinks();
-  } catch(e) { alert('Error: '+e.message); }
-};
-window.deleteLink = async function() {
-  if (!editLinkId) return;
-  if (!confirm(`Delete "${links[editLinkId]?.name}"?`)) return;
-  try {
-    await deleteDoc(doc(db,'links',editLinkId)); window.hideLinkForm();
-    const snap=await getDocs(collection(db,'links'));
-    links={}; snap.forEach(d=>{links[d.id]=d.data();}); renderLinks();
-  } catch(e) { alert('Error: '+e.message); }
-};
-
-// ── Populate ──────────────────────────────────────────
-document.getElementById('populateBtn').addEventListener('click', async () => {
-  if (populateUsed) return;
-  if (Object.keys(nodes).length && !confirm('Add default data on top of existing?')) return;
-  populateUsed = true;
-  const btn = document.getElementById('populateBtn');
-  btn.disabled=true; btn.textContent='Adding...';
-  try {
-    // col and row are the ONLY position data - no x/y
-    const nd = (wf,s,t,col,row) => ({ workflow:wf, step:s, task:t, col, row,
-                                       url:'', audience:'', documents:'', deadline:'', notes:'' });
-    const batch = writeBatch(db);
-    const nData = {
-      t1:  nd('Teaching','1', 'Do you have a PEP ready?',      0, 0),
-      t1a: nd('Teaching','1a','Get blank PEP template',         1, 1),
-      t1b: nd('Teaching','1b','Complete the PEP',               1, 2),
-      t2:  nd('Teaching','2', 'Upload PEP to MS Teams',         0, 2),
-      t3:  nd('Teaching','3', 'Record link in SEM spreadsheet', 0, 3),
-      r1:  nd('Research','1', 'Do you have a PO form?',         0, 0),
-      r1a: nd('Research','1a','Get blank PO form',              1, 1),
-      r1b: nd('Research','1b','Complete the PO form',           1, 2),
-      r2:  nd('Research','2', 'Upload PO & @ Liam for approval',0, 2),
-    };
-    const nIds = {};
-    for (const [k,data] of Object.entries(nData)) {
-      const r = doc(collection(db,'nodes')); batch.set(r,data); nIds[k]=r.id;
-    }
-    const edgeList = [['t1','t2'],['t1','t1a'],['t1a','t1b'],['t1b','t2'],['t2','t3'],
-                      ['r1','r2'],['r1','r1a'],['r1a','r1b'],['r1b','r2']];
-    for (const [a,b] of edgeList) {
-      batch.set(doc(collection(db,'edges')), {from:nIds[a],to:nIds[b]});
-    }
-    await batch.commit();
-    btn.style.display='none';
-    await loadAll();
-  } catch(e) {
-    populateUsed=false; btn.disabled=false; btn.textContent='+ Default Data';
-    alert('Error: '+e.message);
-  }
-});
-
-// ── Link toolbar ─────────────────────────────────────
-let _savedRange = null;
-
-document.getElementById('sf-task').addEventListener('mouseup', showLinkToolbarIfSelected);
-document.getElementById('sf-task').addEventListener('keyup',   showLinkToolbarIfSelected);
-
-function showLinkToolbarIfSelected() {
-  const sel = window.getSelection();
-  if (!sel || sel.isCollapsed || sel.toString().trim() === '') {
-    hideLinkToolbar(); return;
-  }
-  // Check selection is inside sf-task
-  const taskEl = document.getElementById('sf-task');
-  if (!taskEl.contains(sel.anchorNode)) { hideLinkToolbar(); return; }
-
-  // Save the range so we can restore it after clicking the toolbar button
-  _savedRange = sel.getRangeAt(0).cloneRange();
-
-  // Check if selection is already a link
-  const anchor = sel.anchorNode.parentElement?.closest('a');
-  document.getElementById('linkUrlInput').value = anchor ? anchor.href : '';
-
-  // Position toolbar above the selection
-  const rect = sel.getRangeAt(0).getBoundingClientRect();
-  const tb = document.getElementById('linkToolbar');
-  tb.classList.add('visible');
-  tb.style.left = Math.max(4, rect.left) + 'px';
-  tb.style.top  = (rect.top - tb.offsetHeight - 6) + 'px';
-}
-
-window.applyLink = function() {
-  const url = document.getElementById('linkUrlInput').value.trim();
-  if (!url) return;
-  const fullUrl = url.startsWith('http') ? url : 'https://' + url;
-  // Restore saved selection
-  const sel = window.getSelection();
-  if (_savedRange) { sel.removeAllRanges(); sel.addRange(_savedRange); }
-  document.execCommand('createLink', false, fullUrl);
-  // Set target=_blank on newly created links
-  document.getElementById('sf-task').querySelectorAll('a').forEach(a => {
-    a.target = '_blank'; a.rel = 'noopener';
-  });
-  hideLinkToolbar();
-};
-
-window.removeLink = function() {
-  const sel = window.getSelection();
-  if (_savedRange) { sel.removeAllRanges(); sel.addRange(_savedRange); }
-  document.execCommand('unlink', false, null);
-  hideLinkToolbar();
-};
-
-window.hideLinkToolbar = function() {
-  document.getElementById('linkToolbar').classList.remove('visible');
-  _savedRange = null;
-};
-
-// Hide toolbar when clicking outside
-document.addEventListener('mousedown', e => {
-  const tb = document.getElementById('linkToolbar');
-  const taskEl = document.getElementById('sf-task');
-  if (!tb.contains(e.target) && !taskEl.contains(e.target)) {
-    hideLinkToolbar();
-  }
-});
-
-// ── Boot ─────────────────────────────────────────────
-document.getElementById('undoBtn').disabled = true;
-resetView();
-// After first load, auto-fit to show all content
-loadAll().then(() => { setTimeout(fitAll, 100); }).catch(() => {});
-
-</script>
 </body>
 </html>
