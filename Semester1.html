@@ -182,9 +182,8 @@
       letter-spacing:0.1em; text-transform:uppercase; color:var(--light);
       border-bottom:1px solid var(--border);
       position:sticky; top:0; background:#fff; z-index:1;
-      display:flex; align-items:center; justify-content:space-between;
     }
-    .sidebar-count { font-weight:400; color:#bbb; }
+    .sidebar-count { display:none; }
 
     /* Each module pill in the sidebar */
     .mod-link {
@@ -201,12 +200,7 @@
       border-bottom-color:var(--accent);
     }
     .mod-link .mod-sub { display:none; } /* not used in this layout */
-    .mod-link .mod-n {
-      font-size:10px; font-weight:700;
-      background:rgba(0,0,0,0.08);
-      border-radius:10px; padding:2px 7px; flex-shrink:0;
-    }
-    .mod-link.active .mod-n { background:rgba(255,255,255,0.25); color:#fff; }
+
 
     /* ── RIGHT PANEL: single module view ── */
     .main-content {
@@ -737,10 +731,8 @@ function renderSidebar() {
     const div = document.createElement('div');
     div.className = 'mod-link';
     div.id = 'sbl-' + code;
-    div.title = mod.name || code;
-    div.innerHTML =
-      '<span>' + esc(code) + '</span>' +
-      '<span class="mod-n" title="' + mod.sessions.length + ' session' + (mod.sessions.length!==1?'s':'') + '">' + mod.sessions.length + '</span>';
+    div.title = mod.name && mod.name !== code ? mod.name : '';
+    div.textContent = code;
     div.addEventListener('click', () => selectModule(code));
     sidebar.appendChild(div);
   });
