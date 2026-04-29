@@ -1,0 +1,1034 @@
+<!DOCTYPE html>
+<!--
+  ============================================================
+  FILE: Semester1.html
+  PURPOSE: SER Technical Team Teaching Alignment - Semester 1
+  OWNER: Liam Pearson-Noseworthy, Northumbria University
+  LAST UPDATED: 2026-04-29
+
+  FOR AI/LLM READERS - FULL ARCHITECTURE:
+  =========================================
+  This page is a fully-editable teaching alignment tracker for Semester 1.
+  Its pair page is Semester2.html.
+
+  DATA MODEL:
+  -----------
+  All data lives in Firebase Firestore, collection "sem1_sessions".
+
+  Each Firestore document represents ONE session row:
+    docId: moduleCode + "_" + rowIndex   (e.g. "SP4002_0")
+    fields:
+      moduleCode:  string   (e.g. "SP4002")
+      moduleName:  string   (full name)
+      moduleLead:  string
+      techLead:    string
+      week:        string   (teaching week number or "")
+      repeats:     string   (# of repeats / group number)
+      academic:    string   (academic delivering the session)
+      date:        string   (dd/mm/yyyy)
+      start:       string   (HH:MM)
+      finish:      string   (HH:MM)
+      room:        string   (lab/room name)
+      pep:         string   (PEP filename or link)
+      setup:       string   (Yes / No / Drop-off only / etc.)
+      support:     string   (Yes / No)
+      food:        string   (Yes / No)
+      _order:      number   (sort order within module, preserved on reload)
+
+  ALL columns are editable. Staff can:
+    - Click any cell to edit it in-place
+    - Press Enter or click away to save (debounced 600ms -> Firestore)
+    - Click "+ Add row" on any module to append a blank row
+    - Click the red × on any row to delete it (with confirm dialog)
+    - Add an entirely new module via the "+ Add module" button in the header
+
+  SEED DATA:
+  ----------
+  SEED_DATA below is extracted from the original XLSX files. On first load,
+  if Firestore has NO documents for this semester, the seed data is written
+  to Firestore automatically (one-time migration). After that, Firestore is
+  the sole source of truth. If you need to reset a module to its XLSX state,
+  delete its Firestore documents and reload.
+
+  SEED MIGRATION FLAG:
+  A document "sem1_meta/seeded" in Firestore records whether the one-time
+  seed write has occurred. If that document exists with seeded:true, the
+  auto-seed is skipped.
+
+  TO UPDATE FOR A NEW ACADEMIC YEAR:
+  1. Run run_in_console.js to get fresh CSV from MyTimetable
+  2. Run populate_pep_alignment.py against the new XLSX
+  3. Re-extract SEED_DATA from the updated XLSX (the extraction script is
+     in SiSo_Session_Handover_2026-04-29.md, section on extract_workbook())
+  4. Replace the SEED_DATA constant below
+  5. Delete the "sem1_meta/seeded" document in Firestore Console
+     so the seed migration runs again with the new data
+
+  Firebase project: nu-school-of-sport (same as workflow.html and index.html)
+  Firestore collections used:
+    sem1_sessions   - session rows
+    sem1_meta       - seed migration flag
+  ============================================================
+-->
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SER Technical Team &mdash; Teaching Alignment Semester 1</title>
+  <style>
+    /* ============================================================
+       RESET & VARIABLES - matches index.html palette exactly
+       ============================================================ */
+    *, *::before, *::after { margin:0; padding:0; box-sizing:border-box; }
+    :root {
+      --black:#111; --dark:#222; --mid:#555; --light:#888;
+      --border:#ddd; --bg:#f7f7f7; --white:#fff;
+      --accent:#1f4e78; --accent-light:#e8f0fe;
+      --green:#1e6b3c; --green-bg:#e6f4ec;
+      --amber:#b8860b; --amber-bg:#fffde7;
+      --red:#c0392b; --red-bg:#fdf0f0;
+    }
+    html { scroll-behavior:smooth; }
+    body {
+      font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;
+      background:var(--bg); color:var(--black); line-height:1.4;
+      display:flex; flex-direction:column; min-height:100vh;
+    }
+
+    /* ============================================================
+       HEADER - matches index.html
+       ============================================================ */
+    header { background:#000; position:sticky; top:0; z-index:200; }
+    .header-inner {
+      max-width:1600px; margin:0 auto; padding:0 32px; height:60px;
+      display:flex; align-items:center; gap:24px;
+    }
+    .logo img { height:32px; width:auto; display:block; }
+    .logo { display:flex; align-items:center; text-decoration:none; flex-shrink:0; }
+    .header-sep { width:1px; height:24px; background:#444; flex-shrink:0; }
+    .header-dept { font-size:13px; color:#ccc; font-weight:500; }
+    .header-right { margin-left:auto; display:flex; align-items:center; gap:16px; }
+    .header-link { font-size:13px; color:#fff; text-decoration:none; font-weight:500; }
+    .header-link:hover { color:#ccc; }
+    .sem-toggle { display:flex; gap:4px; }
+    .sem-btn {
+      padding:5px 14px; font-size:12px; font-weight:700; letter-spacing:0.04em;
+      border:1px solid rgba(255,255,255,0.3); border-radius:3px;
+      text-decoration:none; color:rgba(255,255,255,0.6); transition:all 0.15s;
+    }
+    .sem-btn.active { background:#fff; color:#000; border-color:#fff; }
+    .sem-btn:not(.active):hover { background:rgba(255,255,255,0.12); color:#fff; }
+
+    /* ============================================================
+       PAGE BAND
+       ============================================================ */
+    .page-band { background:#000; padding:28px 32px 24px; }
+    .page-band-inner {
+      max-width:1600px; margin:0 auto;
+      display:flex; align-items:center; gap:20px; flex-wrap:wrap;
+    }
+    .page-band h1 {
+      font-size:clamp(20px,2.5vw,38px); font-weight:900;
+      letter-spacing:-0.02em; color:#fff; text-transform:uppercase;
+    }
+    .page-band-actions { margin-left:auto; display:flex; align-items:center; gap:12px; flex-wrap:wrap; }
+    .btn-add-module {
+      padding:7px 16px; font-size:12px; font-weight:700; letter-spacing:0.04em;
+      background:transparent; border:1px solid rgba(255,255,255,0.4);
+      color:#fff; cursor:pointer; font-family:inherit; border-radius:3px;
+      transition:all 0.15s;
+    }
+    .btn-add-module:hover { background:rgba(255,255,255,0.12); }
+    .save-indicator {
+      font-size:11px; font-weight:600; letter-spacing:0.05em;
+      padding:4px 12px; border-radius:3px; display:inline-block;
+      background:transparent; color:transparent; transition:all 0.25s;
+      min-width:100px; text-align:center;
+    }
+    .save-indicator.saving { background:#fff3cd; color:#856404; }
+    .save-indicator.saved  { background:#d4edda; color:#155724; }
+    .save-indicator.error  { background:#f8d7da; color:#721c24; }
+    #loadStatus { font-size:11px; color:#666; }
+
+    /* ============================================================
+       LAYOUT: sidebar + main
+       ============================================================ */
+    .layout {
+      flex:1; max-width:1600px; margin:0 auto; width:100%;
+      padding:24px 32px 48px;
+      display:grid; grid-template-columns:210px 1fr;
+      gap:28px; align-items:start;
+    }
+
+    /* ============================================================
+       SIDEBAR
+       ============================================================ */
+    .sidebar {
+      position:sticky; top:72px;
+      background:var(--white); border:1px solid var(--border);
+      max-height:calc(100vh - 90px); overflow-y:auto;
+    }
+    .sidebar-head {
+      padding:10px 14px; font-size:9px; font-weight:700;
+      letter-spacing:0.1em; text-transform:uppercase; color:var(--light);
+      border-bottom:1px solid var(--border);
+      position:sticky; top:0; background:#fff; z-index:1;
+      display:flex; align-items:center; justify-content:space-between;
+    }
+    .sidebar-count { font-weight:400; font-size:9px; color:#bbb; }
+    .mod-link {
+      display:flex; align-items:center; justify-content:space-between;
+      padding:7px 14px; font-size:12px; font-weight:600;
+      color:var(--mid); text-decoration:none;
+      border-bottom:1px solid #f0f0f0; transition:background 0.1s,color 0.1s;
+      line-height:1.3; gap:6px;
+    }
+    .mod-link:hover { background:#f5f5f5; color:var(--black); }
+    .mod-link.active { background:var(--accent); color:#fff; }
+    .mod-link .mod-sub { display:block; font-size:10px; font-weight:400; opacity:0.65; margin-top:1px; }
+    .mod-link .mod-n { font-size:9px; background:rgba(0,0,0,0.08); border-radius:10px; padding:1px 5px; flex-shrink:0; }
+    .mod-link.active .mod-n { background:rgba(255,255,255,0.2); color:#fff; }
+
+    /* ============================================================
+       MODULE BLOCKS
+       ============================================================ */
+    .module-block {
+      background:var(--white); border:1px solid var(--border);
+      margin-bottom:28px; scroll-margin-top:80px;
+    }
+    .module-header {
+      display:flex; align-items:center; padding:0;
+      border-bottom:1px solid var(--border); background:var(--black);
+      flex-wrap:wrap;
+    }
+    /* Editable module title area */
+    .module-title-area {
+      flex:1; display:flex; align-items:center; gap:12px;
+      padding:12px 16px; min-width:0;
+    }
+    .module-code-cell {
+      font-size:13px; font-weight:900; letter-spacing:-0.01em;
+      color:#fff; font-family:'Courier New',monospace;
+      cursor:text; padding:2px 4px; border-radius:2px;
+      min-width:60px; outline:none;
+      border:1px solid transparent;
+    }
+    .module-code-cell:focus {
+      border-color:rgba(255,255,255,0.3); background:rgba(255,255,255,0.08);
+    }
+    .module-name-cell {
+      font-size:12px; font-weight:500; color:rgba(255,255,255,0.6);
+      flex:1; cursor:text; padding:2px 4px; border-radius:2px;
+      outline:none; min-width:80px;
+      border:1px solid transparent;
+    }
+    .module-name-cell:focus {
+      color:#fff; border-color:rgba(255,255,255,0.3); background:rgba(255,255,255,0.08);
+    }
+    .module-lead-cell {
+      font-size:10px; font-weight:600; letter-spacing:0.04em;
+      text-transform:uppercase; color:#aaa;
+      cursor:text; padding:2px 8px; border-radius:2px;
+      background:#1a1a1a; outline:none;
+      border:1px solid transparent; white-space:nowrap;
+    }
+    .module-lead-cell:focus { border-color:rgba(255,255,255,0.3); color:#fff; background:#222; }
+    .module-tech-cell {
+      font-size:10px; font-weight:600; letter-spacing:0.04em;
+      text-transform:uppercase; color:#fff;
+      cursor:text; padding:2px 8px; border-radius:2px;
+      background:var(--accent); outline:none;
+      border:1px solid transparent; white-space:nowrap;
+    }
+    .module-tech-cell:focus { border-color:rgba(255,255,255,0.4); }
+    .module-tech-cell.empty { background:#2a2a2a; color:#666; }
+
+    /* Delete module button */
+    .btn-del-module {
+      padding:12px 14px; background:transparent; border:none; border-left:1px solid #222;
+      color:#444; cursor:pointer; font-size:16px; transition:all 0.15s;
+      flex-shrink:0; self-align:stretch;
+    }
+    .btn-del-module:hover { background:var(--red); color:#fff; }
+
+    /* Session count */
+    .module-session-count {
+      font-size:10px; color:rgba(255,255,255,0.35);
+      padding:0 16px; white-space:nowrap;
+    }
+
+    /* ============================================================
+       TABLE
+       ALL columns are editable.
+       Yellow header = "staff fills this in"
+       Normal header = "comes from timetable import, but can be corrected"
+       ============================================================ */
+    .table-wrap { overflow-x:auto; }
+    table { width:100%; border-collapse:collapse; font-size:11.5px; }
+
+    thead th {
+      background:#f5f5f5; padding:7px 10px; text-align:left;
+      font-size:9px; font-weight:700; letter-spacing:0.07em;
+      text-transform:uppercase; color:var(--mid);
+      border-bottom:2px solid var(--border); border-right:1px solid #e8e8e8;
+      white-space:nowrap; user-select:none;
+    }
+    thead th:last-child { border-right:none; width:32px; }
+    /* Yellow-header columns are the "staff fills in" ones */
+    thead th.staff-col { background:var(--amber-bg); color:var(--amber); }
+
+    tbody tr { border-bottom:1px solid #f0f0f0; transition:background 0.1s; }
+    tbody tr:hover { background:#fafafa; }
+    tbody tr.week-start { border-top:2px solid #e0e0e0; }
+
+    td {
+      padding:0; vertical-align:middle;
+      border-right:1px solid #f0f0f0;
+    }
+    td:last-child { border-right:none; }
+
+    /* Editable cell - ALL cells use this */
+    .cell {
+      display:block; width:100%; padding:6px 10px;
+      white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+      cursor:text; outline:none; color:var(--dark);
+      min-height:30px; font-family:inherit; font-size:11.5px;
+      transition:background 0.1s;
+    }
+    .cell:hover { background:var(--amber-bg); }
+    .cell:focus {
+      background:var(--accent-light);
+      box-shadow:inset 0 0 0 1.5px var(--accent);
+      outline:none; white-space:pre-wrap; word-break:break-word;
+      overflow:visible; z-index:5; position:relative;
+    }
+
+    /* Week cell special styling */
+    td.week-td { background:var(--accent); min-width:36px; }
+    td.week-td .cell {
+      color:#fff; font-weight:700; text-align:center;
+      font-family:'Courier New',monospace; background:transparent;
+    }
+    td.week-td .cell:hover { background:rgba(255,255,255,0.1); }
+    td.week-td .cell:focus { background:rgba(255,255,255,0.15); box-shadow:none; color:#fff; }
+    td.week-td.empty-week { background:transparent; }
+    td.week-td.empty-week .cell { color:var(--light); }
+
+    /* Delete row button */
+    .btn-del-row {
+      display:block; width:100%; padding:6px 8px;
+      background:transparent; border:none; cursor:pointer;
+      color:#ccc; font-size:14px; text-align:center;
+      transition:all 0.15s;
+    }
+    .btn-del-row:hover { color:var(--red); background:#fff5f5; }
+
+    /* Add row button */
+    .add-row-bar {
+      display:flex; align-items:center; padding:6px 12px;
+      border-top:1px dashed #e0e0e0; background:#fafafa;
+    }
+    .btn-add-row {
+      font-size:11px; font-weight:600; color:var(--accent);
+      background:transparent; border:none; cursor:pointer; padding:4px 8px;
+      font-family:inherit; letter-spacing:0.03em; border-radius:3px;
+      transition:all 0.15s;
+    }
+    .btn-add-row:hover { background:var(--accent-light); }
+
+    /* No sessions placeholder */
+    .no-sessions {
+      padding:20px; font-size:12px; color:var(--light);
+      text-align:center; border-top:1px solid var(--border);
+    }
+
+    /* ============================================================
+       ADD MODULE MODAL
+       ============================================================ */
+    .modal-overlay {
+      display:none; position:fixed; inset:0;
+      background:rgba(0,0,0,0.55); z-index:400;
+      align-items:center; justify-content:center;
+    }
+    .modal-overlay.vis { display:flex; }
+    .modal {
+      background:#fff; border:1px solid var(--border); padding:28px;
+      width:420px; max-width:90vw;
+      box-shadow:0 12px 40px rgba(0,0,0,0.25);
+    }
+    .modal h2 { font-size:16px; font-weight:800; margin-bottom:18px; }
+    .modal label { display:block; font-size:10px; font-weight:700; letter-spacing:0.07em; text-transform:uppercase; color:var(--light); margin-bottom:4px; margin-top:12px; }
+    .modal input {
+      width:100%; padding:8px 10px; border:1px solid var(--border); border-radius:3px;
+      font-family:inherit; font-size:13px; color:var(--black); background:#fff;
+    }
+    .modal input:focus { border-color:var(--accent); outline:none; }
+    .modal-btns { display:flex; gap:8px; margin-top:20px; }
+    .btn-modal-save {
+      flex:1; padding:9px; background:var(--black); color:#fff;
+      border:none; font-size:13px; font-weight:700; cursor:pointer; font-family:inherit;
+    }
+    .btn-modal-save:hover { background:var(--dark); }
+    .btn-modal-cancel {
+      padding:9px 16px; background:transparent; border:1px solid var(--border);
+      color:var(--mid); font-size:13px; cursor:pointer; font-family:inherit;
+    }
+
+    /* ============================================================
+       FOOTER - matches index.html
+       ============================================================ */
+    footer { background:#000; padding:32px 32px; margin-top:auto; }
+    .footer-inner {
+      max-width:1600px; margin:0 auto;
+      display:flex; align-items:flex-start; justify-content:space-between;
+      gap:32px; flex-wrap:wrap;
+    }
+    .footer-left strong { font-size:13px; font-weight:800; color:#fff; display:block; }
+    .footer-left span   { font-size:12px; color:#aaa; display:block; }
+    .footer-links { display:flex; gap:24px; flex-wrap:wrap; }
+    .footer-links a { font-size:12px; color:#aaa; text-decoration:none; }
+    .footer-links a:hover { color:#fff; }
+
+    @media(max-width:900px) {
+      .layout { grid-template-columns:1fr; padding:16px; }
+      .sidebar { position:static; max-height:none; display:flex; flex-wrap:wrap; padding:8px; gap:4px; border:none; background:transparent; }
+      .sidebar-head { display:none; }
+      .mod-link { border:1px solid var(--border); border-radius:3px; padding:4px 10px; flex-direction:column; align-items:flex-start; }
+      .header-inner { padding:0 16px; }
+      .header-dept, .header-sep { display:none; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- ============================================================
+     HEADER
+     ============================================================ -->
+<header>
+  <div class="header-inner">
+    <a class="logo" href="https://www.northumbria.ac.uk/" target="_blank" rel="noopener">
+      <img src="https://www.northumbria.ac.uk/-/media/take-on-tomorrow/northumbria-university-newcastle.png?modified=20201119190031" alt="Northumbria University">
+    </a>
+    <div class="header-sep"></div>
+    <span class="header-dept">Sport, Exercise &amp; Rehabilitation &mdash; Technical Team</span>
+    <div class="header-right">
+      <div class="sem-toggle">
+        <a href="Semester1.html" class="sem-btn active">Semester 1</a>
+        <a href="Semester2.html" class="sem-btn ">Semester 2</a>
+      </div>
+      <a class="header-link" href="index.html">&#8592; Portal</a>
+    </div>
+  </div>
+</header>
+
+<!-- ============================================================
+     PAGE BAND
+     ============================================================ -->
+<div class="page-band">
+  <div class="page-band-inner">
+    <h1>Teaching Alignment &nbsp;/&nbsp; Semester 1</h1>
+    <div class="page-band-actions">
+      <span id="loadStatus">Loading...</span>
+      <span id="saveIndicator" class="save-indicator"></span>
+      <button class="btn-add-module" onclick="openAddModal()">+ Add module</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================
+     LAYOUT
+     ============================================================ -->
+<div class="layout">
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-head">
+      <span>Modules</span>
+      <span class="sidebar-count" id="modCount"></span>
+    </div>
+  </aside>
+  <main id="mainContent"></main>
+</div>
+
+<!-- ============================================================
+     ADD MODULE MODAL
+     ============================================================ -->
+<div class="modal-overlay" id="addModal">
+  <div class="modal">
+    <h2>Add new module</h2>
+    <label>Module code</label>
+    <input id="newCode" placeholder="e.g. SP4002" autocomplete="off">
+    <label>Module name</label>
+    <input id="newName" placeholder="e.g. Energetics of Exercise" autocomplete="off">
+    <label>Module lead</label>
+    <input id="newLead" placeholder="e.g. Ian Walshe" autocomplete="off">
+    <label>Tech lead</label>
+    <input id="newTech" placeholder="e.g. Liam Pearson" autocomplete="off">
+    <div class="modal-btns">
+      <button class="btn-modal-cancel" onclick="closeAddModal()">Cancel</button>
+      <button class="btn-modal-save" onclick="saveNewModule()">Add module</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================
+     FOOTER
+     ============================================================ -->
+<footer>
+  <div class="footer-inner">
+    <div class="footer-left">
+      <strong>Northumbria University</strong>
+      <span>School of Sport, Exercise &amp; Rehabilitation</span>
+      <span>Internal staff portal &mdash; maintained by Dr Liam T. Pearson-Noseworthy</span>
+    </div>
+    <div class="footer-links">
+      <a href="index.html">Portal home</a>
+      <a href="Semester2.html">Semester 2</a>
+      <a href="workflow.html">Workflow Map</a>
+    </div>
+  </div>
+</footer>
+
+<!--
+  ============================================================
+  JAVASCRIPT - FOR AI/LLM READERS
+  ============================================================
+  DATA FLOW:
+    1. SEED_DATA (from XLSX) is defined below.
+    2. On load, check Firestore for "sem1_meta/seeded" doc.
+       - If NOT seeded: write all SEED_DATA to Firestore, mark as seeded, then render.
+       - If seeded: load all "sem1_sessions" docs from Firestore, render.
+    3. All state lives in the `modules` Map (moduleCode -> moduleData).
+    4. Each moduleData has: code, name, lead, techLead, sessions[]
+       Each session: { id (Firestore docId), week, repeats, academic, date, start,
+                       finish, room, pep, setup, support, food, _order }
+
+  EDITING:
+    - ALL cells use contenteditable=true. On blur/Enter, save to Firestore.
+    - Module header fields (code, name, lead, techLead) saved on blur.
+    - Row cells saved on blur via debounced saveRow(docId, fields).
+    - Add row: creates new Firestore doc with blank fields, appends to UI.
+    - Delete row: deleteDoc after confirm, removes from UI.
+    - Delete module: deletes all its session docs + removes module block.
+    - Add module: modal -> creates a placeholder session row, renders module block.
+
+  FIRESTORE OPERATIONS:
+    - Batch write used for initial seed (to avoid rate-limiting 473+ individual writes)
+    - setDoc(merge:true) used for individual cell edits
+    - deleteDoc used for row deletion
+    - writeBatch used for module deletion (deletes all rows at once)
+
+  SAVE INDICATOR:
+    - Debounced 600ms per-row. Shows "Saving..." -> "Saved ✓" -> fades after 3s.
+    - Shows "Save failed" in red on Firestore error.
+  ============================================================
+-->
+<script type="module">
+import { initializeApp }   from 'https://www.gstatic.com/firebasejs/10.7.0/firebase-app.js';
+import { getFirestore, collection, getDocs, doc, setDoc, deleteDoc, writeBatch, getDoc }
+  from 'https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore.js';
+
+// ── Firebase - same project as workflow.html and index.html ──────────────────
+const firebaseConfig = {
+  apiKey:            'AIzaSyDSK-2hI6ML1eykIed6E8S5Ve29phrEolI',
+  authDomain:        'nu-school-of-sport.firebaseapp.com',
+  projectId:         'nu-school-of-sport',
+  storageBucket:     'nu-school-of-sport.firebasestorage.app',
+  messagingSenderId: '396866213410',
+  appId:             '1:396866213410:web:bc7f31d1eb1833306d1c7b'
+};
+const app = initializeApp(firebaseConfig, 'sem1-app');
+const db  = getFirestore(app);
+const COL     = 'sem1_sessions';  // main data collection
+const META    = 'sem1_meta';      // seed flag collection
+
+// ── SEED DATA - extracted from the original XLSX.
+// Replace this blob each new academic year (see file header comments for how).
+// Keys = module codes. Values = { code, name, lead, techLead, semester, sessions[] }
+// Each session: { week, repeat, academic, date, start, finish, room, pep, setup, support, food }
+const SEED_DATA = {"SP3008": {"code": "SP3008", "name": "SP3008 Essential Skills for Studying Sport", "lead": "Georgia Allen-Baker", "techLead": "", "semester": "Semester 1", "sessions": []}, "SP3009": {"code": "SP3009", "name": "SP3009 Sport Foundation Year Project", "lead": "Andrea Scott-Bell", "techLead": "", "semester": "Semester 1", "sessions": [{"week": "7", "repeat": "1", "academic": "Steven Marshall", "date": "14/11/2025", "start": "09:00", "finish": "11:00", "room": "SPF 112", "pep": "PEP - SP3009 - Food preparation for athletes.docx", "setup": "Drop-off only", "support": "No", "food": ""}, {"week": "", "repeat": "2", "academic": "Steven Marshall", "date": "14/11/2025", "start": "11:00", "finish": "13:00", "room": "SPF 112", "pep": "PEP - SP3009 - Food preparation for athletes.docx", "setup": "Drop-off only", "support": "No", "food": ""}, {"week": "", "repeat": "3", "academic": "Steven Marshall", "date": "14/11/2025", "start": "14:00", "finish": "16:00", "room": "SPF 112", "pep": "PEP - SP3009 - Food preparation for athletes.docx", "setup": "Drop-off only", "support": "No", "food": ""}]}, "SP3012": {"code": "SP3012", "name": "SP3012 Sport, Exercise & Performance", "lead": "Louise Burnie", "techLead": "", "semester": "Semester 1", "sessions": [{"week": "1", "repeat": "1", "academic": "Louise Burnie", "date": "29/09/2025", "start": "11:00", "finish": "13:00", "room": "SPF114 & SPF109", "pep": "PEP - SP3012 - Gait Video FMS.docx", "setup": "Drop-off only", "support": "No", "food": "No"}, {"week": "", "repeat": "2", "academic": "Louise Burnie", "date": "29/09/2025", "start": "14:00", "finish": "16:00", "room": "SPF114 & SPF109", "pep": "PEP - SP3012 - Gait Video FMS.docx", "setup": "Drop-off only", "support": "No", "food": "No"}, {"week": "", "repeat": "3", "academic": "Louise Burnie", "date": "29/09/2025", "start": "16:00", "finish": "18:00", "room": "SPF114 & SPF109", "pep": "PEP - SP3012 - Gait Video FMS.docx", "setup": "Drop-off only", "support": "No", "food": "No"}, {"week": "2", "repeat": "1", "academic": "Louise Burnie", "date": "06/10/2025", "start": "11:00", "finish": "13:00", "room": "SPF114 & SPF109", "pep": "PEP - SP3012 - Gait spatiotemporal parameters.docx", "setup": "Yes", "support": "No", "food": "No"}, {"week": "", "repeat": "2", "academic": "Louise Burnie", "date": "06/10/2025", "start": "14:00", "finish": "16:00", "room": "SPF114 & SPF109", "pep": "PEP - SP3012 - Gait spatiotemporal parameters.docx", "setup": "Yes", "support": "No", "food": "No"}, {"week": "", "repeat": "3", "academic": "Louise Burnie", "date": "06/10/2025", "start": "16:00", "finish": "18:00", "room": "SPF114 & SPF109", "pep": "PEP - SP3012 - Gait spatiotemporal parameters.docx", "setup": "Yes", "support": "No", "food": "No"}, {"week": "3", "repeat": "1", "academic": "Louise Burnie", "date": "13/10/2025", "start": "11:00", "finish": "13:00", "room": "SPF114 & SPF109", "pep": "PEP - SP3012 - Performance testing.docx", "setup": "Drop-off only", "support": "No", "food": "No"}, {"week": "", "repeat": "2", "academic": "Louise Burnie", "date": "13/10/2025", "start": "14:00", "finish": "16:00", "room": "SPF114 & SPF109", "pep": "PEP - SP3012 - Performance testing.docx", "setup": "Drop-off only", "support": "No", "food": "No"}, {"week": "", "repeat": "3", "academic": "Louise Burnie", "date": "13/10/2025", "start": "16:00", "finish": "18:00", "room": "SPF114 & SPF109", "pep": "PEP - SP3012 - Performance testing.docx", "setup": "Drop-off only", "support": "No", "food": "No"}, {"week": "10", "repeat": "1", "academic": "Paul Ansdell", "date": "1/12/25", "start": "11:00", "finish": "12:00", "room": "SPF110", "pep": "PEP - SP3012 - Chester Step, Multi-stage fitness, 6 minute walk.docx", "setup": "", "support": "", "food": ""}, {"week": "", "repeat": "2", "academic": "Paul Ansdell", "date": "1/12/25", "start": "12:00", "finish": "13:00", "room": "SPF110", "pep": "PEP - SP3012 - Chester Step, Multi-stage fitness, 6 minute walk.docx", "setup": "", "support": "", "food": ""}, {"week": "", "repeat": "3", "academic": "Paul Ansdell", "date": "1/12/25", "start": "13:00", "finish": "14:00", "room": "SPF110", "pep": "PEP - SP3012 - Chester Step, Multi-stage fitness, 6 minute walk.docx", "setup": "", "support": "", "food": ""}, {"week": "11", "repeat": "1", "academic": "Paul Ansdell", "date": "9/12/25", "start": "12:00", "finish": "13:00", "room": "SPF110", "pep": "PEP - SP3012 - Anaerobic Capacity.docx", "setup": "Only wingate, no timing gates.", "support": "", "food": ""}, {"week": "", "repeat": "2", "academic": "Paul Ansdell", "date": "9/12/25", "start": "14:00", "finish": "15:00", "room": "SPF110", "pep": "PEP - SP3012 - Anaerobic Capacity.docx", "setup": "Only wingate, no timing gates.", "support": "", "food": ""}, {"week": "", "repeat": "3", "academic": "Paul Ansdell", "date": "9/12/25", "start": "15:00", "finish": "16:00", "room": "SPF110", "pep": "PEP - SP3012 - Anaerobic Capacity.docx", "setup": "Only wingate, no timing gates.", "support": "", "food": ""}, {"week": "", "repeat": "4", "academic": "Paul Ansdell", "date": "12/12/25", "start": "09:00", "finish": "11:00", "room": "SPF109", "pep": "PEP - SP3012 - Phys Assessment Vertical Jump.docx", "setup": "", "support": "", "food": ""}, {"week": "", "repeat": "5", "academic": "Paul Ansdell", "date": "12/12/25", "start": "11:00", "finish": "13:00", "room": "SPF109", "pep": "PEP - SP3012 - Phys Assessment Vertical Jump.docx", "setup": "", "support": "", "food": ""}, {"week": "", "repeat": "6", "academic": "Paul Ansdell", "date": "12/12/25", "start": "14:00", "finish": "16:00", "room": "SPF109", "pep": "PEP - SP3012 - Phys Assessment Vertical Jump.docx", "setup": "", "support": "", "food": ""}]}, "SP4000": {"code": "SP4000", "name": "SP4000 Academic & Professional Skills", "lead": "Daniel Peart", "techLead": "", "semester": "Semester 1", "sessions": []}, "SP4001": {"code": "SP4001", "name": "Fundamentals of Psychology", "lead": "Gavin Tempest", "techLead": "", "semester": "Semester 1", "sessions": [{"week": "7", "repeat": "1", "academic": "Gavin", "date": "10/11/2025", "start": "1400", "finish": "1600", "room": "110", "pep": "PEP_SP4001_Exercise_Perception new.docx", "setup": "Yes", "support": "", "food": ""}, {"week": "", "repeat": "2", "academic": "Gavin", "date": "10/11/2025", "start": "1600", "finish": "1800", "room": "110", "pep": "PEP_SP4001_Exercise_Perception new.docx", "setup": "Yes", "support": "", "food": ""}, {"week": "", "repeat": "3", "academic": "Gavin", "date": "11/11/2025", "start": "0900", "finish": "1100", "room": "110", "pep": "PEP_SP4001_Exercise_Perception new.docx", "setup": "Yes", "support": "", "food": ""}, {"week": "", "repeat": "4", "academic": "Gavin", "date": "11/11/2025", "start": "1100", "finish": "1300", "room": "110", "pep": "PEP_SP4001_Exercise_Perception new.docx", "setup": "Yes", "support": "", "food": ""}, {"week": "", "repeat": "5", "academic": "Gavin", "date": "11/11/2025", "start": "1400", "finish": "1600", "room": "110", "pep": "PEP_SP4001_Exercise_Perception new.docx", "setup": "Yes", "support": "", "food": ""}, {"week": "", "repeat": "6", "academic": "Gavin", "date": "11/11/2025", "start": "1600", "finish": "1800", "room": "110", "pep": "PEP_SP4001_Exercise_Perception new.docx", "setup": "Yes", "support": "", "food": ""}, {"week": "", "repeat": "7", "academic": "Gavin", "date": "13/11/2025", "start": "0900", "finish": "1100", "room": "110", "pep": "PEP_SP4001_Exercise_Perception new.docx", "setup": "Yes", "support": "", "food": ""}, {"week": "", "repeat": "8", "academic": "Gavin", "date": "13/11/2025", "start": "1100", "finish": "1300", "room": "110", "pep": "PEP_SP4001_Exercise_Perception new.docx", "setup": "Yes", "support": "", "food": ""}, {"week": "", "repeat": "9", "academic": "Gavin", "date": "13/11/2025", "start": "1400", "finish": "1600", "room": "110", "pep": "PEP_SP4001_Exercise_Perception new.docx", "setup": "Yes", "support": "", "food": ""}]}, "SP4002": {"code": "SP4002", "name": "SP4002 Energetics of Exercise", "lead": "Ian Walshe", "techLead": "", "semester": "Semester 1", "sessions": [{"week": "1", "repeat": "1", "academic": "Ian Walshe", "date": "29/09/25", "start": "14:00", "finish": "15:00", "room": "SPF110", "pep": "PEP - SP4002 - Energetics.docx", "setup": "Yes", "support": "Yes", "food": "No"}, {"week": "", "repeat": "2", "academic": "Ian Walshe", "date": "29/09/25", "start": "15:00", "finish": "16:00", "room": "SPF110", "pep": "PEP - SP4002 - Energetics.docx", "setup": "Yes", "support": "Yes", "food": "No"}, {"week": "", "repeat": "3", "academic": "Ian Walshe", "date": "29/09/25", "start": "16:00", "finish": "17:00", "room": "SPF110", "pep": "PEP - SP4002 - Energetics.docx", "setup": "Yes", "support": "Yes", "food": "No"}, {"week": "", "repeat": "4", "academic": "Ian Walshe", "date": "29/09/25", "start": "17:00", "finish": "18:00", "room": "SPF110", "pep": "PEP - SP4002 - Energetics.docx", "setup": "Yes", "support": "Yes", "food": "No"}, {"week": "", "repeat": "5", "academic": "Ian Walshe", "date": "30/09/25", "start": "09:00", "finish": "10:00", "room": "SPF110", "pep": "PEP - SP4002 - Energetics.docx", "setup": "Yes", "support": "Yes", "food": "No"}, {"week": "", "repeat": "6", "academic": "Ian Walshe", "date": "30/09/25", "start": "10:00", "finish": "11:00", "room": "SPF110", "pep": "PEP - SP4002 - Energetics.docx", "setup": "Yes", "support": "Yes", "food": "No"}, {"week": "", "repeat": "7", "academic": "Ian Walshe", "date": "30/09/25", "start": "11:00", "finish": "12:00", "room": "SPF110", "pep": "PEP - SP4002 - Energetics.docx", "setup": "Yes", "support": "Yes", "food": "No"}, {"week": "", "repeat": "8", "academic": "Ian Walshe", "date": "30/09/25", "start": "12:00", "finish": "13:00", "room": "SPF110", "pep": "PEP - SP4002 - Energetics.docx", "setup": "Yes", "support": "Yes", "food": "No"}, {"week": "", "repeat": "9", "academic": "Ian Walshe", "date": "30/09/25", "start": "14:00", "finish": "15:00", "room": "SPF110", "pep": "PEP - SP4002 - Energetics.docx", "setup": "Yes", "support": "Yes", "food": "No"}, {"week": "2", "repeat": "1", "academic": "", "date": "06/10/25", "start": "14:00", "finish": "15:00", "room": "SPF110", "pep": "PEP - SP4002 - RMR & Metabolic Rate.docx", "setup": "Yes", "support": "Yes", "food": "No"}, {"week": "", "repeat": "2", "academic": "PAdraig", "date": "06/10/25", "start": "15:00", "finish": "16:00", "room": "SPF110", "pep": "PEP - SP4002 - RMR & Metabolic Rate.docx", "setup": "Yes", "support": "Yes", "food": "No"}, {"week": "", "repeat": "3", "academic": "", "date": "06/10/25", "start": "16:00", "finish": "17:00", "room": "SPF110", "pep": "PEP - SP4002 - RMR & Metabolic Rate.docx", "setup": "Yes", "support": "Yes", "food": "No"}, {"week": "", "repeat": "4", "academic": "", "date": "06/10/25", "start": "17:00", "finish": "18:00", "room": "SPF110", "pep": "PEP - SP4002 - RMR & Metabolic Rate.docx", "setup": "Yes", "support": "Yes", "food": "No"}, {"week": "", "repeat": "5", "academic": "", "date": "07/10/25", "start": "09:00", "finish": "10:00", "room": "SPF110", "pep": "PEP - SP4002 - RMR & Metabolic Rate.docx", "setup": "Yes", "support": "Yes", "food": "No"}, {"week": "", "repeat": "6", "academic": "", "date": "07/10/25", "start": "10:00", "finish": "11:00", "room": "SPF110", "pep": "PEP - SP4002 - RMR & Metabolic Rate.docx", "setup": "Yes", "support": "Yes", "food": "No"}, {"week": "", "repeat": "7", "academic": "", "date": "07/10/25", "start": "11:00", "finish": "12:00", "room": "SPF110", "pep": "PEP - SP4002 - RMR & Metabolic Rate.docx", "setup": "Yes", "support": "Yes", "food": "No"}, {"week": "", "repeat": "8", "academic": "", "date": "07/10/25", "start": "12:00", "finish": "13:00", "room": "SPF110", "pep": "PEP - SP4002 - RMR & Metabolic Rate.docx", "setup": "Yes", "support": "Yes", "food": "No"}, {"week": "", "repeat": "9", "academic": "", "date": "07/10/25", "start": "14:00", "finish": "15:00", "room": "SPF110", "pep": "PEP - SP4002 - RMR & Metabolic Rate.docx", "setup": "Yes", "support": "Yes", "food": "No"}, {"week": "4", "repeat": "1", "academic": "Ian Walshe", "date": "20/10/25", "start": "14:00", "finish": "16:00", "room": "SPF110", "pep": "PEP - SP4002 - High and Low GI, Jelly Beans and Dark Chocolate (Capillary blood sampling).docx", "setup": "Yes", "support": "Yes", "food": "Yes"}, {"week": "", "repeat": "2", "academic": "Ian Walshe", "date": "20/10/25", "start": "16:00", "finish": "18:00", "room": "SPF110", "pep": "PEP - SP4002 - High and Low GI, Jelly Beans and Dark Chocolate (Capillary blood sampling).docx", "setup": "Yes", "support": "Yes", "food": "Yes"}, {"week": "", "repeat": "3", "academic": "Ian Walshe", "date": "21/10/25", "start": "09:00", "finish": "11:00", "room": "SPF110", "pep": "PEP - SP4002 - High and Low GI, Jelly Beans and Dark Chocolate (Capillary blood sampling).docx", "setup": "Yes", "support": "Yes", "food": "Yes"}, {"week": "", "repeat": "4", "academic": "Ian Walshe", "date": "21/10/25", "start": "11:00", "finish": "13:00", "room": "SPF110", "pep": "PEP - SP4002 - High and Low GI, Jelly Beans and Dark Chocolate (Capillary blood sampling).docx", "setup": "Yes", "support": "Yes", "food": "Yes"}, {"week": "", "repeat": "5", "academic": "Ian Walshe", "date": "21/10/25", "start": "14:00", "finish": "15:00", "room": "SPF110", "pep": "PEP - SP4002 - High and Low GI, Jelly Beans and Dark Chocolate (Capillary blood sampling).docx", "setup": "Yes", "support": "Yes", "food": "Yes"}, {"week": "", "repeat": "6", "academic": "Ian Walshe", "date": "21/10/25", "start": "16:00", "finish": "18:00", "room": "SPF110", "pep": "PEP - SP4002 - High and Low GI, Jelly Beans and Dark Chocolate (Capillary blood sampling).docx", "setup": "Yes", "support": "Yes", "food": "Yes"}, {"week": "", "repeat": "7", "academic": "Ian Walshe", "date": "23/10/25", "start": "09:00", "finish": "11:00", "room": "SPF110", "pep": "PEP - SP4002 - High and Low GI, Jelly Beans and Dark Chocolate (Capillary blood sampling).docx", "setup": "Yes", "support": "Yes", "food": "Yes"}, {"week": "", "repeat": "8", "academic": "Ian Walshe", "date": "23/10/25", "start": "11:00", "finish": "13:00", "room": "SPF110", "pep": "PEP - SP4002 - High and Low GI, Jelly Beans and Dark Chocolate (Capillary blood sampling).docx", "setup": "Yes", "support": "Yes", "food": "Yes"}, {"week": "", "repeat": "9", "academic": "Ian Walshe", "date": "23/10/25", "start": "14:00", "finish": "16:00", "room": "SPF110", "pep": "PEP - SP4002 - High and Low GI, Jelly Beans and Dark Chocolate (Capillary blood sampling).docx", "setup": "Yes", "support": "Yes", "food": "Yes"}, {"week": "5", "repeat": "1", "academic": "Steven Marshall", "date": "27/10/25", "start": "14:00", "finish": "15:00", "room": "SPF110", "pep": "PEP - SP4002 - Metabolism During Exercise.docx", "setup": "Yes", "support": "No", "food": "No"}, {"week": "", "repeat": "2", "academic": "Steven Marshall", "date": "27/10/25", "start": "15:00", "finish": "16:00", "room": "SPF110", "pep": "PEP - SP4002 - Metabolism During Exercise.docx", "setup": "Yes", "support": "No", "food": "No"}, {"week": "", "repeat": "3", "academic": "Steven Marshall", "date": "27/10/25", "start": "16:00", "finish": "17:00", "room": "SPF110", "pep": "PEP - SP4002 - Metabolism During Exercise.docx", "setup": "Yes", "support": "No", "food": "No"}, {"week": "", "repeat": "4", "academic": "Steven Marshall", "date": "27/10/25", "start": "17:00", "finish": "18:00", "room": "SPF110", "pep": "PEP - SP4002 - Metabolism During Exercise.docx", "setup": "Yes", "support": "No", "food": "No"}, {"week": "", "repeat": "5", "academic": "Steven Marshall", "date": "28/10/25", "start": "09:00", "finish": "10:00", "room": "SPF110", "pep": "PEP - SP4002 - Metabolism During Exercise.docx", "setup": "Yes", "support": "No", "food": "No"}, {"week": "", "repeat": "6", "academic": "Steven Marshall", "date": "28/10/25", "start": "10:00", "finish": "11:00", "room": "SPF110", "pep": "PEP - SP4002 - Metabolism During Exercise.docx", "setup": "Yes", "support": "No", "food": "No"}, {"week": "", "repeat": "7", "academic": "Steven Marshall", "date": "28/10/25", "start": "11:00", "finish": "12:00", "room": "SPF110", "pep": "PEP - SP4002 - Metabolism During Exercise.docx", "setup": "Yes", "support": "No", "food": "No"}, {"week": "", "repeat": "8", "academic": "Steven Marshall", "date": "28/10/25", "start": "12:00", "finish": "13:00", "room": "SPF110", "pep": "PEP - SP4002 - Metabolism During Exercise.docx", "setup": "Yes", "support": "No", "food": "No"}, {"week": "", "repeat": "9", "academic": "Steven Marshall", "date": "28/10/25", "start": "14:00", "finish": "15:00", "room": "SPF110", "pep": "PEP - SP4002 - Metabolism During Exercise.docx", "setup": "Yes", "support": "No", "food": "No"}, {"week": "9", "repeat": "1", "academic": "Ian Walshe", "date": "24/11/25", "start": "17:00", "finish": "18:00", "room": "SPF110", "pep": "PEP - SP4002 - Exercise Lasting Seconds.docx", "setup": "Yes", "support": "Yes", "food": "No"}, {"week": "", "repeat": "2", "academic": "Ian Walshe", "date": "25/11/25", "start": "13:00", "finish": "14:00", "room": "SPF110", "pep": "PEP - SP4002 - Exercise Lasting Seconds.docx", "setup": "Yes", "support": "Yes", "food": "No"}, {"week": "", "repeat": "3", "academic": "Ian Walshe", "date": "25/11/25", "start": "14:00", "finish": "15:00", "room": "SPF110", "pep": "PEP - SP4002 - Exercise Lasting Seconds.docx", "setup": "Yes", "support": "Yes", "food": "No"}, {"week": "", "repeat": "4", "academic": "Ian Walshe", "date": "25/11/25", "start": "15:00", "finish": "16:00", "room": "SPF110", "pep": "PEP - SP4002 - Exercise Lasting Seconds.docx", "setup": "Yes", "support": "Yes", "food": "No"}, {"week": "", "repeat": "5", "academic": "Ian Walshe", "date": "25/11/25", "start": "16:00", "finish": "17:00", "room": "SPF110", "pep": "PEP - SP4002 - Exercise Lasting Seconds.docx", "setup": "Yes", "support": "Yes", "food": "No"}, {"week": "", "repeat": "6", "academic": "Ian Walshe", "date": "25/11/25", "start": "17:00", "finish": "18:00", "room": "SPF110", "pep": "PEP - SP4002 - Exercise Lasting Seconds.docx", "setup": "Yes", "support": "Yes", "food": "No"}, {"week": "", "repeat": "7", "academic": "Ian Walshe", "date": "28/11/25", "start": "09:00", "finish": "10:00", "room": "SPF110", "pep": "PEP - SP4002 - Exercise Lasting Seconds.docx", "setup": "Yes", "support": "Yes", "food": "No"}, {"week": "", "repeat": "8", "academic": "Ian Walshe", "date": "28/11/25", "start": "10:00", "finish": "11:00", "room": "SPF110", "pep": "PEP - SP4002 - Exercise Lasting Seconds.docx", "setup": "Yes", "support": "Yes", "food": "No"}, {"week": "", "repeat": "9", "academic": "Ian Walshe", "date": "28/11/25", "start": "11:00", "finish": "12:00", "room": "SPF110", "pep": "PEP - SP4002 - Exercise Lasting Seconds.docx", "setup": "Yes", "support": "Yes", "food": "No"}, {"week": "10", "repeat": "1", "academic": "Ozcan Esen", "date": "1/12/25", "start": "14:00", "finish": "15:00", "room": "SPF110", "pep": "PEP - SP4002 Exercise Lasting Minutes.docx", "setup": "Yes", "support": "Yes", "food": "No"}, {"week": "", "repeat": "2", "academic": "Ozcan Esen", "date": "1/12/25", "start": "15:00", "finish": "16:00", "room": "SPF110", "pep": "PEP - SP4002 Exercise Lasting Minutes.docx", "setup": "Yes", "support": "Yes", "food": "No"}, {"week": "", "repeat": "3", "academic": "Ozcan Esen", "date": "1/12/25", "start": "16:00", "finish": "17:00", "room": "SPF110", "pep": "PEP - SP4002 Exercise Lasting Minutes.docx", "setup": "Yes", "support": "Yes", "food": "No"}, {"week": "", "repeat": "4", "academic": "Ozcan Esen", "date": "1/12/25", "start": "17:00", "finish": "18:00", "room": "SPF110", "pep": "PEP - SP4002 Exercise Lasting Minutes.docx", "setup": "Yes", "support": "Yes", "food": "No"}, {"week": "", "repeat": "5", "academic": "Ozcan Esen", "date": "2/12/25", "start": "12:00", "finish": "13:00", "room": "SPF110", "pep": "PEP - SP4002 Exercise Lasting Minutes.docx", "setup": "Yes", "support": "Yes", "food": "No"}, {"week": "", "repeat": "6", "academic": "Ozcan Esen", "date": "4/12/25", "start": "12:00", "finish": "13:00", "room": "SPF110", "pep": "PEP - SP4002 Exercise Lasting Minutes.docx", "setup": "Yes", "support": "Yes", "food": "No"}, {"week": "", "repeat": "7", "academic": "Ozcan Esen", "date": "4/12/25", "start": "13:00", "finish": "14:00", "room": "SPF110", "pep": "PEP - SP4002 Exercise Lasting Minutes.docx", "setup": "Yes", "support": "Yes", "food": "No"}, {"week": "", "repeat": "8", "academic": "Ozcan Esen", "date": "4/12/25", "start": "14:00", "finish": "15:00", "room": "SPF110", "pep": "PEP - SP4002 Exercise Lasting Minutes.docx", "setup": "Yes", "support": "Yes", "food": "No"}, {"week": "", "repeat": "9", "academic": "Ozcan Esen", "date": "4/12/25", "start": "15:00", "finish": "16:00", "room": "SPF110", "pep": "PEP - SP4002 Exercise Lasting Minutes.docx", "setup": "Yes", "support": "Yes", "food": "No"}, {"week": "11", "repeat": "1", "academic": "Steven Marshall", "date": "8/12/25", "start": "14:00", "finish": "15:00", "room": "SPF110", "pep": "PEP - SP4002 Exercise Lasting Hours.docx", "setup": "Yes", "support": "Yes", "food": "No"}, {"week": "", "repeat": "2", "academic": "Steven Marshall", "date": "8/12/25", "start": "15:00", "finish": "16:00", "room": "SPF110", "pep": "PEP - SP4002 Exercise Lasting Hours.docx", "setup": "Yes", "support": "Yes", "food": "No"}, {"week": "", "repeat": "3", "academic": "Steven Marshall", "date": "8/12/25", "start": "16:00", "finish": "17:00", "room": "SPF110", "pep": "PEP - SP4002 Exercise Lasting Hours.docx", "setup": "Yes", "support": "Yes", "food": "No"}, {"week": "", "repeat": "4", "academic": "Steven Marshall", "date": "8/12/25", "start": "17:00", "finish": "18:00", "room": "SPF110", "pep": "PEP - SP4002 Exercise Lasting Hours.docx", "setup": "Yes", "support": "Yes", "food": "No"}, {"week": "", "repeat": "5", "academic": "Steven Marshall", "date": "9/12/25", "start": "09:00", "finish": "10:00", "room": "SPF110", "pep": "PEP - SP4002 Exercise Lasting Hours.docx", "setup": "Yes", "support": "Yes", "food": "No"}, {"week": "", "repeat": "6", "academic": "Steven Marshall", "date": "9/12/25", "start": "10:00", "finish": "11:00", "room": "SPF110", "pep": "PEP - SP4002 Exercise Lasting Hours.docx", "setup": "Yes", "support": "Yes", "food": "No"}, {"week": "", "repeat": "7", "academic": "Steven Marshall", "date": "9/12/25", "start": "11:00", "finish": "12:00", "room": "SPF110", "pep": "PEP - SP4002 Exercise Lasting Hours.docx", "setup": "Yes", "support": "Yes", "food": "No"}, {"week": "", "repeat": "8", "academic": "Steven Marshall", "date": "11/12/25", "start": "14:00", "finish": "15:00", "room": "SPF110", "pep": "PEP - SP4002 Exercise Lasting Hours.docx", "setup": "Yes", "support": "Yes", "food": "No"}, {"week": "", "repeat": "9", "academic": "Steven Marshall", "date": "11/12/25", "start": "15:00", "finish": "16:00", "room": "SPF110", "pep": "PEP - SP4002 Exercise Lasting Hours.docx", "setup": "Yes", "support": "Yes", "food": "No"}]}, "SP4006": {"code": "SP4006", "name": "SP4006 Introduction to Sport Coaching", "lead": "Karen Johns", "techLead": "", "semester": "Semester 1", "sessions": [{"week": "1", "repeat": "1", "academic": "Karen Johns", "date": "02.10.25", "start": "9", "finish": "10", "room": "Sport Hall middle", "pep": "SP4006 Week 1 &2 2025.docx", "setup": "No", "support": "No", "food": ""}, {"week": "", "repeat": "2", "academic": "Reece Chapman", "date": "02.10.25", "start": "9", "finish": "10", "room": "Sport hall south", "pep": "SP4006 Week 1 &2 2025.docx", "setup": "No", "support": "No", "food": ""}, {"week": "", "repeat": "3", "academic": "AndrewCoyles", "date": "02.10.25", "start": "10", "finish": "11", "room": "sport hall south", "pep": "SP4006 Week 1 &2 2025.docx", "setup": "No", "support": "No", "food": ""}, {"week": "2", "repeat": "1", "academic": "Karen Johns", "date": "09.10.25", "start": "9", "finish": "10", "room": "", "pep": "SP4006 Week 1 &2 2025.docx", "setup": "NO", "support": "No", "food": ""}, {"week": "", "repeat": "2", "academic": "Reece Chapman", "date": "09.10.26", "start": "9", "finish": "10", "room": "", "pep": "SP4006 Week 1 &2 2025.docx", "setup": "NO", "support": "No", "food": ""}, {"week": "", "repeat": "3", "academic": "Reece Chapman", "date": "09.10.27", "start": "10", "finish": "11", "room": "", "pep": "SP4006 Week 1 &2 2025.docx", "setup": "NO", "support": "No", "food": ""}, {"week": "4", "repeat": "1", "academic": "Karen Johns", "date": "21.10.25", "start": "1.30", "finish": "4.30", "room": "Swimming Pool", "pep": "SP4006 Week 4 25-26 Pool.docx", "setup": "", "support": "", "food": ""}, {"week": "", "repeat": "2", "academic": "Karen Johns", "date": "23.10.25", "start": "1.30", "finish": "4.30", "room": "Swimming Pool", "pep": "SP4006 Week 4 25-26 Pool.docx", "setup": "", "support": "", "food": ""}, {"week": "", "repeat": "3", "academic": "Karen Johns", "date": "24.10.25", "start": "1.30", "finish": "4.30", "room": "Swimming Pool", "pep": "SP4006 Week 4 25-26 Pool.docx", "setup": "", "support": "", "food": ""}, {"week": "5", "repeat": "1", "academic": "Emma Boocock", "date": "30.10.25", "start": "9", "finish": "10", "room": "Middle", "pep": "SP4006 Week 5, 7-11.docx", "setup": "NO", "support": "NO", "food": ""}, {"week": "", "repeat": "2", "academic": "Reece Chapman", "date": "30.10.25", "start": "9", "finish": "10", "room": "South", "pep": "SP4006 Week 5, 7-11.docx", "setup": "NO", "support": "NO", "food": ""}, {"week": "", "repeat": "3", "academic": "Reece Chapman", "date": "30.10.25", "start": "10", "finish": "11", "room": "MIddle", "pep": "SP4006 Week 5, 7-11.docx", "setup": "NO", "support": "NO", "food": ""}, {"week": "7", "repeat": "1", "academic": "Philip Harvey", "date": "13.11.25", "start": "9", "finish": "10", "room": "middle", "pep": "SP4006 Week 5, 7-11.docx", "setup": "NO", "support": "NO", "food": ""}, {"week": "", "repeat": "2", "academic": "Andrew Coyles", "date": "13.11.25", "start": "9", "finish": "10", "room": "North", "pep": "SP4006 Week 5, 7-11.docx", "setup": "NO", "support": "NO", "food": ""}, {"week": "", "repeat": "3", "academic": "Andrew Coyles", "date": "13.11.25", "start": "10", "finish": "11", "room": "midldle", "pep": "SP4006 Week 5, 7-11.docx", "setup": "NO", "support": "NO", "food": ""}, {"week": "8", "repeat": "1", "academic": "Emma Boocock", "date": "20.11.25", "start": "9", "finish": "10", "room": "middle", "pep": "SP4006 Week 5, 7-11.docx", "setup": "NO", "support": "NO", "food": ""}, {"week": "", "repeat": "2", "academic": "Reece Chapman", "date": "20.11.25", "start": "9", "finish": "10", "room": "North", "pep": "SP4006 Week 5, 7-11.docx", "setup": "NO", "support": "NO", "food": ""}, {"week": "", "repeat": "3", "academic": "Reece Chapman", "date": "20.11.25", "start": "10", "finish": "11", "room": "midldle", "pep": "SP4006 Week 5, 7-11.docx", "setup": "NO", "support": "NO", "food": ""}, {"week": "9", "repeat": "1", "academic": "Emma Boocock", "date": "27.11.25", "start": "9", "finish": "11", "room": "Middle", "pep": "SP4006 Week 5, 7-11.docx", "setup": "NO", "support": "NO", "food": ""}, {"week": "", "repeat": "2", "academic": "Emma Boocock", "date": "27.11.25", "start": "11", "finish": "13.00", "room": "Middle", "pep": "SP4006 Week 5, 7-11.docx", "setup": "NO", "support": "NO", "food": ""}, {"week": "", "repeat": "3", "academic": "Emma Boocock", "date": "28.11.25", "start": "11", "finish": "13.00", "room": "South", "pep": "SP4006 Week 5, 7-11.docx", "setup": "NO", "support": "NO", "food": ""}, {"week": "10", "repeat": "1", "academic": "Emma Boocock", "date": "04.12.25", "start": "9", "finish": "11", "room": "Middle", "pep": "SP4006 Week 5, 7-11.docx", "setup": "NO", "support": "NO", "food": ""}, {"week": "", "repeat": "2", "academic": "Emma Boocock", "date": "04.12.25", "start": "11", "finish": "13.00", "room": "Middle", "pep": "SP4006 Week 5, 7-11.docx", "setup": "NO", "support": "NO", "food": ""}, {"week": "", "repeat": "3", "academic": "Emma Boocock", "date": "05.12.25", "start": "11", "finish": "13.00", "room": "South", "pep": "SP4006 Week 5, 7-11.docx", "setup": "NO", "support": "NO", "food": ""}, {"week": "11", "repeat": "1", "academic": "Karen Johns", "date": "11.12.25", "start": "10", "finish": "11", "room": "South", "pep": "SP4006 Week 5, 7-11.docx", "setup": "NO", "support": "NO", "food": ""}, {"week": "", "repeat": "2", "academic": "Emma Boocock", "date": "12.12.25", "start": "11", "finish": "1", "room": "South", "pep": "SP4006 Week 5, 7-11.docx", "setup": "NO", "support": "NO", "food": ""}, {"week": "12", "repeat": "1", "academic": "Karen Johns", "date": "16.12.25", "start": "11", "finish": "1", "room": "Middle", "pep": "SP4006 Week 5, 7-11.docx", "setup": "NO", "support": "NO", "food": ""}, {"week": "EXAM PEPS\n(Karen put the PEPS in here please, Cheers, Liam)", "repeat": "1", "academic": "Karen Johns", "date": "14.01.26", "start": "08.30", "finish": "15:00", "room": "All courts", "pep": "SP4006 January Assessments 2026 14&15th.docx", "setup": "NO", "support": "NO ", "food": ""}, {"week": "", "repeat": "2", "academic": "", "date": "15.01.26", "start": "08.30", "finish": "15:00", "room": "", "pep": "SP4006 January Assessments 2026 14&15th.docx", "setup": "", "support": "", "food": ""}]}, "SP4008": {"code": "SP4008", "name": "SP4008 Introduction to Coaching Science", "lead": "Marc Briggs", "techLead": "", "semester": "Semester 1", "sessions": [{"week": "1", "repeat": "1", "academic": "Marc Briggs", "date": "2/10/25", "start": "10:00", "finish": "12:00", "room": "SPF 110", "pep": "PEP - SP4008 - Muscle Force Production.docx", "setup": "Yes", "support": "No", "food": "N/A"}, {"week": "", "repeat": "2", "academic": "Marc Briggs", "date": "2/10/25", "start": "13:00", "finish": "15:00", "room": "SPF 110", "pep": "PEP - SP4008 - Muscle Force Production.docx", "setup": "Yes", "support": "No", "food": "N/A"}, {"week": "", "repeat": "3", "academic": "Marc Briggs", "date": "2/10/25", "start": "15:00", "finish": "17:00", "room": "SPF 110", "pep": "PEP - SP4008 - Muscle Force Production.docx", "setup": "Yes", "support": "No", "food": "N/A"}, {"week": "2", "repeat": "1", "academic": "Marc Briggs", "date": "9/10/25", "start": "9:00", "finish": "10:00", "room": "SPF 110", "pep": "PEP - SP4008 - Energy Systems.docx", "setup": "Yes", "support": "No", "food": "N/A"}, {"week": "", "repeat": "2", "academic": "Marc Briggs", "date": "9/10/25", "start": "10:00", "finish": "11:00", "room": "SPF 110", "pep": "PEP - SP4008 - Energy Systems.docx", "setup": "Yes", "support": "No", "food": "N/A"}, {"week": "", "repeat": "3", "academic": "Marc Briggs", "date": "9/10/25", "start": "11:00", "finish": "12:00", "room": "SPF 110", "pep": "PEP - SP4008 - Energy Systems.docx", "setup": "Yes", "support": "No", "food": "N/A"}, {"week": "3", "repeat": "1", "academic": "Marc Briggs", "date": "16/10/25", "start": "9:00", "finish": "10:00", "room": "SPF 110", "pep": "PEP - SP4008 - CV Recovery.docx", "setup": "Yes", "support": "Yes", "food": "N/A"}, {"week": "", "repeat": "2", "academic": "Marc Briggs", "date": "16/10/25", "start": "10:00", "finish": "11:00", "room": "SPF 110", "pep": "PEP - SP4008 - CV Recovery.docx", "setup": "Yes", "support": "Yes", "food": "N/A"}, {"week": "", "repeat": "3", "academic": "Marc Briggs", "date": "16/10/25", "start": "13:00", "finish": "14:00", "room": "SPF 110", "pep": "PEP - SP4008 - CV Recovery.docx", "setup": "Yes", "support": "Yes", "food": "N/A"}, {"week": "4", "repeat": "1", "academic": "Suzi Wolfram", "date": "23/10/25", "start": "9:00", "finish": "10:00", "room": "SPF 109 & 114", "pep": "PEP - SP4008 - Kinematics.docx", "setup": "Yes", "support": "No", "food": ""}, {"week": "", "repeat": "2", "academic": "Suzi Wolfram", "date": "23/10/25", "start": "10:00", "finish": "11:00", "room": "SPF 109 & 114", "pep": "PEP - SP4008 - Kinematics.docx", "setup": "Yes", "support": "No", "food": ""}, {"week": "", "repeat": "3", "academic": "Suzi Wolfram", "date": "23/10/25", "start": "17:00", "finish": "18:00", "room": "SPF 109 & 114", "pep": "PEP - SP4008 - Kinematics.docx", "setup": "Yes", "support": "No", "food": ""}, {"week": "5", "repeat": "1", "academic": "Suzi Wolfram", "date": "28/10/25", "start": "9:00", "finish": "10:00", "room": "SPF 109 & 114", "pep": "PEP - SP4008 - Performance Testing.docx", "setup": "Yes", "support": "No", "food": ""}, {"week": "", "repeat": "2", "academic": "Suzi Wolfram", "date": "28/10/25", "start": "10:00", "finish": "11:00", "room": "SPF 109 & 114", "pep": "PEP - SP4008 - Performance Testing.docx", "setup": "Yes", "support": "No", "food": ""}, {"week": "", "repeat": "3", "academic": "Suzi Wolfram", "date": "28/10/25", "start": "14:00", "finish": "15:00", "room": "SPF 109 & 114", "pep": "PEP - SP4008 - Performance Testing.docx", "setup": "Yes", "support": "No", "food": ""}, {"week": "10", "repeat": "1", "academic": "Marc Briggs", "date": "4/12/25", "start": "9:00", "finish": "10:00", "room": "SPF 110 &112", "pep": "PEP - SP4008 - Pre-exercise Nutritional Strategies.docx", "setup": "Yes", "support": "Yes", "food": ""}, {"week": "", "repeat": "2", "academic": "Marc Briggs", "date": "4/12/25", "start": "10:00", "finish": "11:00", "room": "SPF 110 &112", "pep": "PEP - SP4008 - Pre-exercise Nutritional Strategies.docx", "setup": "Yes", "support": "Yes", "food": ""}, {"week": "", "repeat": "3", "academic": "Marc Briggs", "date": "4/12/25", "start": "11:00", "finish": "12:00", "room": "SPF 110 &112", "pep": "PEP - SP4008 - Pre-exercise Nutritional Strategies.docx", "setup": "Yes", "support": "Yes", "food": ""}, {"week": "11", "repeat": "1", "academic": "Marc Briggs", "date": "11/12/25", "start": "9:00", "finish": "10:00", "room": "SPF 110 &112", "pep": "PEP - SP4008 - Dehydration.docx", "setup": "Yes", "support": "No", "food": ""}, {"week": "", "repeat": "2", "academic": "Marc Briggs", "date": "11/12/25", "start": "10:00", "finish": "11:00", "room": "SPF 110 &112", "pep": "PEP - SP4008 - Dehydration.docx", "setup": "Yes", "support": "No", "food": ""}, {"week": "", "repeat": "3", "academic": "Marc Briggs", "date": "11/12/25", "start": "11:00", "finish": "12:00", "room": "SPF 110 &112", "pep": "PEP - SP4008 - Dehydration.docx", "setup": "Yes", "support": "No", "food": ""}]}, "SP5026": {"code": "SP5026", "name": "SP5026 Research Design & Analysis", "lead": "Luca Angius", "techLead": "", "semester": "Semester 1", "sessions": [{"week": "7", "repeat": "1", "academic": "Cristea Liviu", "date": "10-11-2025", "start": "9:00", "finish": "11:00", "room": "SPF 109", "pep": "HL_PEP 5026.docx", "setup": "SES", "support": "Yes", "food": "SES"}, {"week": "", "repeat": "2", "academic": "Cristea Liviu", "date": "10-11-2025", "start": "14:00", "finish": "16:00", "room": "SPF 109", "pep": "HL_PEP 5026.docx", "setup": "SEN", "support": "Yes", "food": "SEN"}, {"week": "", "repeat": "3", "academic": "Mick Wilkinson", "date": "11-11-2025", "start": "9:00", "finish": "11:00", "room": "SPF 109", "pep": "HL_PEP 5026.docx", "setup": "SEN", "support": "Yes", "food": "SEN"}, {"week": "", "repeat": "4", "academic": "David Hendry", "date": "13-11-2025", "start": "9:00", "finish": "11:00", "room": "SPF 109", "pep": "HL_PEP 5026.docx", "setup": "Coaching", "support": "Yes", "food": "Coaching"}, {"week": "", "repeat": "5", "academic": "Luca Angius", "date": "13-11-2025", "start": "11:00", "finish": "13:00", "room": "SPF 109", "pep": "HL_PEP 5026.docx", "setup": "SES", "support": "Yes", "food": "SES"}, {"week": "", "repeat": "6", "academic": "Luca Angius", "date": "13-11-2025", "start": "14:00", "finish": "16:00", "room": "SPF 109", "pep": "HL_PEP 5026.docx", "setup": "SES", "support": "Yes", "food": "SES"}, {"week": "", "repeat": "7", "academic": "David Hendry", "date": "13-11-2025", "start": "16:00", "finish": "18:00", "room": "SPF 109", "pep": "HL_PEP 5026.docx", "setup": "Coaching", "support": "Yes", "food": "Coaching"}, {"week": "", "repeat": "8", "academic": "Luca Angius", "date": "13-11-2025", "start": "9:00", "finish": "11:00", "room": "SPF 001", "pep": "HL_PEP 5026.docx", "setup": "SES", "support": "Yes", "food": "SES"}, {"week": "", "repeat": "9", "academic": "Cristea Liviu", "date": "13-11-2025", "start": "9:00", "finish": "11:00", "room": "SPF102", "pep": "HL_PEP 5026.docx", "setup": "SES", "support": "Yes", "food": "SES"}, {"week": "", "repeat": "10", "academic": "Luca Angius", "date": "14-11-2025", "start": "9:00", "finish": "11:00", "room": "SPF 109", "pep": "HL_PEP 5026.docx", "setup": "SES", "support": "Yes", "food": "SES"}, {"week": "", "repeat": "11", "academic": "Luca Angius", "date": "14-11-2025", "start": "11:00", "finish": "13:00", "room": "SPF 109", "pep": "HL_PEP 5026.docx", "setup": "SES", "support": "Yes", "food": "SES"}, {"week": "", "repeat": "12", "academic": "Luca Angius", "date": "14-11-2025", "start": "14:00", "finish": "16:00", "room": "SPF 109", "pep": "HL_PEP 5026.docx", "setup": "SES", "support": "Yes", "food": "SES"}, {"week": "8", "repeat": "1", "academic": "Cristea Liviu", "date": "17-11-2025", "start": "9:00", "finish": "11:00", "room": "SPF 001", "pep": "HL_PEP 5026.docx", "setup": "SES", "support": "Yes", "food": "SES"}, {"week": "", "repeat": "2", "academic": "Jamal McKenzie", "date": "17-11-2025", "start": "9:00", "finish": "11:00", "room": "SPF 001", "pep": "HL_PEP 5026.docx", "setup": "SES", "support": "Yes", "food": "SES"}, {"week": "", "repeat": "3", "academic": "Cristea Liviu", "date": "17-11-2025", "start": "13:00", "finish": "15:00", "room": "SPF 001", "pep": "HL_PEP 5026.docx", "setup": "SES", "support": "Yes", "food": "SES"}, {"week": "", "repeat": "4", "academic": "David Hendry", "date": "18-112025", "start": "13:00", "finish": "15:00", "room": "SPF 001", "pep": "HL_PEP 5026.docx", "setup": "Coaching", "support": "Yes", "food": "Coaching"}, {"week": "", "repeat": "5", "academic": "Mick Wilkinson", "date": "20-11-2025", "start": "9:00", "finish": "11:00", "room": "SPF 102", "pep": "HL_PEP 5026.docx", "setup": "SEN", "support": "Yes", "food": "SEN"}, {"week": "", "repeat": "6", "academic": "David Hendry", "date": "20-11-2025", "start": "9:00", "finish": "11:00", "room": "SPF 001", "pep": "HL_PEP 5026.docx", "setup": "Coaching", "support": "Yes", "food": "Coaching"}, {"week": "", "repeat": "7", "academic": "Mick Wilkinson", "date": "20-11-2025", "start": "11:00", "finish": "13:00", "room": "SPF 001", "pep": "HL_PEP 5026.docx", "setup": "SES", "support": "Yes", "food": "SES"}, {"week": "", "repeat": "8", "academic": "Cristea Liviu", "date": "20-11-2025", "start": "10:00", "finish": "12:00", "room": "SPF 001", "pep": "HL_PEP 5026.docx", "setup": "SES", "support": "Yes", "food": "SES"}, {"week": "", "repeat": "9", "academic": "Mick Wilkinson", "date": "21-11-2025", "start": "9:00", "finish": "11:00", "room": "SPF 102", "pep": "HL_PEP 5026.docx", "setup": "SES", "support": "Yes", "food": "SES"}, {"week": "9", "repeat": "1", "academic": "Cristea Liviu", "date": "24-11-2025", "start": "9:00", "finish": "11:00", "room": "SPF102", "pep": "HL_PEP 5026.docx", "setup": "SES", "support": "No", "food": "SES"}, {"week": "", "repeat": "2", "academic": "Cristea Liviu", "date": "24-11-2025", "start": "9:00", "finish": "11:00", "room": "SPF102", "pep": "HL_PEP 5026.docx", "setup": "SES", "support": "No", "food": "SES"}, {"week": "", "repeat": "3", "academic": "Cristea Liviu", "date": "24-11-2025", "start": "13:00", "finish": "15:00", "room": "SPF 001", "pep": "HL_PEP 5026.docx", "setup": "SES", "support": "No", "food": "SES"}, {"week": "", "repeat": "4", "academic": "Mick Wilkinson", "date": "24-11-2025", "start": "10:00", "finish": "12:00", "room": "SPF 001", "pep": "HL_PEP 5026.docx", "setup": "SEN", "support": "No", "food": "SEN"}, {"week": "", "repeat": "5", "academic": "Mick Wilkinson", "date": "25-11-2025", "start": "13:00", "finish": "15:00", "room": "SPF 001", "pep": "HL_PEP 5026.docx", "setup": "SES", "support": "No", "food": "SES"}, {"week": "", "repeat": "6", "academic": "Jamal McKenzie", "date": "27-11-2025", "start": "9:00", "finish": "11:00", "room": "SPF 001", "pep": "HL_PEP 5026.docx", "setup": "SES", "support": "No", "food": "SES"}, {"week": "", "repeat": "7", "academic": "Mick Wilkinson", "date": "27-11-2025", "start": "9:00", "finish": "11:00", "room": "SPF 102", "pep": "HL_PEP 5026.docx", "setup": "SEN", "support": "No", "food": "SEN"}, {"week": "", "repeat": "8", "academic": "Mick Wilkinson", "date": "27-11-2025", "start": "9:00", "finish": "11:00", "room": "SPF 102", "pep": "HL_PEP 5026.docx", "setup": "SES", "support": "No", "food": "SES"}, {"week": "", "repeat": "9", "academic": "Cristea Liviu", "date": "27-11-2025", "start": "9:00", "finish": "11:00", "room": "SPF 001", "pep": "HL_PEP 5026.docx", "setup": "SES", "support": "No", "food": "SES"}, {"week": "", "repeat": "10", "academic": "Cristea Liviu", "date": "27-11-2025", "start": "11:00", "finish": "13:00", "room": "SPF 001", "pep": "HL_PEP 5026.docx", "setup": "Coaching", "support": "No", "food": "Coaching"}, {"week": "", "repeat": "11", "academic": "Cristea Liviu", "date": "28-11-2025", "start": "9:00", "finish": "11:00", "room": "SPF 001", "pep": "HL_PEP 5026.docx", "setup": "Coaching", "support": "No", "food": "Coaching"}, {"week": "", "repeat": "12", "academic": "Jamal McKenzie", "date": "28-11-2025", "start": "9:00", "finish": "11:00", "room": "SPF 102", "pep": "HL_PEP 5026.docx", "setup": "SES", "support": "No", "food": "SES"}, {"week": "", "repeat": "13", "academic": "Cristea Liviu", "date": "28-11-2025", "start": "9:00", "finish": "11:00", "room": "SPF 001", "pep": "HL_PEP 5026.docx", "setup": "SES", "support": "No", "food": "SES"}, {"week": "", "repeat": "14", "academic": "Mick Wilkinson", "date": "28-11-2026", "start": "11:00", "finish": "13:00", "room": "SPF 001", "pep": "HL_PEP 5026.docx", "setup": "SEN", "support": "No", "food": "SEN"}, {"week": "", "repeat": "15", "academic": "Mick Wilkinson", "date": "28-11-2027", "start": "11:00", "finish": "13:00", "room": "SPF 001", "pep": "HL_PEP 5026.docx", "setup": "SES", "support": "No", "food": "SES"}, {"week": "10", "repeat": "1", "academic": "David Hendry", "date": "01-12-2025", "start": "9:00", "finish": "11:00", "room": "SPF 102", "pep": "HL_PEP 5026.docx", "setup": "Coaching", "support": "No", "food": "Coaching"}, {"week": "", "repeat": "2", "academic": "Mick Wilkinson", "date": "02-12-2025", "start": "14:00", "finish": "16:00", "room": "SPF 109", "pep": "HL_PEP 5026.docx", "setup": "SEN", "support": "No", "food": "SEN"}, {"week": "", "repeat": "3", "academic": "Jamal McKenzie", "date": "02-12-2025", "start": "11:00", "finish": "13:00", "room": "SPF 109", "pep": "HL_PEP 5026.docx", "setup": "SES", "support": "No", "food": "SES"}, {"week": "", "repeat": "4", "academic": "Mick Wilkinson", "date": "04-12-2025", "start": "9:00", "finish": "11:00", "room": "SPF 102", "pep": "HL_PEP 5026.docx", "setup": "SEN", "support": "No", "food": "SEN"}, {"week": "", "repeat": "5", "academic": "David Hendry", "date": "04-12-2025", "start": "9:00", "finish": "11:00", "room": "SPF 001", "pep": "HL_PEP 5026.docx", "setup": "Coaching", "support": "No", "food": "Coaching"}, {"week": "", "repeat": "6", "academic": "Cristea Liviu", "date": "04-12-2025", "start": "9:00", "finish": "11:00", "room": "SPF 001", "pep": "HL_PEP 5026.docx", "setup": "SES", "support": "No", "food": "SES"}, {"week": "", "repeat": "7", "academic": "Jamal McKenzie", "date": "04-12-2025", "start": "11:00", "finish": "13:00", "room": "SPF 109", "pep": "HL_PEP 5026.docx", "setup": "SES", "support": "No", "food": "SES"}, {"week": "", "repeat": "8", "academic": "Cristea Liviu", "date": "04-12-2025", "start": "11:00", "finish": "13:00", "room": "SPF 001", "pep": "HL_PEP 5026.docx", "setup": "SES", "support": "No", "food": "SES"}, {"week": "", "repeat": "9", "academic": "Justin Andrushko", "date": "04-12-2025", "start": "15:00", "finish": "17:00", "room": "SPF 109", "pep": "HL_PEP 5026.docx", "setup": "SES", "support": "No", "food": ""}, {"week": "", "repeat": "10", "academic": "Jamal McKenzie", "date": "05-12-2025", "start": "16:00", "finish": "18:00", "room": "SPF 109", "pep": "HL_PEP 5026.docx", "setup": "SES", "support": "No", "food": ""}, {"week": "", "repeat": "11", "academic": "Rodrigo Vitorio", "date": "05-12-2025", "start": "9:00", "finish": "11:00", "room": "SPF 001", "pep": "HL_PEP 5026.docx", "setup": "SES", "support": "No", "food": "SES"}, {"week": "11", "repeat": "1", "academic": "Cristea Liviu", "date": "08-12-2025", "start": "9:00", "finish": "11:00", "room": "SPF 109", "pep": "HL_PEP 5026.docx", "setup": "SES", "support": "No", "food": ""}]}, "SP5027": {"code": "SP5027", "name": "SP5027 Sport Performance Assessment", "lead": "Tom Macpherson", "techLead": "", "semester": "Semester 1", "sessions": [{"week": "2", "repeat": "1", "academic": "Phil Hayes", "date": "6/10/25", "start": "9:00", "finish": "11:00", "room": "SPF 109", "pep": "Week 2 - Aerobic Lab", "setup": "Yes", "support": "Yes", "food": "No"}, {"week": "", "repeat": "2", "academic": "Phil Hayes", "date": "6/10/25", "start": "12:00", "finish": "14:00", "room": "SPF 110", "pep": "Week 2 - Aerobic Lab", "setup": "Yes", "support": "Yes", "food": "No"}, {"week": "", "repeat": "3", "academic": "Phil Hayes", "date": "7/10/25", "start": "10:00", "finish": "12:00", "room": "SPF 109", "pep": "Week 2 - Aerobic Lab", "setup": "Yes", "support": "Yes", "food": "No"}, {"week": "", "repeat": "4", "academic": "Phil Hayes", "date": "7/10/25", "start": "12:00", "finish": "14:00", "room": "SPF 109", "pep": "Week 2 - Aerobic Lab", "setup": "Yes", "support": "Yes", "food": "No"}, {"week": "", "repeat": "5", "academic": "Phil Hayes", "date": "7/10/25", "start": "16:00", "finish": "18:00", "room": "SPF 110", "pep": "Week 2 - Aerobic Lab", "setup": "Yes", "support": "Yes", "food": "No"}, {"week": "", "repeat": "6", "academic": "Phil Hayes", "date": "9/10/25", "start": "12:00", "finish": "14:00", "room": "SPF 110", "pep": "Week 2 - Aerobic Lab", "setup": "Yes", "support": "Yes", "food": "No"}, {"week": "", "repeat": "7", "academic": "Phil Hayes", "date": "9/10/25", "start": "14:00", "finish": "16:00", "room": "SPF 109", "pep": "Week 2 - Aerobic Lab", "setup": "Yes", "support": "Yes", "food": "No"}, {"week": "", "repeat": "8", "academic": "Phil Hayes", "date": "9/10/25", "start": "16:00", "finish": "18:00", "room": "SPF 109", "pep": "Week 2 - Aerobic Lab", "setup": "Yes", "support": "Yes", "food": "No"}, {"week": "", "repeat": "9", "academic": "Phil Hayes", "date": "10/10/25", "start": "14:00", "finish": "16:00", "room": "SPF 109", "pep": "Week 2 - Aerobic Lab", "setup": "Yes", "support": "Yes", "food": "No"}, {"week": "3", "repeat": "1", "academic": "Phil Hayes", "date": "13/10/25", "start": "09:00", "finish": "10:30", "room": "SPF 110", "pep": "Week 3 - Optimising Peak Power Lab", "setup": "Yes", "support": "Yes", "food": "No"}, {"week": "", "repeat": "2", "academic": "Phil Hayes", "date": "14/10/25", "start": "10:00", "finish": "11:30", "room": "SPF 109", "pep": "Week 3 - Optimising Peak Power Lab", "setup": "Yes", "support": "Yes", "food": "No"}, {"week": "", "repeat": "3", "academic": "Phil Hayes", "date": "14/10/25", "start": "12:30", "finish": "14:00", "room": "SPF 110", "pep": "Week 3 - Optimising Peak Power Lab", "setup": "Yes", "support": "Yes", "food": "No"}, {"week": "", "repeat": "4", "academic": "Phil Hayes", "date": "14/10/25", "start": "15:00", "finish": "16:30", "room": "SPF 109", "pep": "Week 3 - Optimising Peak Power Lab", "setup": "Yes", "support": "Yes", "food": "No"}, {"week": "", "repeat": "5", "academic": "Phil Hayes", "date": "14/10/25", "start": "16:30", "finish": "18:00", "room": "SPF 109", "pep": "Week 3 - Optimising Peak Power Lab", "setup": "Yes", "support": "Yes", "food": "No"}, {"week": "", "repeat": "6", "academic": "Phil Hayes", "date": "16/10/25", "start": "11:00", "finish": "12:30", "room": "SPF 109", "pep": "Week 3 - Optimising Peak Power Lab", "setup": "Yes", "support": "Yes", "food": "No"}, {"week": "", "repeat": "7", "academic": "Phil Hayes", "date": "16/10/25", "start": "13:00", "finish": "14:30", "room": "SPF 109", "pep": "Week 3 - Optimising Peak Power Lab", "setup": "Yes", "support": "Yes", "food": "No"}, {"week": "", "repeat": "8", "academic": "Phil Hayes", "date": "16/10/25", "start": "14:30", "finish": "16:00", "room": "SPF 109", "pep": "Week 3 - Optimising Peak Power Lab", "setup": "Yes", "support": "Yes", "food": "No"}, {"week": "", "repeat": "9", "academic": "Phil Hayes", "date": "16/10/25", "start": "16:30", "finish": "18:00", "room": "SPF 109", "pep": "Week 3 - Optimising Peak Power Lab", "setup": "Yes", "support": "Yes", "food": "No"}, {"week": "4", "repeat": "1", "academic": "Tom Macpherson", "date": "20/10/25", "start": "14:00", "finish": "16:00", "room": "SPF 109", "pep": "SP5027_Week4_TestingIntermittent.docx", "setup": "No", "support": "Yes", "food": "No"}, {"week": "", "repeat": "2", "academic": "Tom Macpherson", "date": "20/10/25", "start": "16:00", "finish": "18:00", "room": "SPF 109", "pep": "SP5027_Week4_TestingIntermittent.docx", "setup": "No", "support": "Yes", "food": "No"}, {"week": "", "repeat": "3", "academic": "Tom Macpherson", "date": "21/10/25", "start": "10:00", "finish": "12:00", "room": "SPF 102", "pep": "SP5027_Week4_TestingIntermittent.docx", "setup": "No", "support": "Yes", "food": "No"}, {"week": "", "repeat": "4", "academic": "Tom Macpherson", "date": "21/10/25", "start": "13:00", "finish": "15:00", "room": "SPF 001", "pep": "SP5027_Week4_TestingIntermittent.docx", "setup": "No", "support": "Yes", "food": "No"}, {"week": "", "repeat": "5", "academic": "Tom Macpherson", "date": "21/10/25", "start": "16:00", "finish": "18:00", "room": "SPF 109", "pep": "SP5027_Week4_TestingIntermittent.docx", "setup": "No", "support": "Yes", "food": "No"}, {"week": "", "repeat": "6", "academic": "Tom Macpherson", "date": "23/10/25", "start": "9:00", "finish": "11:00", "room": "SPF 001", "pep": "SP5027_Week4_TestingIntermittent.docx", "setup": "No", "support": "Yes", "food": "No"}, {"week": "", "repeat": "7", "academic": "Tom Macpherson", "date": "23/10/25", "start": "13:00", "finish": "15:00", "room": "SPF 109", "pep": "SP5027_Week4_TestingIntermittent.docx", "setup": "No", "support": "Yes", "food": "No"}, {"week": "", "repeat": "8", "academic": "Tom Macpherson", "date": "23/10/25", "start": "15:00", "finish": "17:00", "room": "SPF 109", "pep": "SP5027_Week4_TestingIntermittent.docx", "setup": "No", "support": "Yes", "food": "No"}, {"week": "", "repeat": "9", "academic": "Tom Macpherson", "date": "24/10/25", "start": "11:00", "finish": "13:00", "room": "SPF 109", "pep": "SP5027_Week4_TestingIntermittent.docx", "setup": "No", "support": "Yes", "food": "No"}, {"week": "8", "repeat": "1", "academic": "Louise Burnie", "date": "17/11/2025", "start": "09:00", "finish": "11:00", "room": "SPF114 & SPF109", "pep": "PEP - SP5027 - Motion Capture.docx", "setup": "Yes", "support": "No", "food": "No"}, {"week": "", "repeat": "2", "academic": "Louise Burnie", "date": "17/11/2025", "start": "13:00", "finish": "15:00", "room": "SPF114 & SPF109", "pep": "PEP - SP5027 - Motion Capture.docx", "setup": "Yes", "support": "No", "food": "No"}, {"week": "", "repeat": "3", "academic": "Louise Burnie", "date": "17/11/2025", "start": "15:00", "finish": "17:00", "room": "SPF114 & SPF109", "pep": "PEP - SP5027 - Motion Capture.docx", "setup": "Yes", "support": "No", "food": "No"}, {"week": "", "repeat": "4", "academic": "Louise Burnie", "date": "18/11/2025", "start": "11:00", "finish": "13:00", "room": "SPF114 & SPF109", "pep": "PEP - SP5027 - Motion Capture.docx", "setup": "Yes", "support": "No", "food": "No"}, {"week": "", "repeat": "5", "academic": "Louise Burnie", "date": "18/11/2025", "start": "16:00", "finish": "18:00", "room": "SPF114 & SPF109", "pep": "PEP - SP5027 - Motion Capture.docx", "setup": "Yes", "support": "No", "food": "No"}, {"week": "", "repeat": "6", "academic": "Louise Burnie", "date": "19/11/2025", "start": "09:00", "finish": "11:00", "room": "SPF114 & SPF109", "pep": "PEP - SP5027 - Motion Capture.docx", "setup": "Yes", "support": "No", "food": "No"}, {"week": "", "repeat": "7", "academic": "Louise Burnie", "date": "20/11/2025", "start": "09:00", "finish": "11:00", "room": "SPF114 & SPF109", "pep": "PEP - SP5027 - Motion Capture.docx", "setup": "Yes", "support": "No", "food": "No"}, {"week": "", "repeat": "8", "academic": "Louise Burnie", "date": "20/11/2025", "start": "11:00", "finish": "12:30", "room": "SPF114 & SPF109", "pep": "PEP - SP5027 - Motion Capture.docx", "setup": "Yes", "support": "No", "food": "No"}, {"week": "", "repeat": "9", "academic": "Louise Burnie", "date": "20/11/2025", "start": "12:30", "finish": "14:00", "room": "SPF114 & SPF109", "pep": "PEP - SP5027 - Motion Capture.docx", "setup": "Yes", "support": "No", "food": "No"}, {"week": "9", "repeat": "1", "academic": "Louise Burnie", "date": "24/11/2025", "start": "09:00", "finish": "11:00", "room": "SPF114 & SPF109", "pep": "PEP - SP5027 - Kinetics.docx", "setup": "Yes", "support": "Yes", "food": "No"}, {"week": "", "repeat": "2", "academic": "Louise Burnie", "date": "24/11/2025", "start": "13:00", "finish": "15:00", "room": "SPF114 & SPF109", "pep": "PEP - SP5027 - Kinetics.docx", "setup": "Yes", "support": "Yes", "food": "No"}, {"week": "", "repeat": "3", "academic": "Louise Burnie", "date": "24/11/2025", "start": "15:00", "finish": "17:00", "room": "SPF114 & SPF109", "pep": "PEP - SP5027 - Kinetics.docx", "setup": "Yes", "support": "Yes", "food": "No"}, {"week": "", "repeat": "4", "academic": "Louise Burnie", "date": "25/11/2025", "start": "12:00", "finish": "14:00", "room": "SPF114 & SPF109", "pep": "PEP - SP5027 - Kinetics.docx", "setup": "Yes", "support": "Yes", "food": "No"}, {"week": "", "repeat": "5", "academic": "Louise Burnie", "date": "25/11/2025", "start": "16:00", "finish": "18:00", "room": "SPF114 & SPF109", "pep": "PEP - SP5027 - Kinetics.docx", "setup": "Yes", "support": "Yes", "food": "No"}, {"week": "", "repeat": "6", "academic": "Louise Burnie", "date": "26/11/2025", "start": "09:00", "finish": "11:00", "room": "SPF114 & SPF109", "pep": "PEP - SP5027 - Kinetics.docx", "setup": "Yes", "support": "Yes", "food": "No"}, {"week": "", "repeat": "7", "academic": "Louise Burnie", "date": "27/11/2025", "start": "09:00", "finish": "11:00", "room": "SPF114 & SPF109", "pep": "PEP - SP5027 - Kinetics.docx", "setup": "Yes", "support": "Yes", "food": "No"}, {"week": "", "repeat": "8", "academic": "Louise Burnie", "date": "27/11/2025", "start": "11:00", "finish": "12:30", "room": "SPF114 & SPF109", "pep": "PEP - SP5027 - Kinetics.docx", "setup": "Yes", "support": "Yes", "food": "No"}, {"week": "", "repeat": "9", "academic": "Louise Burnie", "date": "27/11/2025", "start": "12:30", "finish": "14:00", "room": "SPF114 & SPF109", "pep": "PEP - SP5027 - Kinetics.docx", "setup": "Yes", "support": "Yes", "food": "No"}, {"week": "10", "repeat": "1", "academic": "Louise Burnie", "date": "01/12/2025", "start": "09:00", "finish": "11:00", "room": "SPF110", "pep": "PEP - SP5027 - EMG.docx", "setup": "Yes", "support": "Yes", "food": "No"}, {"week": "", "repeat": "2", "academic": "Louise Burnie", "date": "02/12/2025", "start": "16:00", "finish": "18:00", "room": "SPF110", "pep": "PEP - SP5027 - EMG.docx", "setup": "Yes", "support": "Yes", "food": "No"}, {"week": "", "repeat": "3", "academic": "Louise Burnie", "date": "03/12/2025", "start": "09:00", "finish": "11:00", "room": "SPF110", "pep": "PEP - SP5027 - EMG.docx", "setup": "Yes", "support": "Yes", "food": "No"}, {"week": "", "repeat": "4", "academic": "Louise Burnie", "date": "03/12/2025", "start": "11:00", "finish": "13:00", "room": "SPF110", "pep": "PEP - SP5027 - EMG.docx", "setup": "Yes", "support": "Yes", "food": "No"}, {"week": "", "repeat": "5", "academic": "Louise Burnie", "date": "04/12/2025", "start": "16:00", "finish": "18:00", "room": "SPF110", "pep": "PEP - SP5027 - EMG.docx", "setup": "Yes", "support": "Yes", "food": "No"}, {"week": "", "repeat": "6", "academic": "Louise Burnie", "date": "05/12/2025", "start": "09:00", "finish": "11:00", "room": "SPF110", "pep": "PEP - SP5027 - EMG.docx", "setup": "Yes", "support": "Yes", "food": "No"}, {"week": "", "repeat": "7", "academic": "Louise Burnie", "date": "05/12/2025", "start": "11:00", "finish": "13:00", "room": "SPF110", "pep": "PEP - SP5027 - EMG.docx", "setup": "Yes", "support": "Yes", "food": "No"}, {"week": "", "repeat": "8", "academic": "Louise Burnie", "date": "05/12/2025", "start": "14:00", "finish": "16:00", "room": "SPF110", "pep": "PEP - SP5027 - EMG.docx", "setup": "Yes", "support": "Yes", "food": "No"}, {"week": "", "repeat": "9", "academic": "Louise Burnie", "date": "05/12/2025", "start": "16:00", "finish": "18:00", "room": "SPF110", "pep": "PEP - SP5027 - EMG.docx", "setup": "Yes", "support": "Yes", "food": "No"}]}, "SP5028": {"code": "SP5028", "name": "SP5028 Exercise and Health Assessment", "lead": "Nicola McCullogh", "techLead": "", "semester": "Semester 1", "sessions": [{"week": "1", "repeat": "1", "academic": "Emily Hume", "date": "03/10/2025", "start": "09:00", "finish": "10:00", "room": "SPF110", "pep": "PEP - SP5028 - Health screening and ECG.docx", "setup": "Yes", "support": "", "food": ""}, {"week": "", "repeat": "2", "academic": "Emily Hume", "date": "03/10/2025", "start": "10:00", "finish": "11:00", "room": "SPF110", "pep": "PEP - SP5028 - Health screening and ECG.docx", "setup": "Yes", "support": "", "food": ""}, {"week": "", "repeat": "3", "academic": "Emily Hume", "date": "03/10/2025", "start": "11:00", "finish": "12:00", "room": "SPF110", "pep": "PEP - SP5028 - Health screening and ECG.docx", "setup": "Yes", "support": "", "food": ""}, {"week": "", "repeat": "4", "academic": "Emily Hume", "date": "03/10/2025", "start": "13:00", "finish": "14:00", "room": "SPF110", "pep": "PEP - SP5028 - Health screening and ECG.docx", "setup": "Yes", "support": "", "food": ""}, {"week": "", "repeat": "5", "academic": "Emily Hume", "date": "03/10/2025", "start": "14:00", "finish": "15:00", "room": "SPF110", "pep": "PEP - SP5028 - Health screening and ECG.docx", "setup": "Yes", "support": "", "food": ""}, {"week": "", "repeat": "6", "academic": "Emily Hume", "date": "03/10/2025", "start": "15:00", "finish": "16:00", "room": "SPF110", "pep": "PEP - SP5028 - Health screening and ECG.docx", "setup": "Yes", "support": "", "food": ""}, {"week": "2", "repeat": "1", "academic": "Thomas Jones", "date": "09/10", "start": "14:00", "finish": "16:00", "room": "SPF110", "pep": "SP5028 - PEP - Body composition and RMR.docx", "setup": "Yes", "support": "Yes", "food": ""}, {"week": "", "repeat": "2", "academic": "Thomas Jones", "date": "09/10", "start": "16:00", "finish": "18:00", "room": "SPF110", "pep": "SP5028 - PEP - Body composition and RMR.docx", "setup": "Yes", "support": "Yes", "food": ""}, {"week": "", "repeat": "3", "academic": "Thomas Jones", "date": "10/10", "start": "09:00", "finish": "11:00", "room": "SPF110", "pep": "SP5028 - PEP - Body composition and RMR.docx", "setup": "Yes", "support": "Yes", "food": ""}, {"week": "", "repeat": "4", "academic": "Thomas Jones", "date": "10/10", "start": "11:00", "finish": "13:00", "room": "SPF110", "pep": "SP5028 - PEP - Body composition and RMR.docx", "setup": "Yes", "support": "Yes", "food": ""}, {"week": "", "repeat": "5", "academic": "Thomas Jones", "date": "10/10", "start": "14:00", "finish": "16:00", "room": "SPF110", "pep": "SP5028 - PEP - Body composition and RMR.docx", "setup": "Yes", "support": "Yes", "food": ""}, {"week": "", "repeat": "6", "academic": "Thomas Jones", "date": "10/10", "start": "16:00", "finish": "18:00", "room": "SPF110", "pep": "=thomas", "setup": "Yes", "support": "Yes", "food": ""}, {"week": "3", "repeat": "1", "academic": "Emily Hume", "date": "16/10/2025", "start": "14:00", "finish": "16:00", "room": "SPF110", "pep": "PEP - SP5028 - Cardiovascular Risk Assessment.docx", "setup": "Drop-off only", "support": "Yes", "food": ""}, {"week": "", "repeat": "2", "academic": "Emily Hume", "date": "16/10/2025", "start": "16:00", "finish": "18:00", "room": "SPF110", "pep": "PEP - SP5028 - Cardiovascular Risk Assessment.docx", "setup": "Drop-off only", "support": "Yes", "food": ""}, {"week": "", "repeat": "3", "academic": "Emily Hume", "date": "17/10/2025", "start": "09:00", "finish": "11:00", "room": "SPF110", "pep": "PEP - SP5028 - Cardiovascular Risk Assessment.docx", "setup": "Drop-off only", "support": "Yes", "food": ""}, {"week": "", "repeat": "4", "academic": "Emily Hume", "date": "17/10/2025", "start": "11:00", "finish": "13:00", "room": "SPF110", "pep": "PEP - SP5028 - Cardiovascular Risk Assessment.docx", "setup": "Drop-off only", "support": "Yes", "food": ""}, {"week": "", "repeat": "5", "academic": "Emily Hume", "date": "17/10/2025", "start": "14:00", "finish": "16:00", "room": "SPF110", "pep": "PEP - SP5028 - Cardiovascular Risk Assessment.docx", "setup": "Drop-off only", "support": "Yes", "food": ""}, {"week": "", "repeat": "6", "academic": "Emily Hume", "date": "17/10/2025", "start": "16:00", "finish": "18:00", "room": "SPF110", "pep": "PEP - SP5028 - Cardiovascular Risk Assessment.docx", "setup": "Drop-off only", "support": "Yes", "food": ""}, {"week": "4", "repeat": "1", "academic": "Emily Hume", "date": "20/10/2025", "start": "09:00", "finish": "11:00", "room": "SPF110", "pep": "SP5028 - PEP - VO2max and spirometry.docx", "setup": "Drop-off only", "support": "", "food": ""}, {"week": "", "repeat": "2", "academic": "Emily Hume", "date": "23/10/2025", "start": "16:00", "finish": "18:00", "room": "SPF110", "pep": "SP5028 - PEP - VO2max and spirometry.docx", "setup": "Drop-off only", "support": "", "food": ""}, {"week": "", "repeat": "3", "academic": "Emily Hume", "date": "24/10/2025", "start": "09:00", "finish": "11:00", "room": "SPF110", "pep": "SP5028 - PEP - VO2max and spirometry.docx", "setup": "Drop-off only", "support": "", "food": ""}, {"week": "", "repeat": "4", "academic": "Emily Hume", "date": "24/10/2025", "start": "11:00", "finish": "13:00", "room": "SPF110", "pep": "SP5028 - PEP - VO2max and spirometry.docx", "setup": "Drop-off only", "support": "", "food": ""}, {"week": "", "repeat": "5", "academic": "Emily Hume", "date": "24/10/2025", "start": "14:00", "finish": "16:00", "room": "SPF110", "pep": "SP5028 - PEP - VO2max and spirometry.docx", "setup": "Drop-off only", "support": "", "food": ""}, {"week": "", "repeat": "6", "academic": "Emily Hume", "date": "24/10/2025", "start": "16:00", "finish": "18:00", "room": "SPF110", "pep": "SP5028 - PEP - VO2max and spirometry.docx", "setup": "Drop-off only", "support": "", "food": ""}, {"week": "5", "repeat": "1", "academic": "Leila ", "date": "27/10/25", "start": "11:00", "finish": "13:00", "room": "SFP 109 & 114", "pep": "PEP_SP5028 - Exercise and obesity.docx", "setup": "", "support": "", "food": ""}, {"week": "", "repeat": "2", "academic": "Gill Barry", "date": "30/10/25", "start": "09:00", "finish": "11:00", "room": "SFP 109 & 114", "pep": "PEP_SP5028 - Exercise and obesity.docx", "setup": "", "support": "", "food": ""}, {"week": "", "repeat": "3", "academic": "Gill Barry", "date": "31/10/25", "start": "09:00", "finish": "11:00", "room": "SFP 109 & 114", "pep": "PEP_SP5028 - Exercise and obesity.docx", "setup": "", "support": "", "food": ""}, {"week": "", "repeat": "4", "academic": "Gill Barry", "date": "31/10/25", "start": "11:00", "finish": "13:00", "room": "SFP 109 & 114", "pep": "PEP_SP5028 - Exercise and obesity.docx", "setup": "", "support": "", "food": ""}, {"week": "", "repeat": "5", "academic": "Gill Barry", "date": "31/10/25", "start": "14:00", "finish": "16:00", "room": "SFP 109 & 114", "pep": "PEP_SP5028 - Exercise and obesity.docx", "setup": "", "support": "", "food": ""}, {"week": "", "repeat": "6", "academic": "Gill Barry", "date": "31/10/25", "start": "16:00", "finish": "18:00", "room": "SFP 109 & 114", "pep": "PEP_SP5028 - Exercise and obesity.docx", "setup": "", "support": "", "food": ""}, {"week": "8", "repeat": "1", "academic": "Gavin Tempest", "date": "20/11/2025", "start": "1400", "finish": "1600", "room": "109", "pep": "PEP - SP5028 - Exercise, Cognition & Anxiety.docx", "setup": "Yes", "support": "", "food": ""}, {"week": "", "repeat": "2", "academic": "Gavin Tempest", "date": "20/11/2025", "start": "1600", "finish": "1800", "room": "109", "pep": "PEP - SP5028 - Exercise, Cognition & Anxiety.docx", "setup": "Yes", "support": "", "food": ""}, {"week": "", "repeat": "3", "academic": "Gavin Tempest", "date": "21/11/2025", "start": "09:00", "finish": "11:00", "room": "109", "pep": "PEP - SP5028 - Exercise, Cognition & Anxiety.docx", "setup": "Yes", "support": "", "food": ""}, {"week": "", "repeat": "4", "academic": "Gavin Tempest", "date": "21/11/2025", "start": "11:00", "finish": "13:00", "room": "109", "pep": "PEP - SP5028 - Exercise, Cognition & Anxiety.docx", "setup": "Yes", "support": "", "food": ""}, {"week": "", "repeat": "5", "academic": "Gavin Tempest", "date": "21/11/2025", "start": "14:00", "finish": "16:00", "room": "109", "pep": "PEP - SP5028 - Exercise, Cognition & Anxiety.docx", "setup": "Yes", "support": "", "food": ""}, {"week": "", "repeat": "6", "academic": "Gavin Tempest", "date": "21/11/2025", "start": "16:00", "finish": "18:00", "room": "109", "pep": "PEP - SP5028 - Exercise, Cognition & Anxiety.docx", "setup": "Yes", "support": "", "food": ""}, {"week": "9", "repeat": "1", "academic": "Gill Barry", "date": "27/11/25", "start": "14:00", "finish": "16:00", "room": "SPF 109 &114", "pep": "PEP Gait anlysis.docx", "setup": "Yes", "support": "Yes", "food": ""}, {"week": "", "repeat": "2", "academic": "Gill Barry", "date": "27/11/25", "start": "16:00", "finish": "18:00", "room": "SPF 109 &114", "pep": "PEP Gait anlysis.docx", "setup": "Yes", "support": "Yes", "food": ""}, {"week": "", "repeat": "3", "academic": "Gill Barry", "date": "28/11/25", "start": "09:00", "finish": "11:00", "room": "SPF 109 &114", "pep": "PEP Gait anlysis.docx", "setup": "Yes", "support": "Yes", "food": ""}, {"week": "", "repeat": "4", "academic": "Gill Barry", "date": "28/11/25", "start": "11:00", "finish": "13:00", "room": "SPF 109 &114", "pep": "PEP Gait anlysis.docx", "setup": "Yes", "support": "Yes", "food": ""}, {"week": "", "repeat": "5", "academic": "Gill Barry", "date": "28/11/25", "start": "14:00", "finish": "16:00", "room": "SPF 109 &114", "pep": "PEP Gait anlysis.docx", "setup": "Yes", "support": "Yes", "food": ""}, {"week": "", "repeat": "6", "academic": "Gill Barry", "date": "28/11/25", "start": "16:00", "finish": "18:00", "room": "SPF 109 &114", "pep": "PEP Gait anlysis.docx", "setup": "Yes", "support": "Yes", "food": ""}, {"week": "10", "repeat": "1", "academic": "Gill Barry", "date": "4/12/25", "start": "09:00", "finish": "11:00", "room": "SPF 109 &114", "pep": "PEP 5P5028 Balance.docx", "setup": "Yes", "support": "Yes", "food": ""}, {"week": "", "repeat": "2", "academic": "Gill Barry", "date": "4/12/25", "start": "13:00", "finish": "15:00", "room": "SPF 109 &114", "pep": "PEP 5P5028 Balance.docx", "setup": "Yes", "support": "Yes", "food": ""}, {"week": "", "repeat": "3", "academic": "Gill Barry", "date": "5/12/25", "start": "09:00", "finish": "11:00", "room": "SPF 109 &114", "pep": "PEP 5P5028 Balance.docx", "setup": "Yes", "support": "Yes", "food": ""}, {"week": "", "repeat": "4", "academic": "Gill Barry", "date": "5/12/25", "start": "11:00", "finish": "13:00", "room": "SPF 109 &114", "pep": "PEP 5P5028 Balance.docx", "setup": "Yes", "support": "Yes", "food": ""}, {"week": "", "repeat": "5", "academic": "Gill Barry", "date": "5/12/25", "start": "14:00", "finish": "16:00", "room": "SPF 109 &114", "pep": "PEP 5P5028 Balance.docx", "setup": "Yes", "support": "Yes", "food": ""}, {"week": "", "repeat": "6", "academic": "Gill Barry", "date": "5/12/25", "start": "16:00", "finish": "18:00", "room": "SPF 109 &114", "pep": "PEP 5P5028 Balance.docx", "setup": "Yes", "support": "Yes", "food": ""}, {"week": "11", "repeat": "1", "academic": "Emily Hume & Gill Barry", "date": "09/12/25", "start": "14:00", "finish": "16:00", "room": "SPF 109 &114", "pep": "PEP - SP5028 - Physiology Biomechanics Field Tests.docx", "setup": "No", "support": "", "food": ""}, {"week": "", "repeat": "2", "academic": "Emily Hume & Gill Barry", "date": "11/12/25", "start": "09:00", "finish": "11:00", "room": "SPF 109 &114", "pep": "PEP - SP5028 - Physiology Biomechanics Field Tests.docx", "setup": "No", "support": "", "food": ""}, {"week": "", "repeat": "3", "academic": "Emily Hume & Gill Barry", "date": "2025-11-12 00:00:00", "start": "11:00", "finish": "13:00", "room": "SPF 109 &114", "pep": "PEP - SP5028 - Physiology Biomechanics Field Tests.docx", "setup": "No", "support": "", "food": ""}, {"week": "", "repeat": "4", "academic": "Emily Hume & Gill Barry", "date": "2025-11-12 00:00:00", "start": "14:00", "finish": "16:00", "room": "SPF 109 &114", "pep": "PEP - SP5028 - Physiology Biomechanics Field Tests.docx", "setup": "No", "support": "", "food": ""}, {"week": "", "repeat": "5", "academic": "Emily Hume & Gill Barry", "date": "2025-11-12 00:00:00", "start": "16:00", "finish": "18:00", "room": "SPF 109 &114", "pep": "PEP - SP5028 - Physiology Biomechanics Field Tests.docx", "setup": "No", "support": "", "food": ""}]}, "SP5039": {"code": "SP5039", "name": "SP 5039 Coaching Skills and Practice", "lead": "David Hendry", "techLead": "", "semester": "Semester 1", "sessions": [{"week": "2", "repeat": "1", "academic": "David Hendry", "date": "7/10/25", "start": "10.00", "finish": "12.00", "room": "SPF001", "pep": "PEP - SP5039 Assessment Multi-sport equipment.docx", "setup": "No", "support": "No", "food": "No"}, {"week": "", "repeat": "2", "academic": "Justine Allen", "date": "7/10/25", "start": "10.00", "finish": "12.00", "room": "SPF001", "pep": "PEP - SP5039 Assessment Multi-sport equipment.docx", "setup": "No", "support": "No", "food": "No"}, {"week": "", "repeat": "3", "academic": "Philip Harvey", "date": "7/10/25", "start": "10.00", "finish": "12.00", "room": "SPF001", "pep": "PEP - SP5039 Assessment Multi-sport equipment.docx", "setup": "No", "support": "No", "food": "No"}, {"week": "3", "repeat": "1", "academic": "David Hendry", "date": "14/10/25", "start": "10.00", "finish": "12.00", "room": "SPF001", "pep": "PEP - SP5039 Basketball.docx", "setup": "No", "support": "No", "food": "No"}, {"week": "", "repeat": "2", "academic": "Justine Allen", "date": "14/10/25", "start": "10.00", "finish": "12.00", "room": "SPF001", "pep": "PEP - SP5039 Assessment Multi-sport equipment.docx", "setup": "No", "support": "No", "food": "No"}, {"week": "", "repeat": "3", "academic": "Philip Harvey", "date": "14/10/25", "start": "10.00", "finish": "12.00", "room": "SPF001", "pep": "PEP - SP5039 Assessment Multi-sport equipment.docx", "setup": "No", "support": "No", "food": "No"}, {"week": "4", "repeat": "1", "academic": "David Hendry", "date": "21/10/25", "start": "10.00", "finish": "12.00", "room": "SPF001", "pep": "PEP - SP5039 Assessment Multi-sport equipment.docx", "setup": "No", "support": "No", "food": "No"}, {"week": "", "repeat": "2", "academic": "Justine Allen", "date": "21/10/25", "start": "10.00", "finish": "12.00", "room": "SPF001", "pep": "PEP - SP5039 Assessment Multi-sport equipment.docx", "setup": "No", "support": "No", "food": "No"}, {"week": "", "repeat": "3", "academic": "Philip Harvey", "date": "21/10/25", "start": "10.00", "finish": "12.00", "room": "SPF001", "pep": "PEP - SP5039 Assessment Multi-sport equipment.docx", "setup": "No", "support": "No", "food": "No"}, {"week": "5", "repeat": "1", "academic": "David Hendry", "date": "28/10/25", "start": "10.00", "finish": "12.00", "room": "SPF001", "pep": "PEP - SP5039_Racket sport (tennis & badminton).docx", "setup": "No", "support": "No", "food": "No"}, {"week": "", "repeat": "2", "academic": "Justine Allen", "date": "28/10/25", "start": "10.00", "finish": "12.00", "room": "SPF001", "pep": "PEP - SP5039_Racket sport (tennis & badminton).docx", "setup": "No", "support": "No", "food": "No"}, {"week": "", "repeat": "3", "academic": "Philip Harvey", "date": "28/10/25", "start": "10.00", "finish": "12.00", "room": "SPF001", "pep": "PEP - SP5039 Assessment Multi-sport equipment.docx", "setup": "No", "support": "No", "food": "No"}, {"week": "7", "repeat": "1", "academic": "David Hendry", "date": "11/11/25", "start": "10.00", "finish": "12.00", "room": "SPF001", "pep": "PEP - SP5039 invasion games.docx", "setup": "No", "support": "No", "food": "No"}, {"week": "", "repeat": "2", "academic": "Karen Johns", "date": "11/11/25", "start": "10.00", "finish": "12.00", "room": "SPF001", "pep": "PEP - SP5039 invasion games.docx", "setup": "No", "support": "No", "food": "No"}, {"week": "", "repeat": "3", "academic": "Emma Boocock", "date": "11/11/25", "start": "10.00", "finish": "12.00", "room": "SPF001", "pep": "PEP - SP5039 invasion games.docx", "setup": "No", "support": "No", "food": "No"}, {"week": "8", "repeat": "1", "academic": "David Hendry", "date": "18/11/25", "start": "10.00", "finish": "12.00", "room": "SPF001", "pep": "PEP - SP5039 invasion games.docx", "setup": "No", "support": "No", "food": "No"}, {"week": "", "repeat": "2", "academic": "Karen Johns", "date": "18/11/25", "start": "10.00", "finish": "12.00", "room": "SPF001", "pep": "PEP - SP5039 invasion games.docx", "setup": "No", "support": "No", "food": "No"}, {"week": "", "repeat": "3", "academic": "Emma Boocock", "date": "18/11/25", "start": "10.00", "finish": "12.00", "room": "SPF001", "pep": "PEP - SP5039 invasion games.docx", "setup": "No", "support": "No", "food": "No"}, {"week": "9", "repeat": "1", "academic": "David Hendry", "date": "25/11/25", "start": "10.00", "finish": "12.00", "room": "SPF001", "pep": "PEP - SP5039_Athletics practical.docx", "setup": "No", "support": "No", "food": "No"}, {"week": "", "repeat": "2", "academic": "Karen Johns", "date": "25/11/25", "start": "10.00", "finish": "12.00", "room": "SPF001", "pep": "PEP - SP5039 gymnastics.docx", "setup": "No", "support": "No", "food": "No"}, {"week": "", "repeat": "3", "academic": "Emma Boocock", "date": "25/11/25", "start": "10.00", "finish": "12.00", "room": "SPF001", "pep": "PEP - SP5039_Athletics practical.docx", "setup": "No", "support": "No", "food": "No"}, {"week": "10", "repeat": "1", "academic": "David Hendry", "date": "2/12/25", "start": "10.00", "finish": "12.00", "room": "SPF001", "pep": "PEP - SP5039 Assessment Multi-sport equipment.docx", "setup": "No", "support": "No", "food": "No"}, {"week": "", "repeat": "2", "academic": "Karen Johns", "date": "2/12/25", "start": "10.00", "finish": "12.00", "room": "SPF001", "pep": "PEP - SP5039 Assessment Multi-sport equipment.docx", "setup": "No", "support": "No", "food": "No"}, {"week": "", "repeat": "3", "academic": "David Hendry", "date": "5/12/25", "start": "11.00", "finish": "13.00", "room": "SPF001", "pep": "PEP - SP5039 Assessment Multi-sport equipment.docx", "setup": "No", "support": "No", "food": "No"}, {"week": "11", "repeat": "1", "academic": "David Hendry", "date": "9/12/25", "start": "10.00", "finish": "12.00", "room": "SPF001", "pep": "PEP - SP5039 Assessment Multi-sport equipment.docx", "setup": "No", "support": "No", "food": "No"}, {"week": "", "repeat": "2", "academic": "Karen Johns", "date": "9/12/25", "start": "10.00", "finish": "12.00", "room": "SPF001", "pep": "PEP - SP5039 Assessment Multi-sport equipment.docx", "setup": "No", "support": "No", "food": "No"}, {"week": "", "repeat": "3", "academic": "David Hendry", "date": "12/12/25", "start": "11.00", "finish": "13.00", "room": "SPF001", "pep": "PEP - SP5039 Assessment Multi-sport equipment.docx", "setup": "No", "support": "No", "food": "No"}, {"week": "12", "repeat": "1", "academic": "David Hendry", "date": "15/12/25", "start": "09.00", "finish": "16.00", "room": "SPF001", "pep": "PEP - SP5039 Assessment Multi-sport equipment.docx", "setup": "No", "support": "No", "food": "No"}, {"week": "", "repeat": "2", "academic": "David Hendry", "date": "18/12/25", "start": "09.00", "finish": "16.00", "room": "SPF001", "pep": "PEP - SP5039 Assessment Multi-sport equipment.docx", "setup": "No", "support": "No", "food": "No"}, {"week": "", "repeat": "3", "academic": "David Hendry", "date": "19/12/25", "start": "09.00", "finish": "16.00", "room": "SPF001", "pep": "PEP - SP5039 Assessment Multi-sport equipment.docx", "setup": "No", "support": "No", "food": "No"}]}, "SP5042": {"code": "SP5042", "name": "SP5042 Nutrition for Health", "lead": "SER STAFF", "techLead": "", "semester": "Semester 1", "sessions": [{"week": "1", "repeat": "1", "academic": "Victoria McIver", "date": "2025-03-10 00:00:00", "start": "11:00:00", "finish": "13:00:00", "room": "SPF 112", "pep": "PEP - SP5042 - Food preparation for athletes.docx", "setup": "Drop-off only", "support": "No", "food": "Yes"}, {"week": "", "repeat": "2", "academic": "Victoria McIver", "date": "2025-03-10 00:00:00", "start": "14:00:00", "finish": "16:00:00", "room": "SPF 112", "pep": "PEP - SP5042 - Food preparation for athletes.docx", "setup": "Drop-off only", "support": "No", "food": "Yes"}, {"week": "", "repeat": "3", "academic": "Victoria McIver", "date": "2025-03-10 00:00:00", "start": "16:00:00", "finish": "18:00:00", "room": "SPF 112", "pep": "PEP - SP5042 - Food preparation for athletes.docx", "setup": "Drop-off only", "support": "No", "food": "Yes"}, {"week": "7", "repeat": "1", "academic": "Victoria McIver", "date": "13/11/2025", "start": "09:00:00", "finish": "11:00:00", "room": "SPF 112 SPF 113", "pep": "PEP - SP5042 - Food preparation for athletes.docx", "setup": "Drop-off only", "support": "No", "food": "Yes"}, {"week": "", "repeat": "2", "academic": "Victoria McIver", "date": "13/11/2025", "start": "11:00:00", "finish": "13:00:00", "room": "SPF 112 SPF 113", "pep": "PEP - SP5042 - Food preparation for athletes.docx", "setup": "Drop-off only", "support": "No", "food": "Yes"}, {"week": "", "repeat": "3", "academic": "Victoria McIver", "date": "13/11/2025", "start": "14:00:00", "finish": "16:00:00", "room": "SPF 112 SPF 113", "pep": "PEP - SP5042 - Food preparation for athletes.docx", "setup": "Drop-off only", "support": "No", "food": "Yes"}, {"week": "10", "repeat": "1", "academic": "Victoria McIver", "date": "2025-05-12 00:00:00", "start": "11:00:00", "finish": "13:00:00", "room": "SPF 112 SPF 113", "pep": "PEP - SP5042 - Food preparation for athletes.docx", "setup": "Yes", "support": "Yes", "food": "Yes"}, {"week": "", "repeat": "2", "academic": "Victoria McIver", "date": "2025-05-12 00:00:00", "start": "14:00:00", "finish": "16:00:00", "room": "SPF 112 SPF 113", "pep": "PEP - SP5042 - Food preparation for athletes.docx", "setup": "Yes", "support": "Yes", "food": "Yes"}, {"week": "", "repeat": "3", "academic": "Victoria McIver", "date": "2025-05-12 00:00:00", "start": "16:00:00", "finish": "18:00:00", "room": "SPF 112 SPF 113", "pep": "PEP - SP5042 - Food preparation for athletes.docx", "setup": "Yes", "support": "Yes", "food": "Yes"}]}, "SP6036": {"code": "SP6036", "name": "SP6036 Sport Performance Intervention Strategies", "lead": "Steven Marshall", "techLead": "", "semester": "Semester 1", "sessions": [{"week": "2", "repeat": "1", "academic": "Louise Burnie", "date": "07/10/2025", "start": "09:00", "finish": "11:00", "room": "SPF114", "pep": "PEP - SP6036 - Biomechanics equipment.docx", "setup": "Yes", "support": "No", "food": "No"}, {"week": "", "repeat": "2", "academic": "Louise Burnie", "date": "07/10/2025", "start": "11:00", "finish": "13:00", "room": "SPF114", "pep": "PEP - SP6036 - Biomechanics equipment.docx", "setup": "Yes", "support": "No", "food": "No"}, {"week": "", "repeat": "3", "academic": "Louise Burnie", "date": "07/10/2025", "start": "14:00", "finish": "16:00", "room": "SPF114", "pep": "PEP - SP6036 - Biomechanics equipment.docx", "setup": "Yes", "support": "No", "food": "No"}, {"week": "", "repeat": "4", "academic": "Louise Burnie", "date": "07/10/2025", "start": "16:00", "finish": "18:00", "room": "SPF114", "pep": "PEP - SP6036 - Biomechanics equipment.docx", "setup": "Yes", "support": "No", "food": "No"}, {"week": "", "repeat": "5", "academic": "Louise Burnie", "date": "09/10/2025", "start": "13:00", "finish": "15:00", "room": "SPF114", "pep": "PEP - SP6036 - Biomechanics equipment.docx", "setup": "Yes", "support": "No", "food": "No"}, {"week": "", "repeat": "6", "academic": "Louise Burnie", "date": "09/10/2025", "start": "15:00", "finish": "17:00", "room": "SPF114", "pep": "PEP - SP6036 - Biomechanics equipment.docx", "setup": "Yes", "support": "No", "food": "No"}, {"week": "", "repeat": "7", "academic": "Louise Burnie", "date": "10/10/2025", "start": "14:00", "finish": "16:00", "room": "SPF114", "pep": "PEP - SP6036 - Biomechanics equipment.docx", "setup": "Yes", "support": "No", "food": ""}, {"week": "3", "repeat": "1", "academic": "Tom Macpherson", "date": "13/10/25", "start": "11:00", "finish": "13:00", "room": "SPF 110", "pep": "Week 3 - Power Lab", "setup": "Yes", "support": "No", "food": "No"}, {"week": "", "repeat": "2", "academic": "Tom Macpherson", "date": "13/10/25", "start": "14:00", "finish": "16:00", "room": "SPF 110", "pep": "Week 3 - Power Lab", "setup": "Yes", "support": "No", "food": "No"}, {"week": "", "repeat": "3", "academic": "Tom Macpherson", "date": "13/10/25", "start": "16:00", "finish": "18:00", "room": "SPF 110", "pep": "Week 3 - Power Lab", "setup": "Yes", "support": "No", "food": "No"}, {"week": "", "repeat": "4", "academic": "Tom Macpherson", "date": "14/10/25", "start": "10:00", "finish": "12:00", "room": "SPF 110", "pep": "Week 3 - Power Lab", "setup": "Yes", "support": "No", "food": "No"}, {"week": "", "repeat": "5", "academic": "Tom Macpherson", "date": "14/10/25", "start": "14:00", "finish": "16:00", "room": "SPF 110", "pep": "Week 3 - Power Lab", "setup": "Yes", "support": "No", "food": "No"}, {"week": "", "repeat": "6", "academic": "Tom Macpherson", "date": "14/10/25", "start": "16:00", "finish": "18:00", "room": "SPF 110", "pep": "Week 3 - Power Lab", "setup": "Yes", "support": "No", "food": "No"}, {"week": "", "repeat": "7", "academic": "Tom Macpherson", "date": "16/10/25", "start": "11:00", "finish": "13:00", "room": "SPF 110", "pep": "Week 3 - Power Lab", "setup": "Yes", "support": "No", "food": "No"}, {"week": "5", "repeat": "1", "academic": "Suzi Wolfram", "date": "27/10/2015", "start": "14:00", "finish": "16:00", "room": "SPF113/SPF114", "pep": "PEP - SP6036 - Biomechanics-Endurance.docx", "setup": "Yes", "support": "Yes", "food": ""}, {"week": "", "repeat": "2", "academic": "Suzi Wolfram", "date": "27/10/2015", "start": "16:00", "finish": "18:00", "room": "SPF113/SPF115", "pep": "PEP - SP6036 - Biomechanics-Endurance.docx", "setup": "Yes", "support": "Yes", "food": ""}, {"week": "", "repeat": "3", "academic": "Suzi Wolfram", "date": "28/10/2015", "start": "11:00", "finish": "13:00", "room": "SPF113/SPF116", "pep": "PEP - SP6036 - Biomechanics-Endurance.docx", "setup": "Yes", "support": "Yes", "food": ""}, {"week": "", "repeat": "4", "academic": "Suzi Wolfram", "date": "28/10/2025", "start": "16:00", "finish": "18:00", "room": "SPF113/SPF117", "pep": "PEP - SP6036 - Biomechanics-Endurance.docx", "setup": "Yes", "support": "Yes", "food": ""}, {"week": "", "repeat": "5", "academic": "Suzi Wolfram", "date": "30/10/2025", "start": "11:00", "finish": "13:00", "room": "SPF113/SPF118", "pep": "PEP - SP6036 - Biomechanics-Endurance.docx", "setup": "Yes", "support": "Yes", "food": ""}, {"week": "", "repeat": "6", "academic": "Suzi Wolfram", "date": "30/10/2026", "start": "14:00", "finish": "16:00", "room": "SPF113/SPF119", "pep": "PEP - SP6036 - Biomechanics-Endurance.docx", "setup": "Yes", "support": "Yes", "food": ""}, {"week": "", "repeat": "7", "academic": "Suzi Wolfram", "date": "30/10/2027", "start": "16:00", "finish": "18:00", "room": "SPF113/SPF120", "pep": "PEP - SP6036 - Biomechanics-Endurance.docx", "setup": "Yes", "support": "Yes", "food": ""}, {"week": "9", "repeat": "1", "academic": "Steven Marshall", "date": "24/11/25", "start": "0900", "finish": "1100", "room": "SPF110", "pep": "SP6036_Week9_TeamPhys.docx", "setup": "Yes", "support": "", "food": ""}, {"week": "", "repeat": "2", "academic": "Steven Marshall", "date": "24/11/25", "start": "1300", "finish": "1500", "room": "SPF110", "pep": "SP6036_Week9_TeamPhys.docx", "setup": "Yes", "support": "", "food": ""}, {"week": "", "repeat": "3", "academic": "Steven Marshall", "date": "24/11/25", "start": "1500", "finish": "1700", "room": "SPF110", "pep": "SP6036_Week9_TeamPhys.docx", "setup": "Yes", "support": "", "food": ""}, {"week": "", "repeat": "4", "academic": "Steven Marshall", "date": "27/11/25", "start": "0900", "finish": "1100", "room": "SPF110", "pep": "SP6036_Week9_TeamPhys.docx", "setup": "Yes", "support": "", "food": ""}, {"week": "", "repeat": "5", "academic": "Steven Marshall", "date": "27/11/26", "start": "1100", "finish": "1300", "room": "SPF110", "pep": "SP6036_Week9_TeamPhys.docx", "setup": "Yes", "support": "", "food": ""}, {"week": "", "repeat": "6", "academic": "Steven Marshall", "date": "27/11/27", "start": "1400", "finish": "1600", "room": "SPF110", "pep": "SP6036_Week9_TeamPhys.docx", "setup": "Yes", "support": "", "food": ""}, {"week": "", "repeat": "7", "academic": "Steven Marshall", "date": "27/11/28", "start": "1600", "finish": "1800", "room": "SPF110", "pep": "SP6036_Week9_TeamPhys.docx", "setup": "Yes", "support": "", "food": ""}, {"week": "10", "repeat": "1", "academic": "Chris Buckley", "date": "1/12/25", "start": "14.00", "finish": "16.00", "room": "SPF114/109", "pep": "SP6036 - Biomechanics Team sports.docx", "setup": "Yes", "support": "", "food": ""}, {"week": "", "repeat": "2", "academic": "Chris Buckley", "date": "1/12/25", "start": "16.00", "finish": "18.00", "room": "SPF114/109", "pep": "SP6036 - Biomechanics Team sports.docx", "setup": "Yes", "support": "", "food": ""}, {"week": "", "repeat": "3", "academic": "Chris Buckley", "date": "2/12/25", "start": "9.00", "finish": "11.00", "room": "SPF114/109", "pep": "SP6036 - Biomechanics Team sports.docx", "setup": "Yes", "support": "", "food": ""}, {"week": "", "repeat": "4", "academic": "Chris Buckley", "date": "2/12/25", "start": "11.00", "finish": "13.00", "room": "SPF114/109", "pep": "SP6036 - Biomechanics Team sports.docx", "setup": "Yes", "support": "", "food": ""}, {"week": "", "repeat": "5", "academic": "Chris Buckley", "date": "2/12/25", "start": "14.00", "finish": "16.00", "room": "SPF114/109", "pep": "SP6036 - Biomechanics Team sports.docx", "setup": "Yes", "support": "", "food": ""}, {"week": "", "repeat": "6", "academic": "Chris Buckley", "date": "2/12/25", "start": "16.00", "finish": "18.00", "room": "SPF114/109", "pep": "SP6036 - Biomechanics Team sports.docx", "setup": "Yes", "support": "", "food": ""}, {"week": "", "repeat": "7", "academic": "Chris Buckley", "date": "4/12/25", "start": "11.00", "finish": "13.00", "room": "SPF114/109", "pep": "SP6036 - Biomechanics Team sports.docx", "setup": "Yes", "support": "", "food": ""}]}, "SP6037": {"code": "SP6037", "name": "SP6037 Exercise and Health Intervention Strategies", "lead": "Gill Barry", "techLead": "", "semester": "Semester 1", "sessions": [{"week": "2", "repeat": "1", "academic": "Gill Barry", "date": "09/10/25", "start": "9:00", "finish": "11:00", "room": "SPSPF 109 (Sprint Track Laboratory)\nSPF 114 (Biomechanics Laboratory)\n", "pep": "PEP ACL SP6037.docx", "setup": "Yes", "support": "Yes", "food": ""}, {"week": "", "repeat": "2", "academic": "Gill Barry", "date": "09/10/25", "start": "11:00", "finish": "13:00", "room": "SPSPF 109 (Sprint Track Laboratory)\nSPF 114 (Biomechanics Laboratory)\n", "pep": "PEP ACL SP6037.docx", "setup": "Yes", "support": "Yes", "food": ""}, {"week": "", "repeat": "3", "academic": "Gill Barry", "date": "10/10/25", "start": "9:00", "finish": "11:00", "room": "SPSPF 109 (Sprint Track Laboratory)\nSPF 114 (Biomechanics Laboratory)\n", "pep": "PEP ACL SP6037.docx", "setup": "Yes", "support": "Yes", "food": ""}, {"week": "", "repeat": "4", "academic": "Gill Barry", "date": "2025-10-10 00:00:00", "start": "11:00", "finish": "13:00", "room": "SPSPF 109 (Sprint Track Laboratory)\nSPF 114 (Biomechanics Laboratory)\n", "pep": "PEP ACL SP6037.docx", "setup": "Yes", "support": "Yes", "food": ""}, {"week": "", "repeat": "5", "academic": "Gill Barry", "date": "2025-10-10 00:00:00", "start": "16:00", "finish": "18:00", "room": "SPSPF 109 (Sprint Track Laboratory)\nSPF 114 (Biomechanics Laboratory)\n", "pep": "PEP ACL SP6037.docx", "setup": "Yes", "support": "Yes", "food": ""}, {"week": "3", "repeat": "1", "academic": "Gill Barry", "date": "16/10/2025", "start": "09:00", "finish": "11:00", "room": "SFP 110 &114", "pep": "PEP Neuro and Balance.docx", "setup": "", "support": "", "food": ""}, {"week": "", "repeat": "2", "academic": "Gill Barry", "date": "17/10/2025", "start": "9:00", "finish": "11:00", "room": "SFP 110 &114", "pep": "PEP Neuro and Balance.docx", "setup": "", "support": "", "food": ""}, {"week": "", "repeat": "3", "academic": "Gill Barry", "date": "17/10/2025", "start": "11:00", "finish": "13:00", "room": "SFP 110 &114", "pep": "PEP Neuro and Balance.docx", "setup": "", "support": "", "food": ""}, {"week": "", "repeat": "4", "academic": "Gill Barry", "date": "17/10/2025", "start": "14:00", "finish": "16:00", "room": "SFP 110 &114", "pep": "PEP Neuro and Balance.docx", "setup": "", "support": "", "food": ""}, {"week": "", "repeat": "5", "academic": "Gill Barry", "date": "17/10/2025", "start": "16:00", "finish": "18:00", "room": "SFP 110 &114", "pep": "PEP Neuro and Balance.docx", "setup": "", "support": "", "food": ""}, {"week": "4", "repeat": "1", "academic": "Suzi Wolfram", "date": "21/10/2015", "start": "11:00", "finish": "13:00", "room": "SPF109/SPF114", "pep": "PEP - SP6037 - Cancer.docx", "setup": "No", "support": "No", "food": ""}, {"week": "", "repeat": "2", "academic": "Suzi Wolfram", "date": "21/10/2025", "start": "14:00", "finish": "16:00", "room": "SPF109/SPF115", "pep": "PEP - SP6037 - Cancer.docx", "setup": "No", "support": "No", "food": ""}, {"week": "", "repeat": "3", "academic": "Suzi Wolfram", "date": "23/10/2025", "start": "11:00", "finish": "13:00", "room": "SPF109/SPF116", "pep": "PEP - SP6037 - Cancer.docx", "setup": "No", "support": "No", "food": ""}, {"week": "", "repeat": "4", "academic": "Suzi Wolfram", "date": "24/10/2025", "start": "9:00", "finish": "11:00", "room": "SPF109/SPF117", "pep": "PEP - SP6037 - Cancer.docx", "setup": "No", "support": "No", "food": ""}, {"week": "", "repeat": "5", "academic": "Suzi Wolfram", "date": "24/10/2025", "start": "13:00", "finish": "15:00", "room": "SPF109/SPF118", "pep": "PEP - SP6037 - Cancer.docx", "setup": "No", "support": "No", "food": ""}, {"week": "5", "repeat": "1", "academic": "Gabriel Cucato", "date": "30/10/25", "start": "13:00", "finish": "15:00", "room": "SFP 110 ", "pep": "PEP SP6037 CV responses to exercise week 8.docx", "setup": "", "support": "", "food": ""}, {"week": "", "repeat": "2", "academic": "Gabriel Cucato", "date": "30/10/2025", "start": "15:00", "finish": "17:00", "room": "SPF110", "pep": "PEP SP6037 CV responses to exercise week 8.docx", "setup": "", "support": "", "food": ""}, {"week": "", "repeat": "3", "academic": "Gabriel Cucato", "date": "31/10/2015", "start": "09:00", "finish": "11:00", "room": "SPF110", "pep": "PEP SP6037 CV responses to exercise week 8.docx", "setup": "", "support": "", "food": ""}, {"week": "", "repeat": "4", "academic": "Gabriel Cucato", "date": "31/10/2025", "start": "11:00", "finish": "13:00", "room": "SPF110", "pep": "PEP SP6037 CV responses to exercise week 8.docx", "setup": "", "support": "", "food": ""}, {"week": "", "repeat": "5", "academic": "Gabriel Cucato", "date": "31/10/2025", "start": "14:00", "finish": "16:00", "room": "SPF110", "pep": "PEP SP6037 CV responses to exercise week 8.docx", "setup": "", "support": "", "food": ""}, {"week": "7", "repeat": "1", "academic": "Emily Hume", "date": "13/11/2025", "start": "16:00", "finish": "18:00", "room": "SPF110", "pep": "PEP - SP6037 - Respiratory - COPD.docx", "setup": "Drop-off only", "support": "", "food": ""}, {"week": "", "repeat": "2", "academic": "Emily Hume", "date": "14/11/2025", "start": "09:00", "finish": "11:00", "room": "SPF110", "pep": "PEP - SP6037 - Respiratory - COPD.docx", "setup": "Drop-off only", "support": "", "food": ""}, {"week": "", "repeat": "3", "academic": "Emily Hume", "date": "14/11/2025", "start": "11:00", "finish": "13:00", "room": "SPF110", "pep": "PEP - SP6037 - Respiratory - COPD.docx", "setup": "Drop-off only", "support": "", "food": ""}, {"week": "", "repeat": "4", "academic": "Emily Hume", "date": "14/11/2025", "start": "14:00", "finish": "16:00", "room": "SPF110", "pep": "PEP - SP6037 - Respiratory - COPD.docx", "setup": "Drop-off only", "support": "", "food": ""}, {"week": "", "repeat": "5", "academic": "Emily Hume", "date": "14/11/2025", "start": "16:00", "finish": "18:00", "room": "SPF110", "pep": "PEP - SP6037 - Respiratory - COPD.docx", "setup": "Drop-off only", "support": "", "food": ""}, {"week": "8", "repeat": "1", "academic": "Sarah Allison", "date": "20/11/2025", "start": "16:00", "finish": "18:00", "room": "SPF114", "pep": "https://livenorthumbriaac.sharepoint.com/:w:/s/DepartmentofSportExerciseandRehabilitation/IQAhmx7IPp3BS5BNjXk_FpvqAVCXoQxC6TPayQv_ig4wUYM?e=ab0Bv0", "setup": "", "support": "\"Do not need tables and chairs or squat rack\"", "food": ""}, {"week": "", "repeat": "2", "academic": "Sarah Allison", "date": "21/11/2025", "start": "9:00", "finish": "10:00", "room": "", "pep": "", "setup": "", "support": "", "food": ""}, {"week": "", "repeat": "3", "academic": "Sarah Allison", "date": "21/11/2025", "start": "10:00", "finish": "12:00", "room": "", "pep": "", "setup": "", "support": "", "food": ""}, {"week": "", "repeat": "4", "academic": "Sarah Allison", "date": "21/11/2025", "start": "14:00", "finish": "16:00", "room": "", "pep": "", "setup": "", "support": "", "food": ""}, {"week": "", "repeat": "5", "academic": "Sarah Allison", "date": "21/11/2025", "start": "16:00", "finish": "18:00", "room": "", "pep": "", "setup": "", "support": "", "food": ""}, {"week": "10", "repeat": "1", "academic": "Gavin Tempest", "date": "02/12/2025", "start": "1100", "finish": "1300", "room": "SPF113", "pep": "PEP - SP6037 - Perceptually regulated exercise Week 10.docx", "setup": "Yes", "support": "", "food": ""}, {"week": "", "repeat": "2", "academic": "Gavin Tempest", "date": "02/12/2025", "start": "1400", "finish": "1600", "room": "SPF113", "pep": "PEP - SP6037 - Perceptually regulated exercise Week 10.docx", "setup": "Yes", "support": "", "food": ""}, {"week": "", "repeat": "3", "academic": "Gavin Tempest", "date": "04/12/2025", "start": "1300", "finish": "1500", "room": "SPF113", "pep": "PEP - SP6037 - Perceptually regulated exercise Week 10.docx", "setup": "Yes", "support": "", "food": ""}, {"week": "", "repeat": "4", "academic": "Gavin Tempest", "date": "04/12/2025", "start": "1500", "finish": "1700", "room": "SPF113", "pep": "PEP - SP6037 - Perceptually regulated exercise Week 10.docx", "setup": "Yes", "support": "", "food": ""}, {"week": "", "repeat": "5", "academic": "Gavin Tempest", "date": "03/12/2025", "start": "0900", "finish": "1100", "room": "SPF113", "pep": "PEP - SP6037 - Perceptually regulated exercise Week 10.docx", "setup": "Yes", "support": "", "food": ""}]}, "SP6049": {"code": "SP6049", "name": "SP6049 Advanced Coaching Practice", "lead": "Emma Boocock", "techLead": "", "semester": "Semester 1", "sessions": [{"week": "1", "repeat": "1", "academic": "Emma Boocock", "date": "2.10.25", "start": "10:00", "finish": "12:00", "room": "sport Central main hall middle", "pep": "PEP - Coaching.docx", "setup": "no", "support": "No", "food": ""}, {"week": "2", "repeat": "1", "academic": "Emma Boocock", "date": "10.10.25", "start": "09:00", "finish": "11:00", "room": "Sport Central main hall middle", "pep": "PEP - Coaching.docx", "setup": "No", "support": "No", "food": ""}, {"week": "3", "repeat": "1", "academic": "Justine Allen", "date": "17.10.25", "start": "09:00", "finish": "11:00", "room": "Sport Central main hall middle", "pep": "PEP - Coaching.docx", "setup": "No", "support": "No", "food": ""}, {"week": "4", "repeat": "1", "academic": "Justine Allen", "date": "24.10.25", "start": "09:00", "finish": "11:00", "room": "Sport Central main hall middle", "pep": "PEP - Coaching.docx", "setup": "No", "support": "No", "food": ""}, {"week": "5", "repeat": "1", "academic": "Emma Boocock", "date": "31.10.25", "start": "09:00", "finish": "11:00", "room": "Sport Central main hall middle", "pep": "PEP - Coaching.docx", "setup": "No", "support": "No", "food": ""}, {"week": "7", "repeat": "1", "academic": "Reece Chapman", "date": "14.11.25", "start": "09:00", "finish": "11:00", "room": "Sport Central main hall middle", "pep": "PEP - Coaching.docx", "setup": "No", "support": "No", "food": ""}, {"week": "8", "repeat": "1", "academic": "Reece Chapman", "date": "21.11.25", "start": "09:00", "finish": "11:00", "room": "Sport Central main hall middle", "pep": "PEP - Coaching.docx", "setup": "No", "support": "No", "food": ""}, {"week": "9", "repeat": "1", "academic": "Emma Boocock", "date": "28.11.25", "start": "09:00", "finish": "11:00", "room": "Sport Central main hall middle", "pep": "PEP - Coaching.docx", "setup": "No", "support": "No", "food": ""}, {"week": "10", "repeat": "1", "academic": "Adam Nicol", "date": "05.12.25", "start": "09:00", "finish": "11:00", "room": "Sport Central main hall middle", "pep": "PEP - Coaching.docx", "setup": "No", "support": "No", "food": ""}, {"week": "11", "repeat": "1", "academic": "Emma Boocock", "date": "12.12.25", "start": "09:00", "finish": "11:00", "room": "Sport Central main hall middle", "pep": "PEP - Coaching.docx", "setup": "No", "support": "No", "food": ""}]}, "SP6050": {"code": "SP6050", "name": "SP6050 Contemporary Issues in Sport and Exercise Nutrition", "lead": "Daniel Peart", "techLead": "", "semester": "Semester 1", "sessions": [{"week": "1", "repeat": "1", "academic": "Daniel Peart", "date": "30/09", "start": "11:00", "finish": "12:00", "room": "ELA411", "pep": "Food preparation for athletes", "setup": "Drop-off only", "support": "", "food": "Yes"}, {"week": "", "repeat": "2", "academic": "Daniel Peart", "date": "30/09", "start": "14:00", "finish": "15:00", "room": "ELA411", "pep": "Food preparation for athletes", "setup": "Drop-off only", "support": "", "food": "Yes"}, {"week": "2", "repeat": "1", "academic": "Daniel Peart", "date": "06/10", "start": "11:00", "finish": "12:00", "room": "ELA411", "pep": "Food preparation for athletes", "setup": "Drop-off only", "support": "", "food": "Yes"}, {"week": "", "repeat": "2", "academic": "Daniel Peart", "date": "06/10", "start": "14:00", "finish": "15:00", "room": "ELA411", "pep": "Food preparation for athletes", "setup": "Drop-off only", "support": "", "food": "Yes"}, {"week": "3", "repeat": "1", "academic": "Daniel Peart", "date": "16/10", "start": "11:00", "finish": "12:00", "room": "ELA411", "pep": "Food preparation for athletes", "setup": "Drop-off only", "support": "", "food": "Yes"}, {"week": "", "repeat": "2", "academic": "Daniel Peart", "date": "16/10", "start": "14:00", "finish": "15:00", "room": "ELA411", "pep": "Food preparation for athletes", "setup": "Drop-off only", "support": "", "food": "Yes"}, {"week": "4", "repeat": "1", "academic": "Daniel Peart", "date": "23/10", "start": "09:00", "finish": "10:00", "room": "ELA411", "pep": "Food preparation for athletes", "setup": "Drop-off only", "support": "", "food": "Yes"}, {"week": "", "repeat": "2", "academic": "Daniel Peart", "date": "23/10", "start": "11:00", "finish": "12:00", "room": "ELA411", "pep": "Food preparation for athletes", "setup": "Drop-off only", "support": "", "food": "Yes"}, {"week": "5", "repeat": "1", "academic": "Ian Walshe", "date": "30/10", "start": "09:00", "finish": "10:00", "room": "ELA411", "pep": "Food preparation for athletes", "setup": "Drop-off only", "support": "", "food": "Yes"}, {"week": "", "repeat": "2", "academic": "Ian Walshe", "date": "30/10", "start": "11:00", "finish": "12:00", "room": "ELA411", "pep": "Food preparation for athletes", "setup": "Drop-off only", "support": "", "food": "Yes"}, {"week": "7", "repeat": "1", "academic": "Daniel Peart", "date": "11/11", "start": "11:00", "finish": "12:00", "room": "ELA411", "pep": "Food preparation for athletes", "setup": "Drop-off only", "support": "", "food": "Yes"}, {"week": "", "repeat": "2", "academic": "Daniel Peart", "date": "11/11", "start": "14:00", "finish": "15:00", "room": "ELA411", "pep": "Food preparation for athletes", "setup": "Drop-off only", "support": "", "food": "Yes"}, {"week": "8", "repeat": "1", "academic": "Ellie Hayes", "date": "20/11", "start": "09:00", "finish": "10:00", "room": "ELA411", "pep": "Food preparation for athletes", "setup": "Drop-off only", "support": "", "food": "Yes"}, {"week": "", "repeat": "2", "academic": "Ellie Hayes", "date": "20/11", "start": "11:00", "finish": "12:00", "room": "ELA411", "pep": "Food preparation for athletes", "setup": "Drop-off only", "support": "", "food": "Yes"}, {"week": "9", "repeat": "1", "academic": "Daniel Peart", "date": "27/11", "start": "09:00", "finish": "10:00", "room": "ELA411", "pep": "Food preparation for athletes", "setup": "Drop-off only", "support": "", "food": "Yes"}, {"week": "", "repeat": "2", "academic": "Daniel Peart", "date": "27/11", "start": "11:00", "finish": "12:00", "room": "ELA411", "pep": "Food preparation for athletes", "setup": "Drop-off only", "support": "", "food": "Yes"}, {"week": "10", "repeat": "1", "academic": "Daniel Peart", "date": "04/12", "start": "09:00", "finish": "10:00", "room": "ELA411", "pep": "Food preparation for athletes", "setup": "Drop-off only", "support": "", "food": "Yes"}, {"week": "", "repeat": "2", "academic": "Daniel Peart", "date": "04/12", "start": "11:00", "finish": "12:00", "room": "ELA411", "pep": "Food preparation for athletes", "setup": "Drop-off only", "support": "", "food": "Yes"}]}, "SP7001": {"code": "SP7001", "name": "SP7001 Cardiovascular Conditions", "lead": "Gabriel Cucato", "techLead": "", "semester": "Semester 1", "sessions": [{"week": "2", "repeat": "1", "academic": "Gabriel Cucato", "date": "7/10", "start": "15:00", "finish": "16:00", "room": "SPF110", "pep": "PEP - SP7001 patient assessment lab PEP 2023-24 for 10.10.2023.docx", "setup": "", "support": "", "food": ""}, {"week": "4", "repeat": "1", "academic": "Gabriel Cucato", "date": "21/10", "start": "13:00", "finish": "16:00", "room": "SAN 316b", "pep": "https://livenorthumbriaac.sharepoint.com/:w:/s/DepartmentofSportExerciseandRehabilitation/EcmZRWO2jt9BtclZ03z4DQgBiBcX0SEltodsuP6UVUx_Xw?e=9OgFaR", "setup": "", "support": "", "food": ""}, {"week": "5", "repeat": "1", "academic": "Gabriel Cucato", "date": "28/10", "start": "15:00", "finish": "17:00", "room": "SPF 110 ", "pep": "old_PEP SP7001 - Vascular imaging and flow-mediated dilation.docx", "setup": "", "support": "", "food": ""}, {"week": "6", "repeat": "1", "academic": "Gabriel Cucato", "date": "04/11", "start": "14:00", "finish": "16:00", "room": "SPF110", "pep": "PEP CV responses to exercise SP7001.docx", "setup": "", "support": "", "food": ""}]}, "SP7002": {"code": "SP7002", "name": "SP7002 Principles of Exercise Assessment and Prescription", "lead": "Suzi Wolfram", "techLead": "", "semester": "Semester 1", "sessions": [{"week": "1", "repeat": "1", "academic": "Gabriel Cucato", "date": "30/09", "start": "15:00", "finish": "17:00", "room": "SPF110", "pep": "PEP - SP7002 - Blood pressure, glucose & lipids.docx", "setup": "", "support": "", "food": ""}, {"week": "2", "repeat": "1", "academic": "Gabriel Cucato", "date": "06/10", "start": "10:00", "finish": "12:00", "room": "SPF 110", "pep": "PEP - SP7002 - CPET + Submax testing.docx", "setup": "", "support": "", "food": ""}, {"week": "3", "repeat": "1", "academic": "Gabriel Cucato", "date": "14/10", "start": "13:00", "finish": "15:00", "room": "SPF109", "pep": "https://livenorthumbriaac.sharepoint.com/:w:/s/DepartmentofSportExerciseandRehabilitation/Ef5lRyhzqIlPrzo2TwqnHUQBjySUucCkwqNb47Yo3cqR-A?e=MoXPdy", "setup": "", "support": "", "food": ""}, {"week": "4", "repeat": "1", "academic": "Emily Hume", "date": "21/10/2025", "start": "09:00", "finish": "11:00", "room": "SPF109", "pep": "PEP - SP7002 - Chester step test, 6 minute walk test, Multi-stage fitness.docx", "setup": "Drop-off only", "support": "", "food": ""}, {"week": "5", "repeat": "1", "academic": "Justin Andrushko", "date": "27/10/2025", "start": "10:00", "finish": "12:00", "room": "SPF110/SPF113", "pep": "PEP - SP7002 - Resistance training assessment.docx", "setup": "", "support": "", "food": ""}, {"week": "7", "repeat": "1", "academic": "Justin Andrushko", "date": "27/10/2025", "start": "10:00", "finish": "12:00", "room": "SPF110", "pep": "PEP - SP7002 - Resistance training prescription.docx", "setup": "", "support": "", "food": ""}, {"week": "9", "repeat": "1", "academic": "Gabriel Cucato", "date": "25/11", "start": "10:00", "finish": "13:00", "room": "SPF 109 & SPF 110", "pep": "PEP7002-Week9 2024-11-24 20_21_22.docx", "setup": "", "support": "", "food": ""}, {"week": "10", "repeat": "1", "academic": "Rodrigo Vitorio", "date": "01/12", "start": "10:00", "finish": "12:00", "room": "SPF 109", "pep": "PEP7002-Week 10", "setup": "Drop-off only", "support": "", "food": ""}, {"week": "11", "repeat": "1", "academic": "Gabriel Cucato", "date": "8/12", "start": "13:00", "finish": "14:00", "room": "SPF 109 and SPF110", "pep": "PEP - SP7002 - Assessment and assessment practice (weeks 11, 12, assessment).docx", "setup": "", "support": "", "food": ""}, {"week": "12", "repeat": "1", "academic": "Gabriel Cucato", "date": "15/12", "start": "10:00", "finish": "13:00", "room": "SPF 109 and SPF 110", "pep": "PEP - SP7002 - Assessment and assessment practice (weeks 11, 12, assessment).docx", "setup": "", "support": "", "food": ""}, {"week": "Assessment", "repeat": "1", "academic": "", "date": "19/01", "start": "10:00", "finish": "15:00", "room": "SPF 109 and SPF 110", "pep": "PEP - SP7002 - Assessment and assessment practice (assessment).docx", "setup": "", "support": "", "food": ""}, {"week": "", "repeat": "2", "academic": "", "date": "20/01", "start": "10:00", "finish": "15:00", "room": "SPF 109 and SPF 110", "pep": "PEP - SP7002 - Assessment and assessment practice (assessment).docx", "setup": "", "support": "", "food": ""}]}, "SP7007": {"code": "SP7007", "name": "SP7007 Applied Strength & Conditioning", "lead": "Thomas Jones", "techLead": "Liam Pearson", "semester": "Semester 1", "sessions": [{"week": "1", "repeat": "1", "academic": "Thomas Jones", "date": "30/09/25", "start": "14:00", "finish": "16:00", "room": "S&C Room", "pep": "SP7007 FMS PEP.docx", "setup": "Drop-off only", "support": "No", "food": ""}, {"week": "2", "repeat": "1", "academic": "Kirsty Kicks", "date": "07/10/2025", "start": "14:00", "finish": "16:00", "room": "SPF109", "pep": "SP7007 energy systems training PEP.docx", "setup": "Yes", "support": "No", "food": ""}, {"week": "3", "repeat": "1", "academic": "Thomas Jones", "date": "14/10/2025", "start": "14:00", "finish": "16:00", "room": "S&C Room", "pep": "SP7007 Execution of bilateral lifts PEP.docx", "setup": "No", "support": "Yes", "food": ""}, {"week": "4", "repeat": "1", "academic": "Thomas Jones", "date": "21/10/2025", "start": "14:00", "finish": "16:00", "room": "S&C Room", "pep": "SP7007 Execution of bilateral lifts PEP.docx", "setup": "No", "support": "Yes", "food": ""}, {"week": "5", "repeat": "1", "academic": "Thomas Jones", "date": "28/10/2025", "start": "14:00", "finish": "16:00", "room": "S&C Room", "pep": "SP7007 science and application of velocity based training PEP.docx", "setup": "No", "support": "Yes", "food": ""}, {"week": "7", "repeat": "1", "academic": "Kevin Thomas", "date": "11/11/2025", "start": "14:00", "finish": "16:00", "room": "S&C room & track", "pep": "HL_PEP_585 linear speed.docx", "setup": "Drop-off only", "support": "No", "food": ""}, {"week": "8", "repeat": "1", "academic": "Kevin Thomas", "date": "18/11/2025", "start": "14:00", "finish": "16:00", "room": "S&C room & track", "pep": "HL_PEP_1673 multi directional speed.docx", "setup": "Drop-off only", "support": "No", "food": ""}, {"week": "9", "repeat": "1", "academic": "Kevin Thomas", "date": "25/11/2025", "start": "14:00", "finish": "16:00", "room": "S&C room & track", "pep": "HL_PEP_1818 plyometrics.docx", "setup": "Drop-off only", "support": "No", "food": ""}, {"week": "10", "repeat": "1", "academic": "Thomas Jones", "date": "02/12/2025", "start": "14:00", "finish": "16:00", "room": "S&C room & track", "pep": "HL_PEP_585 linear speed.docx", "setup": "Drop-off only", "support": "No", "food": ""}]}, "SP7008": {"code": "SP7008", "name": "SP7008 Strategic Interventions in Performance Sport", "lead": "Edward Hall", "techLead": "Liam Pearson", "semester": "Semester 1", "sessions": [{"week": "2", "repeat": "1", "academic": "Edward Hall", "date": "06.10.2025", "start": "1000", "finish": "1200", "room": "SPF102", "pep": "https://livenorthumbriaac.sharepoint.com/:w:/s/DepartmentofSportExerciseandRehabilitation/ER0teMKwyb9GvKqwU1ERN1MBL_L_DMm6_VWV3qxdTMg5Nw", "setup": "Drop-off only", "support": "No", "food": "No"}, {"week": "5", "repeat": "1", "academic": "Edward Hall", "date": "27.10.2025", "start": "1000", "finish": "1200", "room": "SPF102", "pep": "https://livenorthumbriaac.sharepoint.com/:w:/s/DepartmentofSportExerciseandRehabilitation/ER0teMKwyb9GvKqwU1ERN1MBL_L_DMm6_VWV3qxdTMg5Nw", "setup": "Drop-off only", "support": "No", "food": "No"}]}, "SP7011": {"code": "SP7011", "name": "SP7011 Exercise Metabolism", "lead": "Penny Rumbold", "techLead": "", "semester": "Semester 1", "sessions": [{"week": "1", "repeat": "1", "academic": "Victoria McIver", "date": "30/09/2025", "start": "13:00:00", "finish": "14:00:00", "room": "SPF 110 SPF112", "pep": "PEP - SP7011 - introduction", "setup": "Yes", "support": "No", "food": "No"}, {"week": "6", "repeat": "1", "academic": "Victoria McIver", "date": "2025-04-11 00:00:00", "start": "11:00:00", "finish": "13:00:00", "room": "SPF 112 SPF 113", "pep": "PEP - SP5042 - Food preparation for athletes.docx", "setup": "No", "support": "No", "food": "Yes"}, {"week": "8", "repeat": "1", "academic": "Victoria McIver", "date": "18/11/2025", "start": "13:00:00", "finish": "15:00:00", "room": "SPF110 SPF112", "pep": "SP7011 - PEP - Standardisation in Nutrition Research 25-26.docx", "setup": "Drop-off only", "support": "No", "food": "Yes"}, {"week": "9", "repeat": "1", "academic": "Victoria McIver", "date": "25/11/2025", "start": "11:00:00", "finish": "13:00:00", "room": "SPF110 SPF112", "pep": "SP7011 - PEP - Standardisation in Nutrition Research 25-26.docx", "setup": "Drop-off only", "support": "No", "food": "Yes"}, {"week": "10", "repeat": "1", "academic": "Victoria McIver", "date": "2025-02-12 00:00:00", "start": "09:00:00", "finish": "12:00:00", "room": "SPF110 SPF112", "pep": "PEP - SP7011  - Week 10 - Integration of CHO and Fats", "setup": "Yes", "support": "Yes", "food": "Yes"}]}, "SP7012": {"code": "SP7012", "name": "SP7012 Practical Skills for Sport & Exercise Nutrionists", "lead": "Steve Marshall", "techLead": "", "semester": "Semester 1", "sessions": [{"week": "5", "repeat": "1", "academic": "Victoria McIver", "date": "28/10/2025", "start": "13:00", "finish": "16:00", "room": "SPF 113", "pep": "PEP - SP7012 - Week 3 - Measuring body composition including somatotyping.docx", "setup": "Yes", "support": "No", "food": "No"}, {"week": "6", "repeat": "1", "academic": "Victoria McIver", "date": "04/11/2025", "start": "14:00", "finish": "16:00", "room": "SPF 113", "pep": "PEP - SP7012 - Week 6 - Biochemical Analysis.docx", "setup": "Yes", "support": "Yes", "food": "No"}, {"week": "9", "repeat": "1", "academic": "Ian Walshe", "date": "25/11/2025", "start": "09:00", "finish": "11:00", "room": "SPF 110", "pep": "PEP - SP7012 - Week 9 - Assessment Practice.docx", "setup": "Yes", "support": "Yes", "food": "No"}, {"week": "10", "repeat": "1", "academic": "Ian Walshe", "date": "2/12/25", "start": "13:00", "finish": "14:00", "room": "SPF110", "pep": "PEP - SP7012 - Week 10 - Energy Expediture - Metabolic Cart.docx", "setup": "Yes", "support": "No", "food": ""}, {"week": "11", "repeat": "1", "academic": "Ian Walshe", "date": "09/12/25", "start": "13:00", "finish": "14:00", "room": "SPF110", "pep": "PEP - SP7012 - Week 11 - Energy Costs of Human Activities.docx", "setup": "Yes", "support": "No", "food": ""}, {"week": "12", "repeat": "1", "academic": "Steven Marshall", "date": "16/12/25", "start": "0900", "finish": "1400", "room": "SPF110", "pep": "PEP - SP7012 - Week 12 - Assessment", "setup": "Yes", "support": "No", "food": "No"}]}, "SP7018": {"code": "SP7018", "name": "SP7018 Performance Analysis and Data Analytics", "lead": "Reece Chapman", "techLead": "", "semester": "Semester 1", "sessions": []}};
+
+// ── In-memory state ───────────────────────────────────────────────────────────
+// modules: Map<moduleCode, { code, name, lead, techLead, sessions: [{id, ...fields}] }>
+// Sessions are kept in _order order. id = Firestore doc ID.
+const modules = new Map();
+
+// ── UI helpers ────────────────────────────────────────────────────────────────
+function setStatus(msg) { document.getElementById('loadStatus').textContent = msg; }
+let saveTimer = null;
+let savePending = 0;
+function flashSave(state, msg) {
+  const el = document.getElementById('saveIndicator');
+  el.className = 'save-indicator ' + state;
+  el.textContent = msg;
+  clearTimeout(saveTimer);
+  if (state === 'saved' || state === 'error')
+    saveTimer = setTimeout(() => { el.className='save-indicator'; el.textContent=''; }, 3000);
+}
+function debounce(fn, ms) {
+  let t; return (...args) => { clearTimeout(t); t = setTimeout(() => fn(...args), ms); };
+}
+function esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2,7); }
+
+// ── Firestore: save a single row ─────────────────────────────────────────────
+// fields: partial session object (only changed fields, plus always _order for sort stability)
+async function saveRow(docId, fields) {
+  flashSave('saving', 'Saving...');
+  try {
+    await setDoc(doc(db, COL, docId), fields, { merge: true });
+    flashSave('saved', 'Saved \u2713');
+  } catch(e) {
+    console.error('Save error:', e);
+    flashSave('error', 'Save failed');
+  }
+}
+
+// ── Firestore: delete a single row ───────────────────────────────────────────
+async function deleteRow(docId) {
+  try {
+    await deleteDoc(doc(db, COL, docId));
+  } catch(e) {
+    console.error('Delete error:', e);
+    flashSave('error', 'Delete failed');
+  }
+}
+
+// ── Firestore: delete all rows for a module ───────────────────────────────────
+async function deleteModuleRows(moduleCode) {
+  const mod = modules.get(moduleCode);
+  if (!mod || !mod.sessions.length) return;
+  const batch = writeBatch(db);
+  mod.sessions.forEach(s => batch.delete(doc(db, COL, s.id)));
+  await batch.commit();
+}
+
+// ── SEED: write all SEED_DATA to Firestore on first load ─────────────────────
+// Uses writeBatch in chunks of 500 (Firestore batch limit).
+// Marks sem_meta/seeded with seeded:true when done.
+async function runSeedIfNeeded() {
+  const metaRef = doc(db, META, 'seeded');
+  let seeded = false;
+  try {
+    const snap = await getDoc(metaRef);
+    seeded = snap.exists() && snap.data().seeded === true;
+  } catch(e) { /* if meta read fails, attempt seed anyway */ }
+
+  if (seeded) return false;  // already seeded
+
+  setStatus('First run - seeding data from XLSX...');
+  const allRows = [];
+  Object.values(SEED_DATA).forEach(mod => {
+    mod.sessions.forEach((sess, idx) => {
+      const docId = mod.code + '_' + idx;
+      allRows.push({
+        docId,
+        data: {
+          moduleCode: mod.code,
+          moduleName: mod.name,
+          moduleLead: mod.lead || '',
+          techLead:   mod.techLead || '',
+          week:       sess.week     || '',
+          repeats:    sess.repeat   || '1',
+          academic:   sess.academic || '',
+          date:       sess.date     || '',
+          start:      sess.start    || '',
+          finish:     sess.finish   || '',
+          room:       sess.room     || '',
+          pep:        sess.pep      || '',
+          setup:      sess.setup    || '',
+          support:    sess.support  || '',
+          food:       sess.food     || '',
+          _order:     idx,
+        }
+      });
+    });
+    // If a module has no sessions, create one blank placeholder row so it shows up
+    if (!mod.sessions.length) {
+      allRows.push({
+        docId: mod.code + '_0',
+        data: {
+          moduleCode: mod.code, moduleName: mod.name,
+          moduleLead: mod.lead||'', techLead: mod.techLead||'',
+          week:'', repeats:'1', academic:'', date:'', start:'', finish:'',
+          room:'', pep:'', setup:'', support:'', food:'', _order:0,
+        }
+      });
+    }
+  });
+
+  // Write in batches of 490 (safe under Firestore 500 limit)
+  const CHUNK = 490;
+  for (let i = 0; i < allRows.length; i += CHUNK) {
+    const batch = writeBatch(db);
+    allRows.slice(i, i + CHUNK).forEach(r => batch.set(doc(db, COL, r.docId), r.data));
+    await batch.commit();
+    setStatus('Seeding... ' + Math.min(i + CHUNK, allRows.length) + '/' + allRows.length);
+  }
+
+  // Mark as seeded
+  await setDoc(metaRef, { seeded: true, seededAt: new Date().toISOString() });
+  return true;
+}
+
+// ── LOAD: read all session docs from Firestore ─────────────────────────────────
+async function loadFromFirestore() {
+  const snap = await getDocs(collection(db, COL));
+  modules.clear();
+  snap.forEach(d => {
+    const s = d.data();
+    const code = s.moduleCode || 'UNKNOWN';
+    if (!modules.has(code)) {
+      modules.set(code, {
+        code, name: s.moduleName||code, lead: s.moduleLead||'', techLead: s.techLead||'',
+        sessions: []
+      });
+    }
+    modules.get(code).sessions.push({ id: d.id, ...s });
+  });
+  // Sort sessions within each module by _order
+  modules.forEach(mod => mod.sessions.sort((a,b) => (a._order||0) - (b._order||0)));
+  setStatus(modules.size + ' modules \u00b7 ' + snap.size + ' sessions');
+}
+
+// ── RENDER: sidebar ───────────────────────────────────────────────────────────
+function renderSidebar() {
+  const sidebar = document.getElementById('sidebar');
+  // Keep header
+  sidebar.querySelectorAll('.mod-link').forEach(el => el.remove());
+  document.getElementById('modCount').textContent = modules.size + ' total';
+
+  [...modules.keys()].sort().forEach(code => {
+    const mod = modules.get(code);
+    const a = document.createElement('a');
+    a.className = 'mod-link';
+    a.href = '#mod-' + code;
+    a.id = 'sbl-' + code;
+    a.innerHTML =
+      '<span>' + esc(code) + '<span class="mod-sub">' + esc(mod.name.replace(code,'').trim().replace(/^[-–—\s]+/,'')) + '</span></span>' +
+      '<span class="mod-n">' + mod.sessions.length + '</span>';
+    sidebar.appendChild(a);
+  });
+}
+
+// ── RENDER: one module block ──────────────────────────────────────────────────
+function renderModule(code) {
+  const mod = modules.get(code);
+  if (!mod) return;
+  const existing = document.getElementById('mod-' + code);
+  if (existing) existing.remove();
+
+  const block = document.createElement('div');
+  block.className = 'module-block';
+  block.id = 'mod-' + code;
+
+  // ── Module header bar ──────────────────────────────────────────────────────
+  // All header fields (code, name, lead, techLead) are contenteditable.
+  // On blur they save the updated value to ALL session docs for this module.
+  const saveModuleField = debounce(async (mod, field, newVal) => {
+    flashSave('saving', 'Saving...');
+    const batch = writeBatch(db);
+    mod.sessions.forEach(s => batch.set(doc(db, COL, s.id), { [field]: newVal }, { merge: true }));
+    try { await batch.commit(); flashSave('saved', 'Saved \u2713'); }
+    catch(e) { flashSave('error', 'Save failed'); }
+  }, 600);
+
+  function makeHeaderCell(cls, val, field, placeholder) {
+    const span = document.createElement('span');
+    span.className = cls + ((!val||val==='None'||val==='') ? ' empty':'');
+    span.contentEditable = 'true';
+    span.spellcheck = false;
+    span.textContent = (val && val !== 'None') ? val : '';
+    span.setAttribute('data-placeholder', placeholder);
+    span.addEventListener('blur', () => {
+      const newVal = span.textContent.trim();
+      mod[field === 'moduleLead' ? 'lead' : field === 'techLead' ? 'techLead' : field === 'moduleName' ? 'name' : 'code'] = newVal;
+      saveModuleField(mod, field, newVal);
+      if (field === 'moduleCode' || field === 'moduleName') {
+        // Update sidebar label
+        const sbl = document.getElementById('sbl-' + code);
+        if (sbl) sbl.innerHTML = '<span>' + esc(mod.code) + '<span class="mod-sub">' + esc(mod.name.replace(mod.code,'').trim().replace(/^[-\s]+/,'')) + '</span></span><span class="mod-n">' + mod.sessions.length + '</span>';
+      }
+    });
+    span.addEventListener('keydown', e => { if (e.key==='Enter') { e.preventDefault(); span.blur(); } });
+    return span;
+  }
+
+  const hdr = document.createElement('div');
+  hdr.className = 'module-header';
+
+  const titleArea = document.createElement('div');
+  titleArea.className = 'module-title-area';
+  titleArea.appendChild(makeHeaderCell('module-code-cell', mod.code, 'moduleCode', 'Code'));
+  titleArea.appendChild(makeHeaderCell('module-name-cell', mod.name.replace(mod.code,'').trim(), 'moduleName', 'Module name'));
+  titleArea.appendChild(makeHeaderCell('module-lead-cell', mod.lead, 'moduleLead', 'Module lead'));
+  titleArea.appendChild(makeHeaderCell('module-tech-cell' + (!mod.techLead?' empty':''), mod.techLead, 'techLead', 'Tech lead'));
+  hdr.appendChild(titleArea);
+
+  const countSpan = document.createElement('span');
+  countSpan.className = 'module-session-count';
+  countSpan.id = 'count-' + code;
+  countSpan.textContent = mod.sessions.length + ' session' + (mod.sessions.length!==1?'s':'');
+  hdr.appendChild(countSpan);
+
+  const delModBtn = document.createElement('button');
+  delModBtn.className = 'btn-del-module';
+  delModBtn.title = 'Delete entire module';
+  delModBtn.textContent = '\u00d7';
+  delModBtn.addEventListener('click', async () => {
+    if (!confirm('Delete module ' + mod.code + ' and ALL its sessions?\n\nThis cannot be undone.')) return;
+    await deleteModuleRows(code);
+    modules.delete(code);
+    block.remove();
+    renderSidebar();
+    updateModCount();
+  });
+  hdr.appendChild(delModBtn);
+  block.appendChild(hdr);
+
+  // ── Table ──────────────────────────────────────────────────────────────────
+  const tableWrap = document.createElement('div');
+  tableWrap.className = 'table-wrap';
+
+  const table = document.createElement('table');
+  table.innerHTML =
+    '<thead><tr>' +
+      '<th>Wk</th>' +
+      '<th class="staff-col">Repeats</th>' +
+      '<th class="staff-col">Academic</th>' +
+      '<th>Date</th><th>Start</th><th>Finish</th><th style="min-width:120px">Lab / Room</th>' +
+      '<th class="staff-col" style="min-width:140px">PEP</th>' +
+      '<th class="staff-col">Set-up?</th>' +
+      '<th class="staff-col">Tech support?</th>' +
+      '<th class="staff-col">Food?</th>' +
+      '<th></th>' +   // delete button column
+    '</tr></thead>';
+  const tbody = document.createElement('tbody');
+  tbody.id = 'tbody-' + code;
+  table.appendChild(tbody);
+  tableWrap.appendChild(table);
+  block.appendChild(tableWrap);
+
+  // Add row bar
+  const addBar = document.createElement('div');
+  addBar.className = 'add-row-bar';
+  const addBtn = document.createElement('button');
+  addBtn.className = 'btn-add-row';
+  addBtn.textContent = '+ Add row';
+  addBtn.addEventListener('click', () => addRow(code));
+  addBar.appendChild(addBtn);
+  block.appendChild(addBar);
+
+  // Render existing sessions into tbody
+  mod.sessions.forEach(sess => renderRow(code, sess));
+
+  return block;
+}
+
+// ── RENDER: one session row ───────────────────────────────────────────────────
+function renderRow(code, sess) {
+  const tbody = document.getElementById('tbody-' + code);
+  if (!tbody) return;
+
+  const tr = document.createElement('tr');
+  tr.id = 'row-' + sess.id;
+  if (sess.week) tr.classList.add('week-start');
+
+  const debouncedSave = debounce((id, fields) => saveRow(id, fields), 600);
+
+  // Generic cell: creates a td with a contenteditable div inside
+  // field: Firestore field name, val: current value
+  // tdClass/tdStyle: optional additional classes/styles on td
+  function makeCell(field, val, tdClass, tdStyle) {
+    const td = document.createElement('td');
+    if (tdClass) td.className = tdClass;
+    if (tdStyle) td.style.cssText = tdStyle;
+    const div = document.createElement('div');
+    div.className = 'cell';
+    div.contentEditable = 'true';
+    div.spellcheck = false;
+    div.textContent = val || '';
+    div.addEventListener('blur', () => {
+      const newVal = div.textContent.trim();
+      // Update in-memory state
+      sess[field] = newVal;
+      debouncedSave(sess.id, { [field]: newVal });
+      // Special case: week cell styling
+      if (field === 'week') {
+        td.className = newVal ? 'week-td' : 'week-td empty-week';
+      }
+    });
+    div.addEventListener('keydown', e => {
+      if (e.key === 'Enter') { e.preventDefault(); div.blur(); }
+    });
+    td.appendChild(div);
+    return td;
+  }
+
+  // Week cell
+  tr.appendChild(makeCell('week', sess.week, sess.week ? 'week-td' : 'week-td empty-week'));
+  // Staff columns (yellow headers)
+  tr.appendChild(makeCell('repeats',  sess.repeats,  null, 'max-width:60px'));
+  tr.appendChild(makeCell('academic', sess.academic, null, 'max-width:140px'));
+  // Timetable columns (can still be edited - just styled normally)
+  tr.appendChild(makeCell('date',   sess.date,   null, 'max-width:100px'));
+  tr.appendChild(makeCell('start',  sess.start,  null, 'max-width:70px'));
+  tr.appendChild(makeCell('finish', sess.finish, null, 'max-width:70px'));
+  tr.appendChild(makeCell('room',   sess.room,   null, 'max-width:160px'));
+  tr.appendChild(makeCell('pep',    sess.pep,    null, 'max-width:180px'));
+  tr.appendChild(makeCell('setup',   sess.setup,   null, 'max-width:100px'));
+  tr.appendChild(makeCell('support', sess.support, null, 'max-width:100px'));
+  tr.appendChild(makeCell('food',    sess.food,    null, 'max-width:80px'));
+
+  // Delete row button
+  const delTd = document.createElement('td');
+  const delBtn = document.createElement('button');
+  delBtn.className = 'btn-del-row';
+  delBtn.title = 'Delete this row';
+  delBtn.textContent = '\u00d7';
+  delBtn.addEventListener('click', async () => {
+    if (!confirm('Delete this session row?')) return;
+    await deleteRow(sess.id);
+    const mod = modules.get(code);
+    if (mod) mod.sessions = mod.sessions.filter(s => s.id !== sess.id);
+    tr.remove();
+    updateSessionCount(code);
+    renderSidebar();
+  });
+  delTd.appendChild(delBtn);
+  tr.appendChild(delTd);
+
+  tbody.appendChild(tr);
+}
+
+// ── ADD ROW ───────────────────────────────────────────────────────────────────
+async function addRow(code) {
+  const mod = modules.get(code);
+  if (!mod) return;
+  const newId = code + '_' + uid();
+  const maxOrder = mod.sessions.reduce((m, s) => Math.max(m, s._order||0), -1);
+  const newSess = {
+    id: newId, moduleCode: code, moduleName: mod.name,
+    moduleLead: mod.lead, techLead: mod.techLead,
+    week:'', repeats:'1', academic:'', date:'', start:'', finish:'',
+    room:'', pep:'', setup:'', support:'', food:'', _order: maxOrder + 1,
+  };
+  flashSave('saving', 'Saving...');
+  try {
+    await setDoc(doc(db, COL, newId), newSess);
+    mod.sessions.push(newSess);
+    renderRow(code, newSess);
+    updateSessionCount(code);
+    renderSidebar();
+    // Focus the week cell of the new row
+    const newTr = document.getElementById('row-' + newId);
+    if (newTr) newTr.querySelector('.cell')?.focus();
+    flashSave('saved', 'Saved \u2713');
+  } catch(e) {
+    console.error(e);
+    flashSave('error', 'Add row failed');
+  }
+}
+
+// ── ADD MODULE (modal) ────────────────────────────────────────────────────────
+window.openAddModal  = () => document.getElementById('addModal').classList.add('vis');
+window.closeAddModal = () => document.getElementById('addModal').classList.remove('vis');
+
+window.saveNewModule = async () => {
+  const code = document.getElementById('newCode').value.trim().toUpperCase();
+  const name = document.getElementById('newName').value.trim();
+  const lead = document.getElementById('newLead').value.trim();
+  const tech = document.getElementById('newTech').value.trim();
+  if (!code) { alert('Module code is required.'); return; }
+  if (modules.has(code)) { alert('Module ' + code + ' already exists.'); return; }
+
+  const newId = code + '_' + uid();
+  const newSess = {
+    id: newId, moduleCode: code, moduleName: name||code,
+    moduleLead: lead, techLead: tech,
+    week:'', repeats:'1', academic:'', date:'', start:'', finish:'',
+    room:'', pep:'', setup:'', support:'', food:'', _order: 0,
+  };
+
+  flashSave('saving', 'Saving...');
+  try {
+    await setDoc(doc(db, COL, newId), newSess);
+    modules.set(code, { code, name: name||code, lead, techLead: tech, sessions: [newSess] });
+    renderSidebar();
+    const block = renderModule(code);
+    document.getElementById('mainContent').appendChild(block);
+    setupObserver();
+    updateModCount();
+    closeAddModal();
+    ['newCode','newName','newLead','newTech'].forEach(id => document.getElementById(id).value='');
+    flashSave('saved', 'Saved \u2713');
+    // Scroll to new module
+    setTimeout(() => block.scrollIntoView({ behavior:'smooth', block:'start' }), 100);
+  } catch(e) {
+    console.error(e);
+    flashSave('error', 'Failed to add module');
+  }
+};
+
+// ── RENDER ALL ────────────────────────────────────────────────────────────────
+function renderAll() {
+  const main = document.getElementById('mainContent');
+  main.innerHTML = '';
+  renderSidebar();
+  [...modules.keys()].sort().forEach(code => {
+    const block = renderModule(code);
+    main.appendChild(block);
+  });
+  setupObserver();
+  updateModCount();
+}
+
+function updateSessionCount(code) {
+  const mod = modules.get(code);
+  const el = document.getElementById('count-' + code);
+  if (el && mod) el.textContent = mod.sessions.length + ' session' + (mod.sessions.length!==1?'s':'');
+}
+
+function updateModCount() {
+  document.getElementById('modCount').textContent = modules.size + ' total';
+  setStatus(modules.size + ' modules');
+}
+
+// ── IntersectionObserver for sidebar active state ─────────────────────────────
+function setupObserver() {
+  if (window._semObserver) window._semObserver.disconnect();
+  window._semObserver = new IntersectionObserver(entries => {
+    entries.forEach(e => {
+      if (e.isIntersecting) {
+        const code = e.target.id.replace('mod-','');
+        document.querySelectorAll('.mod-link').forEach(l => l.classList.remove('active'));
+        const a = document.getElementById('sbl-' + code);
+        if (a) a.classList.add('active');
+      }
+    });
+  }, { rootMargin: '-20% 0px -70% 0px' });
+  document.querySelectorAll('.module-block').forEach(b => window._semObserver.observe(b));
+}
+
+// Close modal on overlay click
+document.getElementById('addModal').addEventListener('click', e => {
+  if (e.target === e.currentTarget) closeAddModal();
+});
+
+// ── BOOT ──────────────────────────────────────────────────────────────────────
+(async () => {
+  try {
+    setStatus('Connecting...');
+    const justSeeded = await runSeedIfNeeded();
+    if (!justSeeded) {
+      setStatus('Loading...');
+    }
+    await loadFromFirestore();
+    renderAll();
+  } catch(e) {
+    console.error('Boot error:', e);
+    setStatus('Error: ' + e.message);
+    flashSave('error', 'Load failed - check console');
+  }
+})();
+</script>
+</body>
+</html>
