@@ -913,7 +913,16 @@ function renderModule(code) {
   titleArea.className = 'module-title-area';
   titleArea.appendChild(makeHeaderCell('module-code-cell', mod.code, 'moduleCode', 'Code'));
   titleArea.appendChild(makeHeaderCell('module-name-cell', mod.name.replace(mod.code,'').trim(), 'moduleName', 'Module name'));
+  const leadLabel = document.createElement('span');
+  leadLabel.style.cssText = 'font-size:9px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:rgba(255,255,255,0.35);flex-shrink:0;';
+  leadLabel.textContent = 'Module lead:';
+  titleArea.appendChild(leadLabel);
   titleArea.appendChild(makeHeaderCell('module-lead-cell', mod.lead, 'moduleLead', 'Module lead'));
+  // Label so staff know what the blue pill means
+  const techLabel = document.createElement('span');
+  techLabel.style.cssText = 'font-size:9px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:rgba(255,255,255,0.35);flex-shrink:0;';
+  techLabel.textContent = 'Tech lead:';
+  titleArea.appendChild(techLabel);
   titleArea.appendChild(makeHeaderCell('module-tech-cell' + (!mod.techLead?' empty':''), mod.techLead, 'techLead', 'Tech lead'));
   hdr.appendChild(titleArea);
 
@@ -967,15 +976,19 @@ function renderModule(code) {
   addBar.appendChild(addBtn);
   block.appendChild(addBar);
 
-  // Render existing sessions into tbody
-  mod.sessions.forEach(sess => renderRow(code, sess));
+  // Render existing sessions into tbody.
+  // Pass the tbody element directly - the block isn't in the DOM yet
+  // so getElementById('tbody-' + code) would return null.
+  mod.sessions.forEach(sess => renderRow(code, sess, tbody));
 
   return block;
 }
 
 // ── RENDER: one session row ───────────────────────────────────────────────────
-function renderRow(code, sess) {
-  const tbody = document.getElementById('tbody-' + code);
+function renderRow(code, sess, tbodyEl) {
+  // tbodyEl passed directly from renderModule (block not yet in DOM);
+  // falls back to getElementById when called from addRow (already in DOM)
+  const tbody = tbodyEl || document.getElementById('tbody-' + code);
   if (!tbody) return;
 
   const tr = document.createElement('tr');
