@@ -596,13 +596,7 @@
     }
     .links-list a:hover { color: var(--mid); }
 
-    .links-list a span {
-      font-size: 14px;
-      color: var(--border);
-      flex-shrink: 0;
-      transition: color 0.12s;
-    }
-    .links-list a:hover span { color: var(--light); }
+
 
     /* Edit button on each dynamic link */
     .li-edit {
@@ -731,7 +725,7 @@
       <img src="https://www.northumbria.ac.uk/-/media/take-on-tomorrow/northumbria-university-newcastle.png?modified=20201119190031" alt="Northumbria University" style="height:32px;width:auto;display:block;">
     </a>
     <div class="header-sep"></div>
-    <span class="header-dept">Sport, Exercise &amp; Rehabilitation</span>
+    <span class="header-dept">School of Sport, Exercise &amp; Rehabilitation</span>
     <div class="header-right">
       <a class="header-link" href="https://mynorthumbria.northumbria.ac.uk/" target="_blank" rel="noopener">MyNorthumbria</a>
       <a class="header-link" href="https://www.northumbria.ac.uk/" target="_blank" rel="noopener">University website</a>
@@ -757,7 +751,7 @@
 
     <!-- Workflow map banner -->
     <p class="section-heading">Workflows &amp; Processes</p>
-    <div class="primary-action" style="background:#fff5f5;border-color:#e8c0c0;">
+    <div class="primary-action" style="background:#fff5f5;">
       <div class="primary-action-text">
         <h2><span style="font-weight:900;color:#cc0000;-webkit-text-stroke:0.5px #111;">HELP REQUIRED</span> - Workflow Map</h2>
         <p>Interactive map of departmental workflows for Teaching and Research. Add and edit process steps, connect stages, and attach notes and links for each step.</p>
@@ -767,14 +761,14 @@
 
     <!-- Teaching Alignment banners - side by side, compact, below the workflow map banner -->
     <div style="display:flex;gap:12px;margin-top:12px;flex-wrap:wrap;">
-      <div class="primary-action" style="flex:1;min-width:220px;margin-bottom:0;background:#f0faf4;border-color:#a8d5b8;">
+      <div class="primary-action" style="flex:1;min-width:220px;margin-bottom:0;background:#f0faf4;">
         <div class="primary-action-text">
           <h2>Teaching Alignment &mdash; Semester 1</h2>
           <p>Timetable, PEP links, set-up and support for all Semester 1 modules.</p>
         </div>
         <a href="Semester1.html" class="btn-primary">Open Sem 1</a>
       </div>
-      <div class="primary-action" style="flex:1;min-width:220px;margin-bottom:0;background:#f0faf4;border-color:#a8d5b8;">
+      <div class="primary-action" style="flex:1;min-width:220px;margin-bottom:0;background:#f0faf4;">
         <div class="primary-action-text">
           <h2>Teaching Alignment &mdash; Semester 2</h2>
           <p>Timetable, PEP links, set-up and support for all Semester 2 modules.</p>
@@ -1587,7 +1581,7 @@ function renderLinks() {
     const isExternal = link.url.startsWith('http');
     li.innerHTML = `
       <a href="${esc(link.url)}"${isExternal ? ' target="_blank" rel="noopener"' : ''}>
-        ${esc(link.name)} <span>${isExternal ? '&#8599;' : '&#8594;'}</span>
+        ${esc(link.name)}
       </a>
       ${!link.hardcoded
         ? `<button class="li-edit" onclick="window.editLink('${link.id}')">edit</button>`

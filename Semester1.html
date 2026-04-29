@@ -102,6 +102,7 @@
     .header-inner {
       max-width:1600px; margin:0 auto; padding:0 32px; height:60px;
       display:flex; align-items:center; gap:24px;
+      position:relative;  /* needed so .sem-toggle absolute centring works */
     }
     .logo img { height:32px; width:auto; display:block; }
     .logo { display:flex; align-items:center; text-decoration:none; flex-shrink:0; }
@@ -110,14 +111,18 @@
     .header-right { margin-left:auto; display:flex; align-items:center; gap:16px; }
     .header-link { font-size:13px; color:#fff; text-decoration:none; font-weight:500; }
     .header-link:hover { color:#ccc; }
-    .sem-toggle { display:flex; gap:4px; }
+    /* sem-toggle is centred absolutely so it doesn't shift when the portal link is present */
+    .sem-toggle {
+      position:absolute; left:50%; transform:translateX(-50%);
+      display:flex; gap:8px;
+    }
     .sem-btn {
-      padding:5px 14px; font-size:12px; font-weight:700; letter-spacing:0.04em;
-      border:1px solid rgba(255,255,255,0.3); border-radius:3px;
-      text-decoration:none; color:rgba(255,255,255,0.6); transition:all 0.15s;
+      padding:10px 28px; font-size:15px; font-weight:800; letter-spacing:0.02em;
+      border:2px solid rgba(255,255,255,0.4); border-radius:4px;
+      text-decoration:none; color:rgba(255,255,255,0.65); transition:all 0.15s;
     }
     .sem-btn.active { background:#fff; color:#000; border-color:#fff; }
-    .sem-btn:not(.active):hover { background:rgba(255,255,255,0.12); color:#fff; }
+    .sem-btn:not(.active):hover { background:rgba(255,255,255,0.15); color:#fff; border-color:rgba(255,255,255,0.7); }
 
     /* ============================================================
        PAGE BAND
@@ -436,7 +441,7 @@
       <img src="https://www.northumbria.ac.uk/-/media/take-on-tomorrow/northumbria-university-newcastle.png?modified=20201119190031" alt="Northumbria University">
     </a>
     <div class="header-sep"></div>
-    <span class="header-dept">Sport, Exercise &amp; Rehabilitation &mdash; Technical Team</span>
+    <a href="index.html" class="header-dept" style="text-decoration:none;color:inherit;">School of Sport, Exercise &amp; Rehabilitation &mdash; Technical Team</a>
     <div class="header-right">
       <div class="sem-toggle">
         <a href="Semester1.html" class="sem-btn active">Semester 1</a>
