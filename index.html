@@ -535,18 +535,46 @@
 
     /* ============================================================
        A-Z LINKS SIDEBAR
+       Sidebar is sticky so it stays visible while scrolling.
+       lp-header: flex row with heading left, + Add button right.
+       lp-form: hidden by default, shown when adding/editing.
+       li.hardcoded: no edit button (hardcoded links can't be deleted).
        ============================================================ */
     .sidebar {
       position: sticky;
       top: 72px;
     }
 
-    .links-list { list-style: none; }
+    /* Header row: section label + Add button */
+    .lp-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-top: 1px solid var(--border);
+      padding-top: 10px;
+      margin-bottom: 16px;
+    }
 
-    .links-list li { border-top: 1px solid var(--border); }
+    .lp-add {
+      font-size: 11px;
+      padding: 3px 9px;
+      border: 1px solid var(--border);
+      border-radius: 3px;
+      background: transparent;
+      color: var(--mid);
+      cursor: pointer;
+      font-family: inherit;
+      flex-shrink: 0;
+    }
+    .lp-add:hover { border-color: var(--black); color: var(--black); background: transparent; }
+
+    .links-list { list-style: none; margin-bottom: 8px; }
+
+    .links-list li { border-top: 1px solid var(--border); display: flex; align-items: center; }
     .links-list li:last-child { border-bottom: 1px solid var(--border); }
 
     .links-list a {
+      flex: 1;
       display: flex;
       align-items: baseline;
       justify-content: space-between;
@@ -557,6 +585,7 @@
       color: var(--black);
       text-decoration: none;
       line-height: 1.35;
+      min-width: 0;
     }
     .links-list a:hover { color: var(--mid); }
 
@@ -567,6 +596,65 @@
       transition: color 0.12s;
     }
     .links-list a:hover span { color: var(--light); }
+
+    /* Edit button on each dynamic link */
+    .li-edit {
+      font-size: 10px;
+      padding: 1px 6px;
+      border: 1px solid var(--border);
+      border-radius: 3px;
+      background: transparent;
+      color: var(--light);
+      cursor: pointer;
+      flex-shrink: 0;
+      margin-left: 4px;
+      font-family: inherit;
+    }
+    .li-edit:hover { border-color: var(--black); color: var(--black); background: transparent; }
+
+    .lp-empty { font-size: 12px; color: var(--light); }
+
+    /* Inline add/edit form */
+    .lp-form {
+      display: none;
+      flex-direction: column;
+      gap: 6px;
+      margin-top: 8px;
+      padding: 10px;
+      border: 1px solid var(--border);
+      background: var(--bg);
+    }
+    .lp-form.vis { display: flex; }
+
+    .lp-form input {
+      width: 100%;
+      padding: 5px 8px;
+      border: 1px solid var(--border);
+      border-radius: 3px;
+      font-size: 12px;
+      font-family: inherit;
+      background: var(--white);
+      color: var(--black);
+    }
+    .lp-form input:focus { border-color: var(--black); outline: none; }
+
+    .lp-btns { display: flex; gap: 6px; }
+
+    .lp-btns button {
+      flex: 1;
+      padding: 5px;
+      font-size: 12px;
+      border-radius: 3px;
+      cursor: pointer;
+      border: 1px solid var(--border);
+      background: var(--white);
+      color: var(--mid);
+      font-family: inherit;
+    }
+    .lp-btns .lp-save { background: var(--black); color: var(--white); border-color: var(--black); }
+    .lp-btns .lp-save:hover { background: var(--dark); }
+    .lp-btns .lp-ddel { border-color: #e74c3c; color: #c0392b; background: transparent; }
+    .lp-btns .lp-ddel:hover { background: #fff0f0; }
 
     /* ============================================================
        FOOTER
@@ -739,22 +827,31 @@
 
   <!-- ============================================================
        RIGHT COLUMN - A-Z USEFUL LINKS SIDEBAR
+       Links are stored in Firebase Firestore (same project as the
+       workflow map). On load, hardcoded links are merged with any
+       links saved in Firestore, then sorted alphabetically.
+       The + Add button opens an inline form to add a new link.
+       Edit buttons allow renaming/deleting existing Firestore links.
+       Hardcoded links cannot be deleted from the UI (they are
+       always re-merged on load) - to remove one, edit the
+       HARDCODED_LINKS array in the links JS section below.
        ============================================================ -->
   <aside class="sidebar">
-    <p class="section-heading">Useful Links A&ndash;Z</p>
-    <ul class="links-list">
-      <li><a href="https://library.northumbria.ac.uk/" target="_blank" rel="noopener">Library <span>&#8599;</span></a></li>
-      <li><a href="https://mynorthumbria.northumbria.ac.uk/" target="_blank" rel="noopener">MyNorthumbria <span>&#8599;</span></a></li>
-      <li><a href="https://mytimetable.northumbria.ac.uk/" target="_blank" rel="noopener">MyTimetable <span>&#8599;</span></a></li>
-      <li><a href="https://www.northumbria.ac.uk/" target="_blank" rel="noopener">Northumbria University <span>&#8599;</span></a></li>
-      <li><a href="https://northumbria.sharepoint.com/" target="_blank" rel="noopener">OneDrive / SharePoint <span>&#8599;</span></a></li>
-      <li><a href="https://panopto.northumbria.ac.uk/" target="_blank" rel="noopener">Panopto <span>&#8599;</span></a></li>
-      <li><a href="https://siso.northumbria.ac.uk/" target="_blank" rel="noopener">SiSo / Online Booking <span>&#8599;</span></a></li>
-      <li><a href="https://www.northumbria.ac.uk/about-us/our-staff/" target="_blank" rel="noopener">Staff Directory <span>&#8599;</span></a></li>
-      <li><a href="https://northumbria.sharepoint.com/" target="_blank" rel="noopener">Teams / SharePoint <span>&#8599;</span></a></li>
-      <li><a href="workflow.html">Workflow Map <span>&#8594;</span></a></li>
-      <li><a href="https://worktribe.com/" target="_blank" rel="noopener">WorkTribe <span>&#8599;</span></a></li>
-    </ul>
+    <div class="lp-header">
+      <p class="section-heading" style="margin-bottom:0;border-top:none;padding-top:0;">Useful Links A&ndash;Z</p>
+      <button class="lp-add" onclick="showLinkForm(null)">+ Add</button>
+    </div>
+    <div id="linksList"><span class="lp-empty">Loading...</span></div>
+    <!-- Inline add/edit form - hidden by default -->
+    <div class="lp-form" id="lpForm">
+      <input id="lpName" placeholder="Name (e.g. Timetabling)">
+      <input id="lpUrl"  placeholder="https://...">
+      <div class="lp-btns">
+        <button id="lpDel" class="lp-ddel" style="display:none" onclick="deleteLink()">Delete</button>
+        <button onclick="hideLinkForm()">Cancel</button>
+        <button class="lp-save" onclick="saveLink()">Save</button>
+      </div>
+    </div>
   </aside>
 
 </div><!-- /main -->
@@ -1314,6 +1411,200 @@
   renderWidget(currentWeekStart);
 
 })();
+</script>
+
+<!-- ============================================================
+     LINKS SIDEBAR JAVASCRIPT
+     ============================================================
+
+     FOR AI/LLM READERS:
+     Uses the same Firebase Firestore project as workflow.html
+     (nu-school-of-sport). Links are stored in the 'links'
+     collection with fields: { name: string, url: string }.
+
+     HARDCODED_LINKS: always present, rendered first in alpha
+     order alongside Firestore links. They cannot be deleted
+     from the UI. To remove one, delete it from this array.
+
+     FLOW:
+     1. Load Firestore links collection on page load
+     2. Merge with HARDCODED_LINKS, sort alphabetically by name
+     3. Render list. Hardcoded items have no edit button.
+     4. + Add: shows lp-form. Save writes to Firestore.
+     5. Edit: pre-fills lp-form with existing data. Save updates
+        the Firestore doc. Delete removes it.
+     6. After any save/delete, re-fetches and re-renders.
+     ============================================================ -->
+<script type="module">
+import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.0/firebase-app.js';
+import { getFirestore, collection, getDocs, addDoc, updateDoc, deleteDoc, doc }
+  from 'https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore.js';
+
+// Same Firebase project as workflow.html
+const firebaseConfig = {
+  apiKey:            'AIzaSyDSK-2hI6ML1eykIed6E8S5Ve29phrEolI',
+  authDomain:        'nu-school-of-sport.firebaseapp.com',
+  projectId:         'nu-school-of-sport',
+  storageBucket:     'nu-school-of-sport.firebasestorage.app',
+  messagingSenderId: '396866213410',
+  appId:             '1:396866213410:web:bc7f31d1eb1833306d1c7b'
+};
+
+const app = initializeApp(firebaseConfig, 'links-app');
+const db  = getFirestore(app);
+
+// ----------------------------------------------------------
+// HARDCODED LINKS
+// Always shown. Cannot be deleted from the UI.
+// To remove a link, delete its entry from this array.
+// To add a permanent link, add an entry here (and optionally
+// remove it from Firestore if it was added via the UI).
+// ----------------------------------------------------------
+const HARDCODED_LINKS = [
+  { name: 'Library',              url: 'https://library.northumbria.ac.uk/' },
+  { name: 'MyNorthumbria',        url: 'https://mynorthumbria.northumbria.ac.uk/' },
+  { name: 'MyTimetable',          url: 'https://mytimetable.northumbria.ac.uk/' },
+  { name: 'Northumbria University', url: 'https://www.northumbria.ac.uk/' },
+  { name: 'OneDrive / SharePoint', url: 'https://northumbria.sharepoint.com/' },
+  { name: 'Panopto',              url: 'https://panopto.northumbria.ac.uk/' },
+  { name: 'SiSo / Online Booking', url: 'https://siso.northumbria.ac.uk/' },
+  { name: 'Staff Directory',      url: 'https://www.northumbria.ac.uk/about-us/our-staff/' },
+  { name: 'Teams / SharePoint',   url: 'https://northumbria.sharepoint.com/' },
+  { name: 'Workflow Map',         url: 'workflow.html' },
+  { name: 'WorkTribe',            url: 'https://worktribe.com/' },
+];
+
+// ----------------------------------------------------------
+// STATE
+// editLinkId: Firestore doc ID being edited, or null for new
+// ----------------------------------------------------------
+let editLinkId = null;
+let firestoreLinks = {}; // { id: { name, url } }
+
+// ----------------------------------------------------------
+// LOAD AND RENDER
+// Fetches Firestore links, merges with hardcoded, sorts A-Z,
+// renders the list. Called on load and after every save/delete.
+// ----------------------------------------------------------
+async function loadLinks() {
+  try {
+    const snap = await getDocs(collection(db, 'links'));
+    firestoreLinks = {};
+    snap.forEach(d => { firestoreLinks[d.id] = d.data(); });
+  } catch(e) {
+    console.warn('Could not load Firestore links:', e);
+  }
+  renderLinks();
+}
+
+function renderLinks() {
+  const list = document.getElementById('linksList');
+  if (!list) return;
+
+  // Merge hardcoded + Firestore, tag each with source
+  const all = [
+    ...HARDCODED_LINKS.map(l => ({ ...l, hardcoded: true })),
+    ...Object.entries(firestoreLinks).map(([id, l]) => ({ ...l, id, hardcoded: false }))
+  ];
+
+  // Sort alphabetically by name (case-insensitive)
+  all.sort((a, b) => a.name.toLowerCase().localeCompare(b.name.toLowerCase()));
+
+  if (!all.length) {
+    list.innerHTML = '<span class="lp-empty">No links yet</span>';
+    return;
+  }
+
+  // Render each link as a list item
+  // Hardcoded links get no edit button
+  // Firestore links get an edit button that opens the form
+  list.innerHTML = '';
+  all.forEach(link => {
+    const li = document.createElement('li');
+    const isExternal = link.url.startsWith('http');
+    li.innerHTML = `
+      <a href="${esc(link.url)}"${isExternal ? ' target="_blank" rel="noopener"' : ''}>
+        ${esc(link.name)} <span>${isExternal ? '&#8599;' : '&#8594;'}</span>
+      </a>
+      ${!link.hardcoded
+        ? `<button class="li-edit" onclick="window.editLink('${link.id}')">edit</button>`
+        : ''}`;
+    list.appendChild(li);
+  });
+}
+
+function esc(s) {
+  return String(s || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+// ----------------------------------------------------------
+// FORM SHOW/HIDE
+// showLinkForm(null) = new link
+// showLinkForm(id)   = edit existing Firestore link
+// ----------------------------------------------------------
+window.showLinkForm = function(id) {
+  editLinkId = id;
+  const link = id ? firestoreLinks[id] : null;
+  document.getElementById('lpName').value = link ? (link.name || '') : '';
+  document.getElementById('lpUrl').value  = link ? (link.url  || '') : '';
+  document.getElementById('lpDel').style.display = id ? '' : 'none';
+  document.getElementById('lpForm').classList.add('vis');
+  document.getElementById('lpName').focus();
+};
+
+window.hideLinkForm = function() {
+  editLinkId = null;
+  document.getElementById('lpForm').classList.remove('vis');
+};
+
+// ----------------------------------------------------------
+// SAVE - create new or update existing Firestore doc
+// ----------------------------------------------------------
+window.saveLink = async function() {
+  const name = document.getElementById('lpName').value.trim();
+  const url  = document.getElementById('lpUrl').value.trim();
+  if (!name || !url) { alert('Both name and URL are required.'); return; }
+  try {
+    if (editLinkId) {
+      await updateDoc(doc(db, 'links', editLinkId), { name, url });
+    } else {
+      await addDoc(collection(db, 'links'), { name, url });
+    }
+    window.hideLinkForm();
+    await loadLinks();
+  } catch(e) { alert('Error saving: ' + e.message); }
+};
+
+// ----------------------------------------------------------
+// DELETE - remove Firestore doc (hardcoded links are never
+// passed to this function so there's no risk of deleting them)
+// ----------------------------------------------------------
+window.deleteLink = async function() {
+  if (!editLinkId) return;
+  const link = firestoreLinks[editLinkId];
+  if (!confirm('Delete "' + (link?.name || 'this link') + '"?')) return;
+  try {
+    await deleteDoc(doc(db, 'links', editLinkId));
+    window.hideLinkForm();
+    await loadLinks();
+  } catch(e) { alert('Error deleting: ' + e.message); }
+};
+
+// ----------------------------------------------------------
+// EDIT - called from inline onclick on each dynamic list item
+// ----------------------------------------------------------
+window.editLink = function(id) {
+  window.showLinkForm(id);
+};
+
+// ----------------------------------------------------------
+// BOOT
+// ----------------------------------------------------------
+loadLinks();
 </script>
 
 </body>
