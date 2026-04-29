@@ -6,53 +6,74 @@
   OWNER: Liam Pearson-Noseworthy, Northumbria University
   LAST UPDATED: 2026-04-29
 
-  FOR AI/LLM READERS:
-  This is a static single-file HTML portal page for the Sport,
-  Exercise & Rehabilitation (SER) technical team at Northumbria
-  University. It has no backend - everything is hardcoded.
+  FOR AI/LLM READERS - ARCHITECTURE OVERVIEW:
+  ============================================================
+  This is a fully self-contained static HTML page. It has no
+  backend server. All calendar data is fetched client-side
+  using the Google Calendar API v3 via a service account JWT.
+
+  AUTHENTICATION FLOW:
+  1. On page load, the JS builds a JWT (JSON Web Token) using
+     the service account private key (RSA-SHA256 via SubtleCrypto)
+  2. The JWT is exchanged for a short-lived OAuth2 bearer token
+     via https://oauth2.googleapis.com/token
+  3. That bearer token is used to call the Google Calendar API
+     events.list endpoint for each calendar
+  4. Events are rendered into a custom weekly grid widget
+
+  SERVICE ACCOUNT:
+  - Email: siso-gc@sisogc-213914.iam.gserviceaccount.com
+  - Project: sisogc-213914 (Google Cloud)
+  - The private key below is RSA PKCS#8 PEM format
+  - The service account has 'reader' access to all calendars
+  - It cannot create, edit, or delete any calendar events
+
+  SECURITY NOTE FOR FUTURE CONTRIBUTORS:
+  - The private key is embedded in this file intentionally
+  - This file should be hosted in a private SharePoint/Teams
+    folder accessible only to SER staff
+  - The service account has READ-ONLY access - even if the key
+    were compromised, no calendar data can be modified
+  - If the key is ever exposed publicly, revoke it in Google
+    Cloud Console (IAM > Service Accounts > Keys) and replace
+    the PRIVATE_KEY and PRIVATE_KEY_ID constants below
+
+  CALENDAR DATA:
+  - Calendar IDs and colours sourced from Google Apps Script
+    CalendarApp.getAllCalendars() on 2026-04-29
+  - Excluded: 1) STAFF, Birthdays, Northumbria University
+    personal timetable, nu.sportex.labs@gmail.com account
+  - White calendars (#FFFFFF) rendered as light grey (#e8e8e8)
+    in the legend for visibility
 
   PAGE STRUCTURE:
   1. Sticky header - NU branding + nav links
   2. Page band - department title/strapline
   3. Two-column main layout:
-     LEFT (75%) - Google Calendar embed showing all lab room
-                  calendars in a read-only week view, plus a
-                  colour-coded legend below it
+     LEFT (75%) - Workflow map banner + custom calendar widget
+                  + colour-coded legend
      RIGHT (25%) - A-Z useful links sidebar
   4. Footer
 
-  GOOGLE CALENDAR EMBED:
-  - Uses Google's public iframe embed URL
-  - All calendars are set to public (read-only for viewers)
-  - Each sub-calendar is added as a separate &src= parameter
-  - The embed is read-only - staff cannot edit, create or delete
-  - Excluded: 1) STAFF, Northumbria University personal timetable,
-    nu.sportex.labs@gmail.com (the account itself), Birthdays
-  - The CALENDAR_SOURCES array below lists every included calendar
-    with its name, ID, and hex colour (from Google Apps Script output)
+  CALENDAR WIDGET BEHAVIOUR:
+  - Shows current week by default (Mon-Sun, UK locale)
+  - Prev/Next week navigation buttons
+  - "Today" button returns to current week
+  - Events shown as coloured blocks matching Google Calendar
+  - Hovering an event shows a tooltip with full title + time
+  - On load, fetches all events for the displayed week from
+    all configured calendars simultaneously (Promise.all)
+  - Token is cached for 55 minutes (Google tokens last 60 min)
 
-  LEGEND:
-  - Hardcoded colour swatches matching the Google Calendar colours
-  - Groups calendars by location for readability
-  - If a calendar is renamed or recoloured, update BOTH the embed
-    src parameter AND the legend section below
+  TO ADD A NEW CALENDAR:
+  - Add an entry to the CALENDARS array below
+  - Share the calendar with the service account email above
+  - Add a matching entry to the legend HTML section
 
-  A-Z LINKS SIDEBAR:
-  - Simple alphabetically sorted list of useful systems
-  - Hardcoded - edit the <ul id="links-list"> section to add/remove
-  - No JavaScript dependency - pure HTML/CSS
-
-  CALENDAR IDs (from Google Apps Script, confirmed 2026-04-29):
-  These are the @group.calendar.google.com IDs for each sub-calendar.
-  The long hex IDs (c1bc9b92... and 1c3645f4...) are valid - Google
-  generates longer IDs for some calendar types.
-
-  MAINTENANCE NOTES:
-  - If a calendar goes missing from the embed, check it is still
-    set to public in Google Calendar settings
-  - The embed URL has a 'mode=WEEK' parameter - change to MONTH
-    for a monthly view if preferred
-  - ctz=Europe/London keeps the timezone correct for UK staff
+  TO UPDATE THE PRIVATE KEY:
+  - Revoke the old key in Google Cloud Console
+  - Download the new JSON key file
+  - Replace PRIVATE_KEY_ID and PRIVATE_KEY below
   ============================================================
 -->
 <html lang="en">
@@ -63,7 +84,6 @@
   <style>
     /* ============================================================
        RESET & CSS VARIABLES
-       Monochrome palette with accent only from calendar colours.
        ============================================================ */
     *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
 
@@ -88,11 +108,11 @@
 
     /* ============================================================
        HEADER
-       Sticky top bar with NU logo, dept name, nav links.
+       Matches Northumbria University website: solid black bar,
+       white logo image, white nav links.
        ============================================================ */
     header {
-      border-bottom: 1px solid var(--border);
-      background: var(--white);
+      background: #000000;
       position: sticky;
       top: 0;
       z-index: 100;
@@ -102,7 +122,7 @@
       max-width: 1400px;
       margin: 0 auto;
       padding: 0 32px;
-      height: 56px;
+      height: 60px;
       display: flex;
       align-items: center;
       gap: 24px;
@@ -111,58 +131,26 @@
     .logo {
       display: flex;
       align-items: center;
-      gap: 10px;
       text-decoration: none;
       flex-shrink: 0;
     }
 
-    .logo-mark {
-      width: 32px;
-      height: 32px;
-      border: 2px solid var(--black);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-    }
-
-    .logo-mark span {
-      font-size: 11px;
-      font-weight: 900;
-      color: var(--black);
-      letter-spacing: -0.05em;
-    }
-
-    .logo-text {
-      display: flex;
-      flex-direction: column;
-      line-height: 1.15;
-    }
-
-    .logo-text strong {
-      font-size: 14px;
-      font-weight: 800;
-      color: var(--black);
-      letter-spacing: -0.01em;
-    }
-
-    .logo-text small {
-      font-size: 10px;
-      color: var(--mid);
-      font-weight: 400;
-      letter-spacing: 0.02em;
-      text-transform: uppercase;
+    .logo img {
+      height: 36px;
+      width: auto;
+      display: block;
     }
 
     .header-sep {
       width: 1px;
       height: 24px;
-      background: var(--border);
+      background: #444444;
       flex-shrink: 0;
     }
 
     .header-dept {
       font-size: 13px;
-      color: var(--mid);
+      color: #cccccc;
       font-weight: 500;
     }
 
@@ -170,24 +158,26 @@
       margin-left: auto;
       display: flex;
       align-items: center;
-      gap: 16px;
+      gap: 20px;
     }
 
     .header-link {
       font-size: 13px;
-      color: var(--mid);
+      color: #ffffff;
       text-decoration: none;
       font-weight: 500;
+      letter-spacing: 0.02em;
     }
-    .header-link:hover { color: var(--black); }
+    .header-link:hover { color: #cccccc; }
 
     /* ============================================================
        PAGE BAND
-       Bold title area below the header.
+       Black background with white uppercase title, matching NU
+       hero banner style from northumbria.ac.uk.
        ============================================================ */
     .page-band {
-      border-bottom: 3px solid var(--black);
-      padding: 36px 32px 32px;
+      background: #000000;
+      padding: 40px 32px 36px;
     }
 
     .page-band-inner {
@@ -195,33 +185,17 @@
       margin: 0 auto;
     }
 
-    .dept-label {
-      font-size: 11px;
-      font-weight: 700;
-      letter-spacing: 0.12em;
-      text-transform: uppercase;
-      color: var(--mid);
-      margin-bottom: 8px;
-    }
-
     .page-band h1 {
-      font-size: clamp(22px, 3vw, 36px);
+      font-size: clamp(24px, 3.5vw, 48px);
       font-weight: 900;
-      letter-spacing: -0.03em;
-      line-height: 1.1;
-      color: var(--black);
-      margin-bottom: 10px;
-    }
-
-    .strapline {
-      font-size: 14px;
-      color: var(--mid);
-      line-height: 1.6;
+      letter-spacing: -0.01em;
+      line-height: 1.05;
+      color: #ffffff;
+      text-transform: uppercase;
     }
 
     /* ============================================================
        MAIN LAYOUT
-       Two-column: calendar (left, wide) + links sidebar (right)
        ============================================================ */
     .main {
       max-width: 1400px;
@@ -233,10 +207,6 @@
       align-items: start;
     }
 
-    /* ============================================================
-       SECTION HEADINGS
-       Thin uppercase label above each content block.
-       ============================================================ */
     .section-heading {
       font-size: 10px;
       font-weight: 700;
@@ -250,7 +220,6 @@
 
     /* ============================================================
        WORKFLOW MAP BANNER
-       Primary call-to-action block at top of left column.
        ============================================================ */
     .primary-action {
       border: 2px solid var(--black);
@@ -293,30 +262,213 @@
     .btn-primary:hover { background: var(--dark); }
 
     /* ============================================================
-       CALENDAR EMBED
-       Google Calendar iframe - read only, week view.
-       The iframe itself has no controls that allow editing.
-       Wrapped in a border to match the page aesthetic.
+       CUSTOM CALENDAR WIDGET
+       Replaces the Google embed iframe. Renders events fetched
+       from the Calendar API into a week-view grid.
        ============================================================ */
-    .calendar-wrap {
+    .cal-widget {
       border: 1px solid var(--border);
       margin-bottom: 20px;
-      line-height: 0; /* removes gap below iframe */
+      background: var(--white);
     }
 
-    .calendar-wrap iframe {
-      width: 100%;
-      height: 620px;
-      border: none;
+    /* Toolbar: Today / prev / next / week label */
+    .cal-toolbar {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 12px 16px;
+      border-bottom: 1px solid var(--border);
+      background: var(--bg);
+    }
+
+    .cal-toolbar button {
+      background: var(--white);
+      border: 1px solid var(--border);
+      color: var(--black);
+      font-size: 12px;
+      font-weight: 600;
+      padding: 5px 12px;
+      cursor: pointer;
+      font-family: inherit;
+    }
+    .cal-toolbar button:hover { background: var(--bg); border-color: var(--light); }
+
+    .cal-week-label {
+      font-size: 14px;
+      font-weight: 700;
+      color: var(--black);
+      margin-left: 4px;
+    }
+
+    .cal-loading {
+      font-size: 12px;
+      color: var(--light);
+      margin-left: auto;
+    }
+
+    /* Day header row */
+    .cal-header {
+      display: grid;
+      /* Time gutter (48px) + 5 day columns (Mon-Fri, weekends excluded) */
+      grid-template-columns: 48px repeat(5, 1fr);
+      border-bottom: 1px solid var(--border);
+    }
+
+    .cal-header-gutter {
+      border-right: 1px solid var(--border);
+    }
+
+    .cal-day-head {
+      padding: 8px 4px;
+      text-align: center;
+      border-right: 1px solid var(--border);
+      font-size: 11px;
+      font-weight: 700;
+      color: var(--mid);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .cal-day-head.today {
+      color: var(--black);
+      background: #f0f0f0;
+    }
+
+    .cal-day-head .cal-day-num {
       display: block;
+      font-size: 18px;
+      font-weight: 900;
+      color: var(--black);
+      letter-spacing: -0.02em;
+      line-height: 1.1;
+      margin-top: 2px;
+    }
+
+    .cal-day-head.today .cal-day-num {
+      background: var(--black);
+      color: var(--white);
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      margin-top: 4px;
+    }
+
+    /* Scrollable time grid */
+    .cal-body-scroll {
+      overflow-y: auto;
+      max-height: 580px;
+    }
+
+    .cal-body {
+      display: grid;
+      grid-template-columns: 48px repeat(5, 1fr);
+      /* 24 hours * 48px per hour = 1152px total height */
+      position: relative;
+    }
+
+    /* Time gutter labels - one per hour */
+    .cal-time-col {
+      grid-column: 1;
+      grid-row: 1 / span 24;
+      border-right: 1px solid var(--border);
+    }
+
+    .cal-time-slot {
+      height: 48px;
+      display: flex;
+      align-items: flex-start;
+      justify-content: flex-end;
+      padding: 2px 6px 0 0;
+      font-size: 10px;
+      color: var(--light);
+      font-weight: 500;
+      border-bottom: 1px solid var(--border);
+    }
+
+    /* Day columns - background grid lines */
+    .cal-day-col {
+      position: relative;
+      border-right: 1px solid var(--border);
+    }
+
+    .cal-day-col-inner {
+      position: relative;
+      height: 1152px; /* 24 * 48px */
+    }
+
+    /* Hour lines within each day column */
+    .cal-hour-line {
+      position: absolute;
+      left: 0;
+      right: 0;
+      height: 1px;
+      background: var(--border);
+    }
+
+    /* Half-hour lines - lighter */
+    .cal-half-line {
+      position: absolute;
+      left: 0;
+      right: 0;
+      height: 1px;
+      background: #f0f0f0;
+    }
+
+    /* Individual event block */
+    .cal-event {
+      position: absolute;
+      left: 2px;
+      right: 2px;
+      border-radius: 2px;
+      padding: 2px 4px;
+      font-size: 11px;
+      font-weight: 600;
+      color: white;
+      overflow: hidden;
+      cursor: default;
+      z-index: 2;
+      line-height: 1.3;
+      /* Text shadow improves legibility on light colours */
+      text-shadow: 0 1px 2px rgba(0,0,0,0.3);
+    }
+
+    .cal-event:hover {
+      z-index: 10;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.25);
+    }
+
+    /* Tooltip shown on event hover */
+    .cal-tooltip {
+      display: none;
+      position: fixed;
+      background: var(--dark);
+      color: var(--white);
+      font-size: 12px;
+      padding: 8px 12px;
+      border-radius: 4px;
+      max-width: 240px;
+      z-index: 1000;
+      pointer-events: none;
+      line-height: 1.5;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+    }
+
+    .cal-tooltip.visible { display: block; }
+
+    /* Error / empty state message */
+    .cal-message {
+      padding: 40px;
+      text-align: center;
+      font-size: 13px;
+      color: var(--light);
     }
 
     /* ============================================================
        CALENDAR LEGEND
-       Colour-coded key so staff know which colour = which room.
-       Grouped by building/location.
-       If a calendar is recoloured in Google Calendar, update the
-       background colour on the matching .legend-dot here.
        ============================================================ */
     .legend {
       margin-bottom: 32px;
@@ -349,7 +501,6 @@
       height: 11px;
       border-radius: 50%;
       flex-shrink: 0;
-      /* border handles white/near-white colours so they're visible */
       border: 1px solid rgba(0,0,0,0.12);
     }
 
@@ -361,25 +512,16 @@
 
     /* ============================================================
        A-Z LINKS SIDEBAR
-       Alphabetical list of useful systems. Pure HTML, no JS.
-       To add a link: copy an <li> block and insert in alpha order.
        ============================================================ */
     .sidebar {
       position: sticky;
-      top: 72px; /* clears the sticky header */
+      top: 72px;
     }
 
-    .links-list {
-      list-style: none;
-    }
+    .links-list { list-style: none; }
 
-    .links-list li {
-      border-top: 1px solid var(--border);
-    }
-
-    .links-list li:last-child {
-      border-bottom: 1px solid var(--border);
-    }
+    .links-list li { border-top: 1px solid var(--border); }
+    .links-list li:last-child { border-bottom: 1px solid var(--border); }
 
     .links-list a {
       display: flex;
@@ -405,10 +547,13 @@
 
     /* ============================================================
        FOOTER
+       Black background matching NU website footer style.
+       White text and links on black.
        ============================================================ */
     footer {
-      border-top: 3px solid var(--black);
-      padding: 28px 32px;
+      background: #000000;
+      padding: 36px 32px;
+      margin-top: 0;
     }
 
     .footer-inner {
@@ -424,11 +569,11 @@
     .footer-left {
       display: flex;
       flex-direction: column;
-      gap: 3px;
+      gap: 4px;
     }
 
-    .footer-left strong { font-size: 13px; font-weight: 800; }
-    .footer-left span   { font-size: 12px; color: var(--mid); }
+    .footer-left strong { font-size: 13px; font-weight: 800; color: #ffffff; }
+    .footer-left span   { font-size: 12px; color: #aaaaaa; }
 
     .footer-links {
       display: flex;
@@ -439,25 +584,21 @@
 
     .footer-links a {
       font-size: 12px;
-      color: var(--mid);
+      color: #aaaaaa;
       text-decoration: none;
     }
-    .footer-links a:hover { color: var(--black); }
+    .footer-links a:hover { color: #ffffff; }
 
     /* ============================================================
        RESPONSIVE
-       On narrow screens, stack to single column.
        ============================================================ */
     @media (max-width: 900px) {
-      .main {
-        grid-template-columns: 1fr;
-        padding: 24px 20px 40px;
-      }
+      .main { grid-template-columns: 1fr; padding: 24px 20px 40px; }
       .sidebar { position: static; }
       .page-band { padding: 28px 20px 24px; }
       .header-inner { padding: 0 20px; }
       .header-dept, .header-sep { display: none; }
-      footer { padding: 24px 20px; }
+      footer { padding: 24px 20px; background: #000000; }
     }
   </style>
 </head>
@@ -469,11 +610,7 @@
 <header>
   <div class="header-inner">
     <a class="logo" href="https://www.northumbria.ac.uk/" target="_blank" rel="noopener">
-      <div class="logo-mark"><span>NU</span></div>
-      <div class="logo-text">
-        <strong>Northumbria University</strong>
-        <small>Newcastle</small>
-      </div>
+      <img src="https://www.northumbria.ac.uk/-/media/take-on-tomorrow/northumbria-university-newcastle.png?modified=20201119190031" alt="Northumbria University" style="height:32px;width:auto;display:block;">
     </a>
     <div class="header-sep"></div>
     <span class="header-dept">Sport, Exercise &amp; Rehabilitation</span>
@@ -489,341 +626,114 @@
      ============================================================ -->
 <div class="page-band">
   <div class="page-band-inner">
-    <p class="dept-label">Technical Team &mdash; Internal Staff Portal</p>
     <h1>Sport, Exercise &amp; Rehabilitation</h1>
-    <p class="strapline">Resources, tools and workflows for the SER technical team at Sport Central.</p>
   </div>
 </div>
 
 <!-- ============================================================
      MAIN CONTENT
-     Left: workflow map banner + calendar + legend
-     Right: A-Z links sidebar
      ============================================================ -->
 <div class="main">
 
-  <!-- LEFT COLUMN -->
   <div class="left-col">
 
     <!-- Workflow map banner -->
     <p class="section-heading">Workflows &amp; Processes</p>
     <div class="primary-action">
       <div class="primary-action-text">
-        <h2>Workflow Map</h2>
+        <h2><span style="font-weight:900;color:#cc0000;-webkit-text-stroke:0.5px #111;">HELP REQUIRED</span> - Workflow Map</h2>
         <p>Interactive map of departmental workflows for Teaching and Research. Add and edit process steps, connect stages, and attach notes and links for each step.</p>
       </div>
       <a href="workflow.html" class="btn-primary">Open Workflow Map</a>
     </div>
 
     <!-- ============================================================
-         GOOGLE CALENDAR EMBED
-         Read-only week view. All src= parameters are public
-         @group.calendar.google.com calendar IDs.
-
-         EXCLUDED calendars (intentionally omitted):
-           - 1) STAFF (6lvpj8nk2eg684lkjf9cc5q7n0) - internal only
-           - Northumbria University personal timetable (import cal)
-           - nu.sportex.labs@gmail.com (the account itself)
-           - Birthdays (Google auto-calendar, not relevant here)
-
-         To add a new calendar: append &src=CALENDARID%40group.calendar.google.com
-         To remove a calendar: delete its &src= parameter
-         To change view: change mode=WEEK to mode=MONTH or mode=AGENDA
+         CUSTOM CALENDAR WIDGET
+         The widget is built entirely by the JavaScript below.
+         This div is the mount point - JS populates it on load.
          ============================================================ -->
     <p class="section-heading">Lab &amp; Room Bookings</p>
-    <div class="calendar-wrap">
-      <iframe
-        src="https://calendar.google.com/calendar/embed?height=620&wkst=2&bgcolor=%23ffffff&ctz=Europe%2FLondon&mode=WEEK&showTitle=0&showNav=1&showDate=1&showPrint=0&showTabs=0&showCalendars=0&showTz=0
-&src=h804sfk2b7dip0e1qgm390unkk%40group.calendar.google.com
-&src=96go5s17lsafcminkben04ie0s%40group.calendar.google.com
-&src=pbsjrleh7hfsqlhb1r6j8kju90%40group.calendar.google.com
-&src=m5cigndvloih65uev8bu7eopeo%40group.calendar.google.com
-&src=sent0vgjssmprjga87erdb7a7k%40group.calendar.google.com
-&src=se59cdk2p01iommmim29dp676k%40group.calendar.google.com
-&src=88s20jv71cbad9so5ofuj3dqso%40group.calendar.google.com
-&src=rjesrdho65nfjrsm9qddlj1ags%40group.calendar.google.com
-&src=6pavl4h44fj8sr63ta88ku0ufk%40group.calendar.google.com
-&src=1c3645f4608a68991baf49742cc78ba5f07e51ba67a4dc9ba97803ee557a4ea4%40group.calendar.google.com
-&src=bmf88nic6vqhl511uhuh0pd25g%40group.calendar.google.com
-&src=vhjs5dl5qbbcv9e1s0gk6q9jbk%40group.calendar.google.com
-&src=i314dr3dn0fh2i189do5mr3cg4%40group.calendar.google.com
-&src=5269gl4vu6g8eggrrltdcqikfg%40group.calendar.google.com
-&src=cejm41grapqjusl6leq8f2fqj4%40group.calendar.google.com
-&src=h4i58igirtnec7032acksfdtbo%40group.calendar.google.com
-&src=tkbanvf6hdvtmn99hff8gkpps0%40group.calendar.google.com
-&src=518787qcpq77euim3vgts1d3n0%40group.calendar.google.com
-&src=nnq9s5e9kmn37qb358uljrctm4%40group.calendar.google.com
-&src=ad4jh6l9cjn3q7l69mcd5v2i7k%40group.calendar.google.com
-&src=k7k4mii47ecqnn7ost50ma65fc%40group.calendar.google.com
-&src=voprcn4fm5ue9jvbujj8j7abok%40group.calendar.google.com
-&src=aprcoic5khr0p45q4hpfs4e1c0%40group.calendar.google.com
-&src=9uice41g2a0kj48kckch9r3mu4%40group.calendar.google.com
-&src=6satuiq3gsk3k2sk7pvm318qro%40group.calendar.google.com
-&src=7stvrmc1fnr6iscigpl6gk7h8c%40group.calendar.google.com
-&src=kh6uoqbnqcbpr0pg3qk2cicb7o%40group.calendar.google.com
-&src=apu5tukm4pvire3mdmeghrqj9k%40group.calendar.google.com
-&src=uqfhi2p4r9k2kaq8k9l8ev0euo%40group.calendar.google.com
-&src=ara7t96dks2tdj008ssijhscjo%40group.calendar.google.com
-&src=c1bc9b923256db1b7f5fd51ec12b715eed364c1ff368bc096f06481ee32bc284%40group.calendar.google.com"
-        frameborder="0"
-        scrolling="no"
-        title="SER Lab and Room Bookings - read only view">
-      </iframe>
+    <div id="cal-widget" class="cal-widget">
+      <div class="cal-message">Loading calendar...</div>
     </div>
+
+    <!-- Tooltip element - moved by JS on event hover -->
+    <div id="cal-tooltip" class="cal-tooltip"></div>
 
     <!-- ============================================================
          CALENDAR LEGEND
-         Hex colours sourced directly from Google Apps Script output.
-         Grouped by building for readability.
-         White calendars (#FFFFFF) shown with a light grey fill so
-         the dot is visible against the white page background.
-
-         MAINTENANCE: if a calendar is recoloured in Google Calendar,
-         update the background-color on its .legend-dot here to match.
+         Colours sourced from Google Apps Script output 2026-04-29.
+         White calendars shown as #e8e8e8 for visibility.
          ============================================================ -->
     <div class="legend">
       <div class="legend-groups">
 
-        <!-- Sport Central (SPF) labs -->
         <div>
           <div class="legend-group-title">Sport Central &mdash; SPF</div>
-          <!-- SPF109: Sprint Track - red #FF0000 -->
-          <div class="legend-item">
-            <div class="legend-dot" style="background:#FF0000;"></div>
-            <span class="legend-name">SPF109: Sprint Track</span>
-          </div>
-          <!-- SPF110: Integrated Performance Lab - purple #CD74E6 -->
-          <div class="legend-item">
-            <div class="legend-dot" style="background:#CD74E6;"></div>
-            <span class="legend-name">SPF110: Integrated Performance Lab</span>
-          </div>
-          <!-- SPF112: Kitchen - orange #FF7300 -->
-          <div class="legend-item">
-            <div class="legend-dot" style="background:#FF7300;"></div>
-            <span class="legend-name">SPF112: Kitchen</span>
-          </div>
-          <!-- SPF113: Physiology Lab - green #85D800 -->
-          <div class="legend-item">
-            <div class="legend-dot" style="background:#85D800;"></div>
-            <span class="legend-name">SPF113: Physiology Lab</span>
-          </div>
-          <!-- SPF113: Treadmill - green #85D800 (same cal colour) -->
-          <div class="legend-item">
-            <div class="legend-dot" style="background:#85D800;"></div>
-            <span class="legend-name">SPF113: Treadmill</span>
-          </div>
-          <!-- SPF113: Wattbikes 1-4 - red #F83A22 -->
-          <div class="legend-item">
-            <div class="legend-dot" style="background:#F83A22;"></div>
-            <span class="legend-name">SPF113: Wattbikes 1-4</span>
-          </div>
-          <!-- SPF114: Biomechanics lab - light grey/mauve #CABDBF -->
-          <div class="legend-item">
-            <div class="legend-dot" style="background:#CABDBF;"></div>
-            <span class="legend-name">SPF114: Biomechanics Lab</span>
-          </div>
-          <!-- SPF115: Gait Lab - brown #AC725E -->
-          <div class="legend-item">
-            <div class="legend-dot" style="background:#AC725E;"></div>
-            <span class="legend-name">SPF115: Gait Lab</span>
-          </div>
-          <!-- SPF115: Respiratory kit - brown #AC725E (same) -->
-          <div class="legend-item">
-            <div class="legend-dot" style="background:#AC725E;"></div>
-            <span class="legend-name">SPF115: Respiratory Kit</span>
-          </div>
-          <!-- SPF115: Variable-Gravity Suspension System - brown #AC725E -->
-          <div class="legend-item">
-            <div class="legend-dot" style="background:#AC725E;"></div>
-            <span class="legend-name">SPF115: Variable-Gravity System</span>
-          </div>
-          <!-- SPF115: Leg Press - brown #AC725E -->
-          <div class="legend-item">
-            <div class="legend-dot" style="background:#AC725E;"></div>
-            <span class="legend-name">SPF115: Leg Press</span>
-          </div>
-          <!-- SPF118: S&C - rose/mauve #CCA6AC -->
-          <div class="legend-item">
-            <div class="legend-dot" style="background:#CCA6AC;"></div>
-            <span class="legend-name">SPF118: S&amp;C</span>
-          </div>
+          <div class="legend-item"><div class="legend-dot" style="background:#FF0000;"></div><span class="legend-name">SPF109: Sprint Track</span></div>
+          <div class="legend-item"><div class="legend-dot" style="background:#CD74E6;"></div><span class="legend-name">SPF110: Integrated Performance Lab</span></div>
+          <div class="legend-item"><div class="legend-dot" style="background:#FF7300;"></div><span class="legend-name">SPF112: Kitchen</span></div>
+          <div class="legend-item"><div class="legend-dot" style="background:#85D800;"></div><span class="legend-name">SPF113: Physiology Lab</span></div>
+          <div class="legend-item"><div class="legend-dot" style="background:#85D800;"></div><span class="legend-name">SPF113: Treadmill</span></div>
+          <div class="legend-item"><div class="legend-dot" style="background:#F83A22;"></div><span class="legend-name">SPF113: Wattbikes 1-4</span></div>
+          <div class="legend-item"><div class="legend-dot" style="background:#CABDBF;"></div><span class="legend-name">SPF114: Biomechanics Lab</span></div>
+          <div class="legend-item"><div class="legend-dot" style="background:#AC725E;"></div><span class="legend-name">SPF115: Gait Lab</span></div>
+          <div class="legend-item"><div class="legend-dot" style="background:#AC725E;"></div><span class="legend-name">SPF115: Respiratory Kit</span></div>
+          <div class="legend-item"><div class="legend-dot" style="background:#AC725E;"></div><span class="legend-name">SPF115: Variable-Gravity System</span></div>
+          <div class="legend-item"><div class="legend-dot" style="background:#AC725E;"></div><span class="legend-name">SPF115: Leg Press</span></div>
+          <div class="legend-item"><div class="legend-dot" style="background:#CCA6AC;"></div><span class="legend-name">SPF118: S&amp;C</span></div>
         </div>
 
-        <!-- Sport Central (SC) halls -->
         <div>
           <div class="legend-group-title">Sport Central &mdash; Halls</div>
-          <!-- SC: Central Hall - yellow #FAD165 -->
-          <div class="legend-item">
-            <div class="legend-dot" style="background:#FAD165;"></div>
-            <span class="legend-name">SC: Central Hall</span>
-          </div>
-          <!-- SC: North Hall - yellow #FAD165 -->
-          <div class="legend-item">
-            <div class="legend-dot" style="background:#FAD165;"></div>
-            <span class="legend-name">SC: North Hall</span>
-          </div>
-          <!-- SC: South Hall - yellow #FAD165 -->
-          <div class="legend-item">
-            <div class="legend-dot" style="background:#FAD165;"></div>
-            <span class="legend-name">SC: South Hall</span>
-          </div>
-          <!-- SC: Upper Hall - blue #0059E9 -->
-          <div class="legend-item">
-            <div class="legend-dot" style="background:#0059E9;"></div>
-            <span class="legend-name">SC: Upper Hall</span>
-          </div>
+          <div class="legend-item"><div class="legend-dot" style="background:#FAD165;"></div><span class="legend-name">SC: Central Hall</span></div>
+          <div class="legend-item"><div class="legend-dot" style="background:#FAD165;"></div><span class="legend-name">SC: North Hall</span></div>
+          <div class="legend-item"><div class="legend-dot" style="background:#FAD165;"></div><span class="legend-name">SC: South Hall</span></div>
+          <div class="legend-item"><div class="legend-dot" style="background:#0059E9;"></div><span class="legend-name">SC: Upper Hall</span></div>
         </div>
 
-        <!-- Northumberland Building (NB/NBD) -->
         <div>
           <div class="legend-group-title">Northumberland Building &mdash; NB/NBD</div>
-          <!-- NB415: Neurophys Lab - pink #FF54E3 -->
-          <div class="legend-item">
-            <div class="legend-dot" style="background:#FF54E3;"></div>
-            <span class="legend-name">NB415: Neurophys Lab</span>
-          </div>
-          <!-- NB421: Exercise Lab - gold #B58500 -->
-          <div class="legend-item">
-            <div class="legend-dot" style="background:#B58500;"></div>
-            <span class="legend-name">NB421: Exercise Lab</span>
-          </div>
-          <!-- NB423: Wet Lab - white #FFFFFF shown as light grey -->
-          <div class="legend-item">
-            <div class="legend-dot" style="background:#e8e8e8;"></div>
-            <span class="legend-name">NB423: Wet Lab</span>
-          </div>
-          <!-- NB425a: Freezer Room - white -->
-          <div class="legend-item">
-            <div class="legend-dot" style="background:#e8e8e8;"></div>
-            <span class="legend-name">NB425a: Freezer Room</span>
-          </div>
-          <!-- NB425b: Clinical Room B - white -->
-          <div class="legend-item">
-            <div class="legend-dot" style="background:#e8e8e8;"></div>
-            <span class="legend-name">NB425b: Clinical Room B</span>
-          </div>
-          <!-- NB425c: Phlebotomy Bed 1 (Window) - white -->
-          <div class="legend-item">
-            <div class="legend-dot" style="background:#e8e8e8;"></div>
-            <span class="legend-name">NB425c: Phlebotomy Bed 1 (Window)</span>
-          </div>
-          <!-- NB425c: Phlebotomy Bed 2 (Wall) - white -->
-          <div class="legend-item">
-            <div class="legend-dot" style="background:#e8e8e8;"></div>
-            <span class="legend-name">NB425c: Phlebotomy Bed 2 (Wall)</span>
-          </div>
-          <!-- NBD 322 (P.A. Suite) - white -->
-          <div class="legend-item">
-            <div class="legend-dot" style="background:#e8e8e8;"></div>
-            <span class="legend-name">NBD 322 (P.A. Suite)</span>
-          </div>
-          <!-- NBD406: Environmental Chamber - dark green #007639 -->
-          <div class="legend-item">
-            <div class="legend-dot" style="background:#007639;"></div>
-            <span class="legend-name">NBD406: Environmental Chamber</span>
-          </div>
+          <div class="legend-item"><div class="legend-dot" style="background:#FF54E3;"></div><span class="legend-name">NB415: Neurophys Lab</span></div>
+          <div class="legend-item"><div class="legend-dot" style="background:#B58500;"></div><span class="legend-name">NB421: Exercise Lab</span></div>
+          <div class="legend-item"><div class="legend-dot" style="background:#e8e8e8;"></div><span class="legend-name">NB423: Wet Lab</span></div>
+          <div class="legend-item"><div class="legend-dot" style="background:#e8e8e8;"></div><span class="legend-name">NB425a: Freezer Room</span></div>
+          <div class="legend-item"><div class="legend-dot" style="background:#e8e8e8;"></div><span class="legend-name">NB425b: Clinical Room B</span></div>
+          <div class="legend-item"><div class="legend-dot" style="background:#e8e8e8;"></div><span class="legend-name">NB425c: Phlebotomy Bed 1 (Window)</span></div>
+          <div class="legend-item"><div class="legend-dot" style="background:#e8e8e8;"></div><span class="legend-name">NB425c: Phlebotomy Bed 2 (Wall)</span></div>
+          <div class="legend-item"><div class="legend-dot" style="background:#e8e8e8;"></div><span class="legend-name">NBD 322 (P.A. Suite)</span></div>
+          <div class="legend-item"><div class="legend-dot" style="background:#007639;"></div><span class="legend-name">NBD406: Environmental Chamber</span></div>
         </div>
 
-        <!-- Other -->
         <div>
           <div class="legend-group-title">Other</div>
-          <!-- SGU: Anatomy Teaching Centre Lab - light pink #FFB7B0 -->
-          <div class="legend-item">
-            <div class="legend-dot" style="background:#FFB7B0;"></div>
-            <span class="legend-name">SGU: Anatomy Teaching Centre Lab</span>
-          </div>
-          <!-- HTA - hot pink #E6236A -->
-          <div class="legend-item">
-            <div class="legend-dot" style="background:#E6236A;"></div>
-            <span class="legend-name">HTA</span>
-          </div>
-          <!-- Centrifuge: Wet Lab Bookings - red #F83A22 -->
-          <div class="legend-item">
-            <div class="legend-dot" style="background:#F83A22;"></div>
-            <span class="legend-name">Centrifuge: Wet Lab Bookings</span>
-          </div>
+          <div class="legend-item"><div class="legend-dot" style="background:#FFB7B0;"></div><span class="legend-name">SGU: Anatomy Teaching Centre Lab</span></div>
+          <div class="legend-item"><div class="legend-dot" style="background:#E6236A;"></div><span class="legend-name">HTA</span></div>
+          <div class="legend-item"><div class="legend-dot" style="background:#F83A22;"></div><span class="legend-name">Centrifuge: Wet Lab Bookings</span></div>
         </div>
 
       </div>
-    </div><!-- /legend -->
+    </div>
 
   </div><!-- /left-col -->
 
   <!-- ============================================================
        RIGHT COLUMN - A-Z USEFUL LINKS SIDEBAR
-       Alphabetically sorted. To add: copy an <li>, insert in
-       alphabetical order by the link text, update href and text.
        ============================================================ -->
   <aside class="sidebar">
     <p class="section-heading">Useful Links A&ndash;Z</p>
     <ul class="links-list">
-
-      <li>
-        <a href="https://www.northumbria.ac.uk/about-us/our-staff/" target="_blank" rel="noopener">
-          Staff Directory <span>&#8599;</span>
-        </a>
-      </li>
-
-      <li>
-        <a href="https://library.northumbria.ac.uk/" target="_blank" rel="noopener">
-          Library <span>&#8599;</span>
-        </a>
-      </li>
-
-      <li>
-        <a href="https://mynorthumbria.northumbria.ac.uk/" target="_blank" rel="noopener">
-          MyNorthumbria <span>&#8599;</span>
-        </a>
-      </li>
-
-      <li>
-        <a href="https://mytimetable.northumbria.ac.uk/" target="_blank" rel="noopener">
-          MyTimetable <span>&#8599;</span>
-        </a>
-      </li>
-
-      <li>
-        <a href="https://www.northumbria.ac.uk/" target="_blank" rel="noopener">
-          Northumbria University <span>&#8599;</span>
-        </a>
-      </li>
-
-      <li>
-        <a href="https://northumbria.sharepoint.com/" target="_blank" rel="noopener">
-          OneDrive / SharePoint <span>&#8599;</span>
-        </a>
-      </li>
-
-      <li>
-        <a href="https://panopto.northumbria.ac.uk/" target="_blank" rel="noopener">
-          Panopto <span>&#8599;</span>
-        </a>
-      </li>
-
-      <li>
-        <a href="https://siso.northumbria.ac.uk/" target="_blank" rel="noopener">
-          SiSo / Online Booking <span>&#8599;</span>
-        </a>
-      </li>
-
-      <li>
-        <a href="https://northumbria.sharepoint.com/" target="_blank" rel="noopener">
-          Teams / SharePoint <span>&#8599;</span>
-        </a>
-      </li>
-
-      <li>
-        <a href="workflow.html">
-          Workflow Map <span>&#8594;</span>
-        </a>
-      </li>
-
-      <li>
-        <a href="https://worktribe.com/" target="_blank" rel="noopener">
-          WorkTribe <span>&#8599;</span>
-        </a>
-      </li>
-
+      <li><a href="https://library.northumbria.ac.uk/" target="_blank" rel="noopener">Library <span>&#8599;</span></a></li>
+      <li><a href="https://mynorthumbria.northumbria.ac.uk/" target="_blank" rel="noopener">MyNorthumbria <span>&#8599;</span></a></li>
+      <li><a href="https://mytimetable.northumbria.ac.uk/" target="_blank" rel="noopener">MyTimetable <span>&#8599;</span></a></li>
+      <li><a href="https://www.northumbria.ac.uk/" target="_blank" rel="noopener">Northumbria University <span>&#8599;</span></a></li>
+      <li><a href="https://northumbria.sharepoint.com/" target="_blank" rel="noopener">OneDrive / SharePoint <span>&#8599;</span></a></li>
+      <li><a href="https://panopto.northumbria.ac.uk/" target="_blank" rel="noopener">Panopto <span>&#8599;</span></a></li>
+      <li><a href="https://siso.northumbria.ac.uk/" target="_blank" rel="noopener">SiSo / Online Booking <span>&#8599;</span></a></li>
+      <li><a href="https://www.northumbria.ac.uk/about-us/our-staff/" target="_blank" rel="noopener">Staff Directory <span>&#8599;</span></a></li>
+      <li><a href="https://northumbria.sharepoint.com/" target="_blank" rel="noopener">Teams / SharePoint <span>&#8599;</span></a></li>
+      <li><a href="workflow.html">Workflow Map <span>&#8594;</span></a></li>
+      <li><a href="https://worktribe.com/" target="_blank" rel="noopener">WorkTribe <span>&#8599;</span></a></li>
     </ul>
   </aside>
 
@@ -836,8 +746,8 @@
   <div class="footer-inner">
     <div class="footer-left">
       <strong>Northumbria University</strong>
-      <span>Department of Sport, Exercise &amp; Rehabilitation</span>
-      <span>Internal staff portal &mdash; maintained by the SER Technical Team</span>
+      <span>School of Sport, Exercise &amp; Rehabilitation</span>
+      <span>Internal staff portal &mdash; maintained by Dr Liam T. Pearson-Noseworthy</span>
     </div>
     <div class="footer-links">
       <a href="https://www.northumbria.ac.uk/" target="_blank" rel="noopener">University website</a>
@@ -846,6 +756,450 @@
     </div>
   </div>
 </footer>
+
+<!-- ============================================================
+     CALENDAR JAVASCRIPT
+     ============================================================
+
+     FOR AI/LLM READERS - HOW THIS WORKS:
+     ======================================
+     The calendar widget uses the Google Calendar API v3 with
+     service account authentication. Because this runs in the
+     browser (no backend), we must implement the JWT flow
+     manually using the Web Crypto API (SubtleCrypto).
+
+     JWT AUTH FLOW:
+     1. Build JWT header + claims (iss, scope, aud, exp, iat)
+     2. Sign with RSA-SHA256 using the private key via SubtleCrypto
+     3. POST to token endpoint to get a bearer token
+     4. Use bearer token in Authorization header for API calls
+     5. Cache token for 55 min (tokens expire after 60 min)
+
+     RENDERING:
+     - Week grid: 7 columns (Mon-Sun), 24-hour time axis
+     - Each hour = 48px. Event top/height calculated from time.
+     - Events are absolutely positioned within their day column.
+     - Overlapping events in same calendar are not de-collided
+       (rare for room bookings; can be added if needed).
+
+     CALENDAR CONFIG:
+     - CALENDARS array: one entry per calendar
+     - Each entry has: id, color, name
+     - color is the hex from Google Apps Script output
+     - White (#FFFFFF) calendars use #888888 for visibility
+
+     TO DEBUG:
+     - Open browser console - all API errors are logged
+     - Check Network tab for failed requests to googleapis.com
+     - Most common failure: service account not shared on a cal
+     ============================================================ -->
+<script>
+(function() {
+
+  // ----------------------------------------------------------
+  // SERVICE ACCOUNT CREDENTIALS
+  // Replace PRIVATE_KEY_ID and PRIVATE_KEY if the key is
+  // ever revoked and a new one is created in Google Cloud.
+  // The PRIVATE_KEY must remain in PEM format with \n newlines.
+  // ----------------------------------------------------------
+  var SA_EMAIL    = 'siso-gc@sisogc-213914.iam.gserviceaccount.com';
+  var KEY_ID      = 'f2056198f628eea47f1b63d83adaf9188669c0ed';
+  var PRIVATE_KEY = '-----BEGIN PRIVATE KEY-----\nMIIEvgIBADANBgkqhkiG9w0BAQEFAASCBKgwggSkAgEAAoIBAQC4kyzUGygpsoPy\nvb9IYGgU5QcaQ8LW1i6yqd9nbBNBGGAacAmeuqtP/1DrIAlS0tHoPy7cjFTPuKGy\nUp2oM9lMMhTQsRl2GCxUE8FV4e/0R1byx4cWldVnH6jiynWmPnh5JGPVtox7zTxq\noPVyL56zKWycIUVKp/ANOTH7a8h8rUfoXV5RM739KaF5AemRcZmFryEJU8buOK+T\neCRaHY+FMY9SrQeb6XDfcjs6dOyVL4rWZE2LaNRTLJpW/4WRSEgweMx1Jm4SvRQd\nWVoermqHmkVqDMJFRh5gjADkh6Q8oIvjN/vsd9kOlZtElovkbfPVcTDSUVvcRyLV\n168Ro6mFAgMBAAECggEAGY0iQRCrXC5ezs1OvCXActgLxiqIP/Zxi4ExsJ8JAVNv\nBmnpIwSjb5UgLhSGxeTycwzAH377xK/CDq4aLi1TURWDxSonJK6PAGqlso5vCemQ\nU1ak0E8YtkhvOEofxE5UniyX939obkEIspgqsk5+UT4UT37ZmU6rUCFRVoViwUN9\nT7oydIV2CcjWNaKA3azVjrn36zPBA2AP0PIS/WI/h9AbBBj38DaLVgId+eGpuls8\nMdfoUZTKqRofZUF6lErztr3VX8BpvAyQXa/fC6ODS+IUmh74g0SQHNztYZIgM1nT\nvJL5KpVdaOQjJxdskS0yBrieF/0j1vJNwqpJD/j6dwKBgQDszCGH5SUp+CPKWV3z\nQ6cHBwcIvRGuKZngIRwbeDvbAdTwHeNnEkgs2aRC2wDU+zNRzUlclw8aNoReD/x4\nPOsudzKffdPO0wsBx7R+3y7IC4ljblvxgMHJChRgFLyk9V11MJAma3nb5U4OYuis\nItItO70wohXAJmZUhmB7HAu5BwKBgQDHiupMjAeCFKicbsiWhAh5XZ0WDMAqM91D\nebL1nHmSe0YUy59tZy1kAVyYHDGqfDs3U4LNz3QWzuk0mxMHEmCDuuUwqP97DBsy\nbKmXIa9+KHKrbwpRBZyafGdz7rDGmtrEdjkBID+xVaZNX1eRRHjhK1BJXdbZhIW3\nExDITb4iEwKBgQDqCl/htsNildSZ/HX1J5qAQZvcMTK2Vnu1oEPtiopuTYMux/uo\nNdOMMJg/U8Ggv57bbPDjSJIusE9nwJkiJeO0iy9Hn8+mjcRFQCLPerr8ERr7YWoS\nadYeY4374MMKr1BtsU/oCTXp9tuNMIkTCV9+QZsd5DVnMwzU4fOd+fxEJQKBgFrq\nbD5cPr+B8iD0SOhrWAEUKhJ11MhlwRaRSHynwqx/BjtLW2RZclDyXeHgVrC60bAv\nmJV1RAtwUsjpLw41zUu3x90X4u+JYIrk/5AghPkSLMz3Vtf7mpK4w9oKkviqbaq9\nwtNEgkCmKZNvMVK6w+iz92y2GMIao2H6idb5tPuJAoGBANGVtmpTzM9pfnORt+6g\nlzOgMrmftvfq5gGTgcrVVfu2UbQ1+6Aog+9oms3qjivnk8IqGUpFATQqMWEP22qI\nGa0oFJXlBRset1CtxxvA70cpO2U9ZAe1vcxTNBkH8ekLGObKTQl4qHWFwlPkRukL\ncqVvoxrJDTBqbPjTof3VxP53\n-----END PRIVATE KEY-----\n';
+
+  // ----------------------------------------------------------
+  // CALENDAR CONFIGURATION
+  // Each entry: id = full calendar ID, color = hex from Apps
+  // Script output, name = display name for tooltip context.
+  // White calendars (#FFFFFF) use a grey fallback so events
+  // are visible on the white grid background.
+  // To add a calendar: add an entry here AND share the calendar
+  // with the service account email above.
+  // ----------------------------------------------------------
+  var CALENDARS = [
+    { id: 'h804sfk2b7dip0e1qgm390unkk@group.calendar.google.com', color: '#FF0000', name: 'SPF109: Sprint Track' },
+    { id: '96go5s17lsafcminkben04ie0s@group.calendar.google.com', color: '#CD74E6', name: 'SPF110: Integrated Performance Lab' },
+    { id: 'pbsjrleh7hfsqlhb1r6j8kju90@group.calendar.google.com', color: '#FF7300', name: 'SPF112: Kitchen' },
+    { id: 'm5cigndvloih65uev8bu7eopeo@group.calendar.google.com', color: '#85D800', name: 'SPF113: Physiology Lab' },
+    { id: '6satuiq3gsk3k2sk7pvm318qro@group.calendar.google.com', color: '#85D800', name: 'SPF113: Treadmill' },
+    { id: '7stvrmc1fnr6iscigpl6gk7h8c@group.calendar.google.com', color: '#F83A22', name: 'SPF113: Wattbike 1' },
+    { id: 'kh6uoqbnqcbpr0pg3qk2cicb7o@group.calendar.google.com', color: '#F83A22', name: 'SPF113: Wattbike 2' },
+    { id: 'apu5tukm4pvire3mdmeghrqj9k@group.calendar.google.com', color: '#F83A22', name: 'SPF113: Wattbike 3' },
+    { id: 'uqfhi2p4r9k2kaq8k9l8ev0euo@group.calendar.google.com', color: '#F83A22', name: 'SPF113: Wattbike 4' },
+    { id: 'sent0vgjssmprjga87erdb7a7k@group.calendar.google.com', color: '#CABDBF', name: 'SPF114: Biomechanics Lab' },
+    { id: 'se59cdk2p01iommmim29dp676k@group.calendar.google.com', color: '#AC725E', name: 'SPF115: Gait Lab' },
+    { id: '88s20jv71cbad9so5ofuj3dqso@group.calendar.google.com', color: '#AC725E', name: 'SPF115: Respiratory Kit' },
+    { id: 'rjesrdho65nfjrsm9qddlj1ags@group.calendar.google.com', color: '#AC725E', name: 'SPF115: Variable-Gravity System' },
+    { id: '6pavl4h44fj8sr63ta88ku0ufk@group.calendar.google.com', color: '#AC725E', name: 'SPF115: Leg Press' },
+    { id: '1c3645f4608a68991baf49742cc78ba5f07e51ba67a4dc9ba97803ee557a4ea4@group.calendar.google.com', color: '#CCA6AC', name: 'SPF118: S&C' },
+    { id: 'ad4jh6l9cjn3q7l69mcd5v2i7k@group.calendar.google.com', color: '#FAD165', name: 'SC: Central Hall' },
+    { id: 'k7k4mii47ecqnn7ost50ma65fc@group.calendar.google.com', color: '#FAD165', name: 'SC: North Hall' },
+    { id: 'voprcn4fm5ue9jvbujj8j7abok@group.calendar.google.com', color: '#FAD165', name: 'SC: South Hall' },
+    { id: 'aprcoic5khr0p45q4hpfs4e1c0@group.calendar.google.com', color: '#0059E9', name: 'SC: Upper Hall' },
+    { id: 'bmf88nic6vqhl511uhuh0pd25g@group.calendar.google.com', color: '#FF54E3', name: 'NB415: Neurophys Lab' },
+    { id: 'vhjs5dl5qbbcv9e1s0gk6q9jbk@group.calendar.google.com', color: '#B58500', name: 'NB421: Exercise Lab' },
+    { id: 'i314dr3dn0fh2i189do5mr3cg4@group.calendar.google.com', color: '#888888', name: 'NB423: Wet Lab' },
+    { id: '5269gl4vu6g8eggrrltdcqikfg@group.calendar.google.com', color: '#888888', name: 'NB425a: Freezer Room' },
+    { id: 'cejm41grapqjusl6leq8f2fqj4@group.calendar.google.com', color: '#888888', name: 'NB425b: Clinical Room B' },
+    { id: 'h4i58igirtnec7032acksfdtbo@group.calendar.google.com', color: '#888888', name: 'NB425c: Phlebotomy Bed 1 (Window)' },
+    { id: 'tkbanvf6hdvtmn99hff8gkpps0@group.calendar.google.com', color: '#888888', name: 'NB425c: Phlebotomy Bed 2 (Wall)' },
+    { id: '518787qcpq77euim3vgts1d3n0@group.calendar.google.com', color: '#888888', name: 'NBD 322 (P.A. Suite)' },
+    { id: 'nnq9s5e9kmn37qb358uljrctm4@group.calendar.google.com', color: '#007639', name: 'NBD406: Environmental Chamber' },
+    { id: '9uice41g2a0kj48kckch9r3mu4@group.calendar.google.com', color: '#FFB7B0', name: 'SGU: Anatomy Teaching Centre Lab' },
+    { id: 'ara7t96dks2tdj008ssijhscjo@group.calendar.google.com', color: '#E6236A', name: 'HTA' },
+    { id: 'c1bc9b923256db1b7f5fd51ec12b715eed364c1ff368bc096f06481ee32bc284@group.calendar.google.com', color: '#F83A22', name: 'Centrifuge: Wet Lab Bookings' }
+  ];
+
+  // ----------------------------------------------------------
+  // TOKEN CACHE
+  // Stores the OAuth2 bearer token and its expiry time.
+  // Avoids re-authenticating on every week navigation.
+  // Tokens are valid for 60 min; we refresh at 55 min to be safe.
+  // ----------------------------------------------------------
+  var tokenCache = { token: null, expiry: 0 };
+
+  // ----------------------------------------------------------
+  // BASE64URL HELPERS
+  // Web Crypto requires base64url encoding (no +, /, = chars).
+  // ----------------------------------------------------------
+  function base64url(str) {
+    return btoa(str).replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
+  }
+
+  function base64urlFromBuffer(buf) {
+    var bytes = new Uint8Array(buf);
+    var str = '';
+    bytes.forEach(function(b) { str += String.fromCharCode(b); });
+    return base64url(str);
+  }
+
+  // ----------------------------------------------------------
+  // PEM -> CryptoKey
+  // Strips the PEM header/footer and newlines, decodes the
+  // base64 DER bytes, and imports as an RSA-SHA256 signing key.
+  // ----------------------------------------------------------
+  function importPrivateKey(pem) {
+    var b64 = pem
+      .replace('-----BEGIN PRIVATE KEY-----', '')
+      .replace('-----END PRIVATE KEY-----', '')
+      .replace(/\n/g, '');
+    var binary = atob(b64);
+    var buf = new ArrayBuffer(binary.length);
+    var view = new Uint8Array(buf);
+    for (var i = 0; i < binary.length; i++) view[i] = binary.charCodeAt(i);
+    return crypto.subtle.importKey(
+      'pkcs8', buf,
+      { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' },
+      false, ['sign']
+    );
+  }
+
+  // ----------------------------------------------------------
+  // BUILD AND SIGN JWT
+  // Constructs a service account JWT per Google's spec:
+  // https://developers.google.com/identity/protocols/oauth2/service-account
+  // ----------------------------------------------------------
+  function buildJWT(cryptoKey) {
+    var now = Math.floor(Date.now() / 1000);
+    var header = base64url(JSON.stringify({ alg: 'RS256', typ: 'JWT', kid: KEY_ID }));
+    var claims = base64url(JSON.stringify({
+      iss: SA_EMAIL,
+      scope: 'https://www.googleapis.com/auth/calendar.readonly',
+      aud: 'https://oauth2.googleapis.com/token',
+      exp: now + 3600,
+      iat: now
+    }));
+    var sigInput = header + '.' + claims;
+    var enc = new TextEncoder();
+    return crypto.subtle.sign(
+      'RSASSA-PKCS1-v1_5',
+      cryptoKey,
+      enc.encode(sigInput)
+    ).then(function(sig) {
+      return sigInput + '.' + base64urlFromBuffer(sig);
+    });
+  }
+
+  // ----------------------------------------------------------
+  // GET OAUTH2 TOKEN
+  // Exchanges the signed JWT for a bearer token.
+  // Result is cached for 55 minutes.
+  // ----------------------------------------------------------
+  function getToken() {
+    if (tokenCache.token && Date.now() < tokenCache.expiry) {
+      return Promise.resolve(tokenCache.token);
+    }
+    return importPrivateKey(PRIVATE_KEY)
+      .then(buildJWT)
+      .then(function(jwt) {
+        return fetch('https://oauth2.googleapis.com/token', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: 'grant_type=urn%3Aietf%3Aparams%3Aoauth%3Agrant-type%3Ajwt-bearer&assertion=' + jwt
+        });
+      })
+      .then(function(r) { return r.json(); })
+      .then(function(data) {
+        if (!data.access_token) throw new Error('Token exchange failed: ' + JSON.stringify(data));
+        tokenCache.token = data.access_token;
+        tokenCache.expiry = Date.now() + 55 * 60 * 1000;
+        return data.access_token;
+      });
+  }
+
+  // ----------------------------------------------------------
+  // FETCH EVENTS FOR ONE CALENDAR
+  // Calls events.list for the given calendar and date range.
+  // Returns array of event objects with: title, start, end,
+  // color, calName.
+  // All-day events are included but rendered as full-day bars.
+  // ----------------------------------------------------------
+  function fetchCalendarEvents(token, calId, color, calName, timeMin, timeMax) {
+    var url = 'https://www.googleapis.com/calendar/v3/calendars/'
+      + encodeURIComponent(calId)
+      + '/events?timeMin=' + timeMin
+      + '&timeMax=' + timeMax
+      + '&singleEvents=true'
+      + '&orderBy=startTime'
+      + '&maxResults=250';
+
+    return fetch(url, {
+      headers: { 'Authorization': 'Bearer ' + token }
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      if (!data.items) {
+        console.warn('No items for ' + calName, data);
+        return [];
+      }
+      return data.items.map(function(ev) {
+        return {
+          title: ev.summary || '(no title)',
+          start: ev.start.dateTime || ev.start.date,
+          end:   ev.end.dateTime   || ev.end.date,
+          allDay: !ev.start.dateTime,
+          color: color,
+          calName: calName
+        };
+      });
+    })
+    .catch(function(e) {
+      console.warn('Failed to fetch ' + calName + ':', e);
+      return [];
+    });
+  }
+
+  // ----------------------------------------------------------
+  // WEEK STATE
+  // weekStart is always a Monday (day 1). Stored as a Date
+  // set to midnight local time.
+  // ----------------------------------------------------------
+  function getMondayOf(d) {
+    var day = d.getDay(); // 0=Sun, 1=Mon ... 6=Sat
+    var diff = (day === 0) ? -6 : 1 - day;
+    var mon = new Date(d);
+    mon.setDate(d.getDate() + diff);
+    mon.setHours(0, 0, 0, 0);
+    return mon;
+  }
+
+  var currentWeekStart = getMondayOf(new Date());
+
+  // ----------------------------------------------------------
+  // RENDER WIDGET
+  // Builds the HTML structure for the week grid, then fetches
+  // all calendar events and positions them.
+  // Called on load and on every prev/next/today navigation.
+  // ----------------------------------------------------------
+  function renderWidget(weekStart) {
+    var widget = document.getElementById('cal-widget');
+    if (!widget) return;
+
+    // Mon-Fri only - weekends excluded
+    var days = [];
+    for (var i = 0; i < 5; i++) {
+      var d = new Date(weekStart);
+      d.setDate(weekStart.getDate() + i);
+      days.push(d);
+    }
+
+    var today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    // Format week label e.g. "28 Apr - 4 May 2026"
+    var months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    var dayNames = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+    var startLabel = days[0].getDate() + ' ' + months[days[0].getMonth()];
+    var endLabel   = days[4].getDate() + ' ' + months[days[4].getMonth()] + ' ' + days[4].getFullYear();
+    var weekLabel  = startLabel + ' - ' + endLabel;
+
+    // Build toolbar HTML
+    var toolbarHTML = '<div class="cal-toolbar">'
+      + '<button id="cal-today-btn">Today</button>'
+      + '<button id="cal-prev-btn">&#8249;</button>'
+      + '<button id="cal-next-btn">&#8250;</button>'
+      + '<span class="cal-week-label">' + weekLabel + '</span>'
+      + '<span class="cal-loading" id="cal-loading">Loading...</span>'
+      + '</div>';
+
+    // Build day header row
+    var headerHTML = '<div class="cal-header"><div class="cal-header-gutter"></div>';
+    days.forEach(function(d) {
+      var isToday = d.getTime() === today.getTime();
+      headerHTML += '<div class="cal-day-head' + (isToday ? ' today' : '') + '">'
+        + dayNames[days.indexOf(d)]
+        + '<span class="cal-day-num">' + d.getDate() + '</span>'
+        + '</div>';
+    });
+    headerHTML += '</div>';
+
+    // Build time grid body
+    // Time gutter: labels for each hour
+    var timeGutterHTML = '<div class="cal-time-col">';
+    for (var h = 0; h < 24; h++) {
+      var label = h === 0 ? '' : (h < 10 ? '0' + h : h) + ':00';
+      timeGutterHTML += '<div class="cal-time-slot">' + label + '</div>';
+    }
+    timeGutterHTML += '</div>';
+
+    // Day columns: background grid lines only (events added later by JS)
+    var dayColsHTML = '';
+    days.forEach(function(d, idx) {
+      dayColsHTML += '<div class="cal-day-col" id="cal-col-' + idx + '">'
+        + '<div class="cal-day-col-inner">';
+      // Hour lines
+      for (var h = 0; h < 24; h++) {
+        dayColsHTML += '<div class="cal-hour-line" style="top:' + (h * 48) + 'px;"></div>';
+        dayColsHTML += '<div class="cal-half-line" style="top:' + (h * 48 + 24) + 'px;"></div>';
+      }
+      dayColsHTML += '</div></div>';
+    });
+
+    var bodyHTML = '<div class="cal-body-scroll"><div class="cal-body">'
+      + timeGutterHTML
+      + dayColsHTML
+      + '</div></div>';
+
+    widget.innerHTML = toolbarHTML + headerHTML + bodyHTML;
+
+    // Wire up toolbar buttons
+    document.getElementById('cal-today-btn').addEventListener('click', function() {
+      currentWeekStart = getMondayOf(new Date());
+      renderWidget(currentWeekStart);
+    });
+    document.getElementById('cal-prev-btn').addEventListener('click', function() {
+      currentWeekStart.setDate(currentWeekStart.getDate() - 7);
+      renderWidget(currentWeekStart);
+    });
+    document.getElementById('cal-next-btn').addEventListener('click', function() {
+      currentWeekStart.setDate(currentWeekStart.getDate() + 7);
+      renderWidget(currentWeekStart);
+    });
+
+    // ISO8601 range for API calls
+    var timeMin = days[0].toISOString().replace('.000Z', 'Z');
+    var weekEnd = new Date(days[4]);
+    weekEnd.setDate(weekEnd.getDate() + 1);
+    var timeMax = weekEnd.toISOString().replace('.000Z', 'Z');
+
+    // Fetch all calendars in parallel then render events
+    getToken().then(function(token) {
+      var fetches = CALENDARS.map(function(cal) {
+        return fetchCalendarEvents(token, cal.id, cal.color, cal.name, timeMin, timeMax);
+      });
+      return Promise.all(fetches);
+    })
+    .then(function(results) {
+      var loadingEl = document.getElementById('cal-loading');
+      if (loadingEl) loadingEl.textContent = '';
+
+      // Flatten all events from all calendars
+      var allEvents = [];
+      results.forEach(function(evs) { allEvents = allEvents.concat(evs); });
+
+      allEvents.forEach(function(ev) {
+        // Work out which day column this event belongs to
+        var evDate = new Date(ev.start);
+        evDate.setHours(0, 0, 0, 0);
+
+        var colIdx = -1;
+        days.forEach(function(d, i) {
+          if (d.getTime() === evDate.getTime()) colIdx = i;
+        });
+        if (colIdx === -1) return; // event outside displayed week
+
+        var col = document.getElementById('cal-col-' + colIdx);
+        if (!col) return;
+        var inner = col.querySelector('.cal-day-col-inner');
+        if (!inner) return;
+
+        // Calculate top and height in pixels
+        // Each hour = 48px. 1 minute = 48/60 = 0.8px.
+        var topPx, heightPx;
+
+        if (ev.allDay) {
+          topPx = 0;
+          heightPx = 1152; // full day
+        } else {
+          var startDate = new Date(ev.start);
+          var endDate   = new Date(ev.end);
+          var startMins = startDate.getHours() * 60 + startDate.getMinutes();
+          var endMins   = endDate.getHours()   * 60 + endDate.getMinutes();
+          if (endMins <= startMins) endMins = startMins + 30; // guard against zero-length
+          topPx    = startMins * 0.8;
+          heightPx = Math.max((endMins - startMins) * 0.8, 18); // min 18px
+        }
+
+        // Format time for tooltip e.g. "09:00 - 10:30"
+        function fmtTime(iso) {
+          var d = new Date(iso);
+          return (d.getHours() < 10 ? '0' : '') + d.getHours() + ':'
+               + (d.getMinutes() < 10 ? '0' : '') + d.getMinutes();
+        }
+        var timeStr = ev.allDay ? 'All day' : fmtTime(ev.start) + ' - ' + fmtTime(ev.end);
+
+        // Create event block
+        var el = document.createElement('div');
+        el.className = 'cal-event';
+        el.style.top       = topPx + 'px';
+        el.style.height    = heightPx + 'px';
+        el.style.background = ev.color;
+        el.textContent = ev.title;
+
+        // Tooltip on hover - uses fixed positioning relative to cursor
+        var tooltip = document.getElementById('cal-tooltip');
+        el.addEventListener('mouseenter', function(e) {
+          tooltip.innerHTML = '<strong>' + ev.title + '</strong><br>'
+            + ev.calName + '<br>'
+            + timeStr;
+          tooltip.classList.add('visible');
+        });
+        el.addEventListener('mousemove', function(e) {
+          tooltip.style.left = (e.clientX + 14) + 'px';
+          tooltip.style.top  = (e.clientY - 10) + 'px';
+        });
+        el.addEventListener('mouseleave', function() {
+          tooltip.classList.remove('visible');
+        });
+
+        inner.appendChild(el);
+      });
+
+      // Scroll to 07:00 on load (7 * 48 = 336px)
+      var scroll = document.querySelector('.cal-body-scroll');
+      if (scroll) scroll.scrollTop = 336;
+    })
+    .catch(function(err) {
+      console.error('Calendar load error:', err);
+      var loadingEl = document.getElementById('cal-loading');
+      if (loadingEl) loadingEl.textContent = 'Error loading calendar - see console';
+    });
+  }
+
+  // Initial render on page load
+  renderWidget(currentWeekStart);
+
+})();
+</script>
 
 </body>
 </html>
