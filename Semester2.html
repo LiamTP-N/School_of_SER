@@ -781,7 +781,7 @@ function selectModule(code) {
   const existing = document.getElementById('mod-' + code);
   if (!existing) {
     const block = renderModule(code);
-    document.getElementById('mainContent').appendChild(block);
+    if (block) document.getElementById('mainContent').appendChild(block);
   }
 
   // Populate staff filter for this module
@@ -832,8 +832,7 @@ function renderStaffFilter(code) {
     div.className = 'mod-link';
     div.id = 'sf-' + name.replace(/\s+/g, '_');
     // Show first name only to keep pills compact
-    div.textContent = name.split(' ')[0];
-    div.title = name; // full name on hover
+    div.textContent = name; // full name - this is a university
     div.addEventListener('click', () => applyStaffFilter(name, code));
     sidebar.appendChild(div);
   });
@@ -900,7 +899,7 @@ function renderModule(code) {
       if (field === 'moduleCode' || field === 'moduleName') {
         // Update sidebar label
         const sbl = document.getElementById('sbl-' + code);
-        if (sbl) sbl.innerHTML = '<span>' + esc(mod.code) + '<span class="mod-sub">' + esc(mod.name.replace(mod.code,'').trim().replace(/^[-\s]+/,'')) + '</span></span><span class="mod-n" title="' + mod.sessions.length + ' session' + (mod.sessions.length!==1?'s':'') + '">' + mod.sessions.length + '</span>';
+        if (sbl) sbl.textContent = mod.code;
       }
     });
     span.addEventListener('keydown', e => { if (e.key==='Enter') { e.preventDefault(); span.blur(); } });
