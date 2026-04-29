@@ -1,58 +1,4 @@
 <!DOCTYPE html>
-<!--
-  ============================================================
-  FILE: workflow.html
-  PURPOSE: SER departmental workflow map — Teaching & Research
-  OWNER: Liam Pearson-Noseworthy, Northumbria University
-  LAST UPDATED: 2026-04-29
-
-  FOR AI/LLM READERS — ARCHITECTURE OVERVIEW
-  ============================================================
-  Zero-dependency static HTML. No build step. Open directly in
-  a browser or host on SharePoint/Teams.
-
-  DATA LAYER — FIREBASE FIRESTORE
-  Three collections:
-    nodes   — workflow boxes: {workflow, step, task, col, row,
-                               url, audience, documents, deadline, notes}
-    edges   — connectors:     {from (nodeId), to (nodeId), label}
-    links   — sidebar links:  {name, url}
-
-  EDGE LABELS (added 2026-04-29)
-  Each edge now has an optional `label` string field.
-  Common values: "Yes", "No", "" (unlabelled).
-  Labels render as colour-coded pills on the SVG connector line:
-    "yes" (case-insensitive) → green pill
-    "no"  (case-insensitive) → red/salmon pill
-    anything else            → grey pill
-    blank / absent           → no pill
-  This replaces the old pattern of Yes/No boxes branching off
-  decision nodes — labels on the lines carry the same information
-  at a fraction of the canvas space.
-
-  HOW TO EDIT A LABEL:
-  - Click the pill on a connector line  → prompt to change
-  - Open a box (click it), scroll the connections panel → "+ label"
-    badge on each outgoing edge, or click existing badge to edit
-  - When drawing a NEW connector, you are prompted for a label
-
-  LAYOUT SYSTEM
-  Nodes are placed on a (workflow × col × row) grid.
-  workflow = "Teaching" | "Research"
-  col      = 0..4 (sub-lane within the workflow column)
-  row      = 0..N (shared row index, Mon-style grid)
-  Pixel coords are computed at render time — only col/row stored.
-
-  INTERACTION
-  - Drag canvas to pan; scroll to zoom
-  - Click a node to open its edit popup
-  - Hover a node → + port buttons appear; click to spawn a child;
-    mousedown + drag to connect to an existing node
-  - Ctrl+click nodes to multi-select; drag any selected to move all
-  - Click a connector line to select it (shows × delete button)
-  - Click a label pill to rename it
-  ============================================================
--->
 <html lang="en">
 <head>
   <meta charset="UTF-8">
@@ -88,7 +34,7 @@
 
     /* ── Canvas wrap ── */
     #canvasWrap {
-      position:fixed; top:48px; left:0; right:260px; bottom:0; overflow:hidden;
+      position:fixed; top:48px; left:0; right:0; bottom:0; overflow:hidden;
     }
 
     /* ── SVG for lanes + edges (behind nodes) ── */
@@ -175,13 +121,6 @@
     @media(prefers-color-scheme:dark){ .node-input textarea{color:#e0e0e0;} }
     .node-input-hint { font-size:10px; color:#bbb; margin-top:6px; }
 
-    /* ── Right panel ── */
-    #rightPanel {
-      position:fixed; top:48px; right:0; bottom:0; width:260px;
-      background:white; border-left:1px solid #ddd;
-      display:flex; flex-direction:column; z-index:200;
-    }
-    @media(prefers-color-scheme:dark){ #rightPanel{background:#1c1c20;border-left-color:#2e2e34;} }
 
     /* ── Floating popup ── */
     #stepDetail {
@@ -251,36 +190,6 @@
                 background:transparent; color:#bbb; cursor:pointer; flex-shrink:0; }
     .conn-del:hover { border-color:#e74c3c; color:#c0392b; background:transparent; }
 
-    /* ── Links panel ── */
-    #linksPanel { padding:16px 20px; flex:1; overflow-y:auto; }
-    .lp-header { font-size:10px; font-weight:700; letter-spacing:0.07em; text-transform:uppercase;
-                 color:#bbb; margin-bottom:10px; display:flex; align-items:center; justify-content:space-between; }
-    .lp-add { font-size:11px; padding:2px 8px; border:1px solid #ddd; border-radius:3px;
-              background:transparent; color:#888; cursor:pointer; }
-    .lp-add:hover { border-color:#1f4e78; color:#1f4e78; background:transparent; }
-    .li { display:flex; align-items:center; gap:6px; padding:4px 0; border-bottom:1px solid #f5f5f5; }
-    .li:last-child { border-bottom:none; }
-    @media(prefers-color-scheme:dark){ .li{border-bottom-color:#2a2a2e;} }
-    .li a { font-size:12px; color:#1f4e78; text-decoration:none; flex:1;
-             overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-    .li a:hover { text-decoration:underline; }
-    @media(prefers-color-scheme:dark){ .li a{color:#5b9bd5;} }
-    .li-edit { font-size:10px; padding:1px 6px; border:1px solid #e0e0e0; border-radius:3px;
-               background:transparent; color:#bbb; cursor:pointer; flex-shrink:0; }
-    .li-edit:hover { border-color:#1f4e78; color:#1f4e78; background:transparent; }
-    .lp-empty { font-size:12px; color:#ccc; }
-    .lp-form { display:none; flex-direction:column; gap:6px; margin-top:8px; }
-    .lp-form.vis { display:flex; }
-    .lp-form input { width:100%; padding:5px 8px; border:1px solid #e0e0e0; border-radius:4px;
-                     font-size:12px; font-family:inherit; background:white; color:#222; }
-    @media(prefers-color-scheme:dark){ .lp-form input{background:#2a2a2e;color:#ddd;border-color:#3a3a40;} }
-    .lp-btns { display:flex; gap:6px; }
-    .lp-btns button { flex:1; padding:5px; font-size:12px; border-radius:4px; cursor:pointer;
-                      border:1px solid #ddd; background:white; color:#555; }
-    .lp-btns .lp-save { background:#1f4e78; color:white; border-color:#1f4e78; }
-    .lp-btns .lp-save:hover { background:#163a5a; }
-    .lp-btns .lp-ddel { border-color:#e74c3c; color:#c0392b; }
-    @media(prefers-color-scheme:dark){ .lp-btns button{background:#2a2a2e;color:#ccc;border-color:#3a3a40;} }
 
     /* ── Canvas toolbar ── */
     .canvas-toolbar {
@@ -348,31 +257,6 @@
     }
     @media(prefers-color-scheme:dark){
       .node.multi-selected{border-color:#5b9bd5 !important;box-shadow:0 0 0 2px rgba(91,155,213,0.3) !important;}
-    }
-
-    /* ── Edge label pill ──
-       Rendered as a <foreignObject> inside the SVG so we get
-       proper text rendering without canvas hacks.
-       Yes labels = green, No labels = red/salmon, other = grey.
-       The pill sits at the midpoint of the longer segment.    ── */
-    .edge-label {
-      display:inline-block;
-      font-size:10px; font-weight:700; letter-spacing:0.04em;
-      padding:1px 6px; border-radius:10px;
-      white-space:nowrap; cursor:pointer;
-      user-select:none; line-height:1.6;
-      border:1px solid transparent;
-      transition:filter 0.12s;
-    }
-    .edge-label:hover { filter:brightness(1.15); }
-    /* Colour variants applied via data-ltype attribute */
-    .edge-label[data-ltype="yes"]   { background:#d4edda; color:#155724; border-color:#a3cfbb; }
-    .edge-label[data-ltype="no"]    { background:#f8d7da; color:#721c24; border-color:#f1aeb5; }
-    .edge-label[data-ltype="other"] { background:#e2e3e5; color:#383d41; border-color:#c8cbcf; }
-    @media(prefers-color-scheme:dark){
-      .edge-label[data-ltype="yes"]   { background:#1a3a22; color:#75c98b; border-color:#2d6a3f; }
-      .edge-label[data-ltype="no"]    { background:#3a1a1a; color:#e07070; border-color:#6a2d2d; }
-      .edge-label[data-ltype="other"] { background:#2a2a30; color:#aaa;    border-color:#3a3a44; }
     }
 
     /* ── Edge delete button ── */
@@ -464,30 +348,12 @@
   <div class="sf sf-task"><label>Task</label><div id="sf-task" contenteditable="true" spellcheck="true"></div></div>
   <div class="sf"><label>URL</label><input id="sf-url" placeholder="https://..."></div>
   <div class="sf"><label>Notes</label><textarea id="sf-notes"></textarea></div>
-  <p class="sd-hint">Drag from + handles to connect. Label connectors Yes/No instead of using separate boxes. Cross-lane lines draw as dashed.</p>
+  <p class="sd-hint">Drag from + handles to connect. Cross-lane lines draw as dashed.</p>
   <div class="sd-btns">
     <button class="btn-del" onclick="deleteNode()">Delete</button>
     <button class="btn-save" onclick="saveDetail()">Save</button>
   </div>
   <div id="connSection"></div>
-</div>
-
-<div id="rightPanel">
-  <div id="linksPanel">
-    <div class="lp-header">
-      <span>Useful Links</span>
-      <button class="lp-add" onclick="showLinkForm(null)">+ Add</button>
-    </div>
-    <div id="linksList"><span class="lp-empty">No links yet</span></div>
-    <div class="lp-form" id="lpForm">
-      <input id="lpName" placeholder="Name (e.g. Timetabling)">
-      <input id="lpUrl"  placeholder="https://...">
-      <div class="lp-btns">
-        <button id="lpDel" class="lp-ddel" style="display:none" onclick="deleteLink()">Delete</button>
-        <button onclick="hideLinkForm()">Cancel</button>
-        <button class="lp-save" onclick="saveLink()">Save</button>
-      </div>
-    </div>
 </div>
 
 <div class="canvas-toolbar">
@@ -578,8 +444,8 @@ function rowFromY(py) {
 }
 
 // ── State ─────────────────────────────────────────────
-let nodes = {}, edges = {}, links = {};
-let selectedId = null, selectedEdgeId = null, filter = 'all', populateUsed = false, editLinkId = null;
+let nodes = {}, edges = {};
+let selectedId = null, selectedEdgeId = null, filter = 'all', populateUsed = false;
 let panX = 0, panY = 0, zoom = 1;
 let isPanning = false, panSX = 0, panSY = 0;
 let connecting = false, connectFrom = null;
@@ -678,18 +544,15 @@ document.addEventListener('keydown', e => {
 async function loadAll() {
   try {
     setStatus('Loading...');
-    const [ns, es, ls] = await Promise.all([
+    const [ns, es] = await Promise.all([
       getDocs(collection(db,'nodes')),
       getDocs(collection(db,'edges')),
-      getDocs(collection(db,'links')),
     ]);
     nodes = {}; ns.forEach(d => { nodes[d.id] = d.data(); });
     edges = {}; es.forEach(d => { edges[d.id] = d.data(); });
-    links = {}; ls.forEach(d => { links[d.id] = d.data(); });
     setStatus(`${ns.size} box${ns.size!==1?'es':''} · ${new Date().toLocaleTimeString()}`);
     renderLanes();
     renderAll();
-    renderLinks();
   } catch(e) { console.error(e); setStatus('Error: '+e.message); }
 }
 
@@ -946,47 +809,7 @@ function renderEdge(id) {
   }
   edgeGroup.appendChild(path);
 
-  // ── EDGE LABEL (Yes / No / custom text) ──────────────
-  // Label is stored as e.label in Firestore.
-  // Rendered as a <foreignObject> pill at the midpoint of the
-  // horizontal jog segment (or midpoint of a straight vertical line).
-  // Clicking the label opens a prompt to change it.
-  // Colour-coding: "yes" (case-insensitive) = green,
-  //                "no"  (case-insensitive) = red,
-  //                anything else            = grey.
-  const label = (e.label || '').trim();
-  if (label) {
-    const lx = (x1 + x2) / 2;    // midpoint of horizontal jog
-    const ly = midY;               // sits on the jog line
-    const fo = document.createElementNS('http://www.w3.org/2000/svg','foreignObject');
-    fo.setAttribute('x', lx - 30);  // rough centering; width is content-sized
-    fo.setAttribute('y', ly - 11);
-    fo.setAttribute('width', 60);
-    fo.setAttribute('height', 22);
-    fo.setAttribute('overflow', 'visible');
-    const ltype = label.toLowerCase() === 'yes' ? 'yes'
-                : label.toLowerCase() === 'no'  ? 'no'
-                : 'other';
-    fo.innerHTML = `<div xmlns="http://www.w3.org/1999/xhtml"
-      style="display:flex;justify-content:center;">
-      <span class="edge-label" data-ltype="${ltype}"
-        title="Click to edit label">${label}</span></div>`;
-    // Click label to rename
-    fo.addEventListener('click', async ev => {
-      ev.stopPropagation();
-      const raw = window.prompt('Edit edge label (Yes, No, or blank to remove)', label);
-      if (raw === null) return;
-      const newLabel = raw.trim();
-      try {
-        await updateDoc(doc(db,'edges',id), {label: newLabel});
-        edges[id].label = newLabel;
-        renderEdges();
-      } catch(err) { alert('Error: '+err.message); }
-    });
-    edgeGroup.appendChild(fo);
-  }
-
-  // Wide invisible hit area (easier to click than the thin line)
+  // Wide invisible hit area (easier to click)
   const hit = document.createElementNS('http://www.w3.org/2000/svg','path');
   hit.setAttribute('d', d);
   hit.setAttribute('fill','none');
@@ -1292,30 +1115,14 @@ function cancelConnect() {
   preview.setAttribute('d','');
   document.querySelectorAll('.node.drag-over').forEach(n=>n.classList.remove('drag-over'));
 }
-async function createEdge(fromId, toId, labelOverride) {
-  // ── EDGE CREATION WITH OPTIONAL LABEL ────────────────
-  // labelOverride: pass a string to skip the prompt (e.g. from populate).
-  // When called from a user connect gesture, we prompt so they can
-  // type "Yes", "No", or leave blank for an unlabelled line.
-  // Labels are stored in Firestore on the edge document and rendered
-  // as colour-coded pills on the SVG connector line.
+async function createEdge(fromId, toId) {
   const exists = Object.values(edges).find(e=>e.from===fromId&&e.to===toId);
   if (exists) { hint('Already connected'); return; }
-
-  let label;
-  if (labelOverride !== undefined) {
-    label = labelOverride;
-  } else {
-    const raw = window.prompt('Edge label? Type Yes, No, or leave blank for none', '');
-    if (raw === null) return; // cancelled
-    label = raw.trim();
-  }
-
   pushUndo('connect');
   try {
     setStatus('Connecting...');
-    const ref = await addDoc(collection(db,'edges'), {from:fromId, to:toId, label:label||''});
-    edges[ref.id] = {from:fromId, to:toId, label:label||''};
+    const ref = await addDoc(collection(db,'edges'), {from:fromId,to:toId});
+    edges[ref.id] = {from:fromId,to:toId};
     renderEdges();
     if (selectedId) renderConnSection(selectedId);
     setStatus('Connected · '+new Date().toLocaleTimeString());
@@ -1464,64 +1271,22 @@ function openDetail(id) {
   }
 }
 function renderConnSection(id) {
-  // ── CONNECTIONS PANEL ─────────────────────────────────
-  // Lists outgoing (→) and incoming (←) edges for the selected node.
-  // Each outgoing edge shows its label with a small editable badge
-  // so users can change Yes/No labels without clicking on the line.
-  // Incoming edges are read-only here (label is owned by the from-node).
   const out = Object.entries(edges).filter(([,e])=>e.from===id);
   const inc = Object.entries(edges).filter(([,e])=>e.to===id);
   let html = '<div class="conn-section"><h4>Connections</h4>';
-  if (!out.length && !inc.length) {
-    html += '<div style="font-size:12px;color:#bbb;">None — drag from a + handle to connect</div>';
-  }
+  if (!out.length && !inc.length) html += '<div style="font-size:12px;color:#bbb;">None — drag from a + handle to connect</div>';
   out.forEach(([eid,e]) => {
     const t = nodes[e.to];
     const cross = t && nodes[id] && t.workflow!==nodes[id].workflow;
-    const lbl = (e.label||'').trim();
-    const ltype = lbl.toLowerCase()==='yes'?'yes':lbl.toLowerCase()==='no'?'no':lbl?'other':'';
-    const lblBadge = lbl
-      ? `<span class="edge-label" data-ltype="${ltype}" style="font-size:9px;padding:0 4px;cursor:pointer;"
-           title="Click to change label" onclick="editEdgeLabel('${eid}','${esc(lbl)}')">${esc(lbl)}</span>`
-      : `<button style="font-size:9px;padding:1px 5px;border:1px dashed #bbb;border-radius:8px;
-           background:transparent;color:#bbb;cursor:pointer;font-family:inherit;"
-           onclick="editEdgeLabel('${eid}','')" title="Add Yes/No label">+ label</button>`;
-    html += `<div class="conn-item">
-      <span class="conn-label">→ ${esc((t?.task||'?').slice(0,22))}${cross?' <em style="color:#c0a060;font-style:normal;">(cross)</em>':''}</span>
-      ${lblBadge}
-      <button class="conn-del" onclick="removeEdge('${eid}')">×</button>
-    </div>`;
+    html += `<div class="conn-item"><span class="conn-label">→ ${esc((t?.task||'?').slice(0,26))}${cross?' <em style="color:#c0a060;font-style:normal;">(cross-lane)</em>':''}</span><button class="conn-del" onclick="removeEdge('${eid}')">×</button></div>`;
   });
   inc.forEach(([eid,e]) => {
     const f = nodes[e.from];
-    const lbl = (e.label||'').trim();
-    const ltype = lbl.toLowerCase()==='yes'?'yes':lbl.toLowerCase()==='no'?'no':lbl?'other':'';
-    const lblBadge = lbl
-      ? `<span class="edge-label" data-ltype="${ltype}" style="font-size:9px;padding:0 4px;">${esc(lbl)}</span>`
-      : '';
-    html += `<div class="conn-item">
-      <span class="conn-label">← ${esc((f?.task||'?').slice(0,22))}</span>
-      ${lblBadge}
-      <button class="conn-del" onclick="removeEdge('${eid}')">×</button>
-    </div>`;
+    html += `<div class="conn-item"><span class="conn-label">← ${esc((f?.task||'?').slice(0,26))}</span><button class="conn-del" onclick="removeEdge('${eid}')">×</button></div>`;
   });
   html += '</div>';
   document.getElementById('connSection').innerHTML = html;
 }
-
-// ── Edit edge label from connections panel ────────────
-// Exposed as window so it can be called from inline onclick handlers.
-window.editEdgeLabel = async function(eid, currentLabel) {
-  const raw = window.prompt('Edge label (Yes, No, or blank to remove)', currentLabel);
-  if (raw === null) return;
-  const newLabel = raw.trim();
-  try {
-    await updateDoc(doc(db,'edges',eid), {label: newLabel});
-    edges[eid].label = newLabel;
-    renderEdges();
-    if (selectedId) renderConnSection(selectedId);
-  } catch(err) { alert('Error: '+err.message); }
-};
 window.removeEdge = async function(eid) {
   pushUndo('remove connection');
   try { await deleteDoc(doc(db,'edges',eid)); delete edges[eid]; renderEdges(); if(selectedId)renderConnSection(selectedId); }
@@ -1625,45 +1390,6 @@ document.querySelectorAll('.fb').forEach(b => {
   });
 });
 
-// ── Links ─────────────────────────────────────────────
-function renderLinks() {
-  const list = document.getElementById('linksList');
-  const entries = Object.entries(links).sort((a,b)=>(a[1].name||'').localeCompare(b[1].name||''));
-  if (!entries.length) { list.innerHTML='<span class="lp-empty">No links yet</span>'; return; }
-  list.innerHTML = entries.map(([id,l])=>`
-    <div class="li"><a href="${esc(l.url||'#')}" target="_blank" rel="noopener">${esc(l.name||'Untitled')}</a>
-    <button class="li-edit" onclick="showLinkForm('${id}')">edit</button></div>`).join('');
-}
-window.showLinkForm = function(id) {
-  editLinkId=id;
-  document.getElementById('lpName').value=id?(links[id]?.name||''):'';
-  document.getElementById('lpUrl').value=id?(links[id]?.url||''):'';
-  document.getElementById('lpDel').style.display=id?'':'none';
-  document.getElementById('lpForm').classList.add('vis');
-  document.getElementById('lpName').focus();
-};
-window.hideLinkForm = function() { editLinkId=null; document.getElementById('lpForm').classList.remove('vis'); };
-window.saveLink = async function() {
-  const name=document.getElementById('lpName').value.trim();
-  const url=document.getElementById('lpUrl').value.trim();
-  if (!name||!url) { alert('Both fields required.'); return; }
-  try {
-    if (editLinkId) await updateDoc(doc(db,'links',editLinkId),{name,url});
-    else await addDoc(collection(db,'links'),{name,url});
-    window.hideLinkForm();
-    const snap=await getDocs(collection(db,'links'));
-    links={}; snap.forEach(d=>{links[d.id]=d.data();}); renderLinks();
-  } catch(e) { alert('Error: '+e.message); }
-};
-window.deleteLink = async function() {
-  if (!editLinkId) return;
-  if (!confirm(`Delete "${links[editLinkId]?.name}"?`)) return;
-  try {
-    await deleteDoc(doc(db,'links',editLinkId)); window.hideLinkForm();
-    const snap=await getDocs(collection(db,'links'));
-    links={}; snap.forEach(d=>{links[d.id]=d.data();}); renderLinks();
-  } catch(e) { alert('Error: '+e.message); }
-};
 
 // ── Populate ──────────────────────────────────────────
 document.getElementById('populateBtn').addEventListener('click', async () => {
@@ -1692,16 +1418,10 @@ document.getElementById('populateBtn').addEventListener('click', async () => {
     for (const [k,data] of Object.entries(nData)) {
       const r = doc(collection(db,'nodes')); batch.set(r,data); nIds[k]=r.id;
     }
-    // Default edges now include Yes/No labels so the diagram reads without
-    // needing separate Yes/No box nodes. Label field matches the edge-label
-    // CSS colour coding (yes=green, no=red, ''=unlabelled).
-    const edgeList = [
-      ['t1','t2','Yes'], ['t1','t1a','No'], ['t1a','t1b',''],
-      ['t1b','t2',''],   ['t2','t3',''],
-      ['r1','r2','Yes'], ['r1','r1a','No'], ['r1a','r1b',''], ['r1b','r2',''],
-    ];
-    for (const [a,b,lbl] of edgeList) {
-      batch.set(doc(collection(db,'edges')), {from:nIds[a], to:nIds[b], label:lbl});
+    const edgeList = [['t1','t2'],['t1','t1a'],['t1a','t1b'],['t1b','t2'],['t2','t3'],
+                      ['r1','r2'],['r1','r1a'],['r1a','r1b'],['r1b','r2']];
+    for (const [a,b] of edgeList) {
+      batch.set(doc(collection(db,'edges')), {from:nIds[a],to:nIds[b]});
     }
     await batch.commit();
     btn.style.display='none';
