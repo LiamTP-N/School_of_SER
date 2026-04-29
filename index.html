@@ -266,44 +266,68 @@
        Replaces the Google embed iframe. Renders events fetched
        from the Calendar API into a week-view grid.
        ============================================================ */
+    /* ============================================================
+       CUSTOM CALENDAR WIDGET - DARK MODE
+       Dark background with alternating day column shades so
+       staff can distinguish days at a glance. Odd columns
+       (Mon, Wed, Fri) are slightly lighter than even (Tue, Thu).
+       Hour lines and half-hour lines are subtle so event colours
+       stand out. Toolbar and headers match the dark aesthetic.
+       ============================================================ */
+
+    /* Dark mode CSS variables scoped to the calendar widget */
     .cal-widget {
-      border: 1px solid var(--border);
+      --cal-bg:         #1e1e1e; /* main background */
+      --cal-bg-odd:     #242424; /* Mon, Wed, Fri column fill */
+      --cal-bg-even:    #1a1a1a; /* Tue, Thu column fill - slightly darker */
+      --cal-toolbar-bg: #161616;
+      --cal-header-bg:  #161616;
+      --cal-border:     #333333;
+      --cal-border-half:#2a2a2a;
+      --cal-text:       #cccccc;
+      --cal-text-dim:   #666666;
+      --cal-btn-bg:     #2a2a2a;
+      --cal-btn-hover:  #333333;
+      --cal-today-bg:   #2d2d1a; /* subtle yellow tint for today column */
+      --cal-today-head: #ffdd44;
+      border: 1px solid #333333;
       margin-bottom: 20px;
-      background: var(--white);
+      background: var(--cal-bg);
     }
 
-    /* Toolbar: Today / prev / next / week label */
+    /* Toolbar */
     .cal-toolbar {
       display: flex;
       align-items: center;
       gap: 10px;
       padding: 12px 16px;
-      border-bottom: 1px solid var(--border);
-      background: var(--bg);
+      border-bottom: 1px solid var(--cal-border);
+      background: var(--cal-toolbar-bg);
     }
 
     .cal-toolbar button {
-      background: var(--white);
-      border: 1px solid var(--border);
-      color: var(--black);
+      background: var(--cal-btn-bg);
+      border: 1px solid var(--cal-border);
+      color: var(--cal-text);
       font-size: 12px;
       font-weight: 600;
       padding: 5px 12px;
       cursor: pointer;
       font-family: inherit;
+      transition: background 0.1s;
     }
-    .cal-toolbar button:hover { background: var(--bg); border-color: var(--light); }
+    .cal-toolbar button:hover { background: var(--cal-btn-hover); }
 
     .cal-week-label {
       font-size: 14px;
       font-weight: 700;
-      color: var(--black);
+      color: #ffffff;
       margin-left: 4px;
     }
 
     .cal-loading {
       font-size: 12px;
-      color: var(--light);
+      color: var(--cal-text-dim);
       margin-left: auto;
     }
 
@@ -312,42 +336,45 @@
       display: grid;
       /* Time gutter (48px) + 5 day columns (Mon-Fri, weekends excluded) */
       grid-template-columns: 48px repeat(5, 1fr);
-      border-bottom: 1px solid var(--border);
+      border-bottom: 1px solid var(--cal-border);
+      background: var(--cal-header-bg);
     }
 
     .cal-header-gutter {
-      border-right: 1px solid var(--border);
+      border-right: 1px solid var(--cal-border);
     }
 
     .cal-day-head {
       padding: 8px 4px;
       text-align: center;
-      border-right: 1px solid var(--border);
+      border-right: 1px solid var(--cal-border);
       font-size: 11px;
       font-weight: 700;
-      color: var(--mid);
+      color: var(--cal-text-dim);
       text-transform: uppercase;
       letter-spacing: 0.05em;
     }
 
+    /* Today column header - subtle yellow highlight */
     .cal-day-head.today {
-      color: var(--black);
-      background: #f0f0f0;
+      color: var(--cal-today-head);
+      background: #252510;
     }
 
     .cal-day-head .cal-day-num {
       display: block;
       font-size: 18px;
       font-weight: 900;
-      color: var(--black);
+      color: var(--cal-text);
       letter-spacing: -0.02em;
       line-height: 1.1;
       margin-top: 2px;
     }
 
+    /* Today date number - yellow circle */
     .cal-day-head.today .cal-day-num {
-      background: var(--black);
-      color: var(--white);
+      background: #ffdd44;
+      color: #111111;
       width: 32px;
       height: 32px;
       border-radius: 50%;
@@ -370,11 +397,12 @@
       position: relative;
     }
 
-    /* Time gutter labels - one per hour */
+    /* Time gutter - dark, right-aligned hour labels */
     .cal-time-col {
       grid-column: 1;
       grid-row: 1 / span 24;
-      border-right: 1px solid var(--border);
+      border-right: 1px solid var(--cal-border);
+      background: var(--cal-toolbar-bg);
     }
 
     .cal-time-slot {
@@ -384,15 +412,27 @@
       justify-content: flex-end;
       padding: 2px 6px 0 0;
       font-size: 10px;
-      color: var(--light);
+      color: var(--cal-text-dim);
       font-weight: 500;
-      border-bottom: 1px solid var(--border);
+      border-bottom: 1px solid var(--cal-border);
     }
 
-    /* Day columns - background grid lines */
+    /* Day columns - alternating shades for easy day identification.
+       odd-col = Mon(1), Wed(3), Fri(5) - slightly lighter
+       even-col = Tue(2), Thu(4) - slightly darker
+       today-col = overrides with a subtle yellow tint */
     .cal-day-col {
       position: relative;
-      border-right: 1px solid var(--border);
+      border-right: 1px solid var(--cal-border);
+      background: var(--cal-bg-odd); /* default = odd shade */
+    }
+
+    .cal-day-col.even-col {
+      background: var(--cal-bg-even);
+    }
+
+    .cal-day-col.today-col {
+      background: #222215; /* very subtle yellow tint */
     }
 
     .cal-day-col-inner {
@@ -400,22 +440,22 @@
       height: 1152px; /* 24 * 48px */
     }
 
-    /* Hour lines within each day column */
+    /* Hour lines - visible but subtle against dark background */
     .cal-hour-line {
       position: absolute;
       left: 0;
       right: 0;
       height: 1px;
-      background: var(--border);
+      background: var(--cal-border);
     }
 
-    /* Half-hour lines - lighter */
+    /* Half-hour lines - barely visible */
     .cal-half-line {
       position: absolute;
       left: 0;
       right: 0;
       height: 1px;
-      background: #f0f0f0;
+      background: var(--cal-border-half);
     }
 
     /* Individual event block */
@@ -423,7 +463,7 @@
       position: absolute;
       left: 2px;
       right: 2px;
-      border-radius: 2px;
+      border-radius: 3px;
       padding: 2px 4px;
       font-size: 11px;
       font-weight: 600;
@@ -432,39 +472,22 @@
       cursor: default;
       z-index: 2;
       line-height: 1.3;
-      /* Text shadow improves legibility on light colours */
-      text-shadow: 0 1px 2px rgba(0,0,0,0.3);
+      text-shadow: 0 1px 2px rgba(0,0,0,0.4);
     }
 
     .cal-event:hover {
       z-index: 10;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.25);
+      box-shadow: 0 2px 10px rgba(0,0,0,0.5);
+      filter: brightness(1.1);
     }
-
-    /* Tooltip shown on event hover */
-    .cal-tooltip {
-      display: none;
-      position: fixed;
-      background: var(--dark);
-      color: var(--white);
-      font-size: 12px;
-      padding: 8px 12px;
-      border-radius: 4px;
-      max-width: 240px;
-      z-index: 1000;
-      pointer-events: none;
-      line-height: 1.5;
-      box-shadow: 0 4px 12px rgba(0,0,0,0.3);
-    }
-
-    .cal-tooltip.visible { display: block; }
 
     /* Error / empty state message */
     .cal-message {
       padding: 40px;
       text-align: center;
       font-size: 13px;
-      color: var(--light);
+      color: var(--cal-text-dim);
+      background: var(--cal-bg);
     }
 
     /* ============================================================
@@ -656,9 +679,6 @@
     <div id="cal-widget" class="cal-widget">
       <div class="cal-message">Loading calendar...</div>
     </div>
-
-    <!-- Tooltip element - moved by JS on event hover -->
-    <div id="cal-tooltip" class="cal-tooltip"></div>
 
     <!-- ============================================================
          CALENDAR LEGEND
@@ -1062,9 +1082,19 @@
     timeGutterHTML += '</div>';
 
     // Day columns: background grid lines only (events added later by JS)
+    // idx 0=Mon, 1=Tue, 2=Wed, 3=Thu, 4=Fri
+    // even-col applied to Tue(1) and Thu(3) for alternating shade
+    // today-col applied to whichever day matches today
     var dayColsHTML = '';
     days.forEach(function(d, idx) {
-      dayColsHTML += '<div class="cal-day-col" id="cal-col-' + idx + '">'
+      var isToday = d.getTime() === today.getTime();
+      var colClass = 'cal-day-col';
+      if (isToday) {
+        colClass += ' today-col';
+      } else if (idx % 2 === 1) {
+        colClass += ' even-col';
+      }
+      dayColsHTML += '<div class="' + colClass + '" id="cal-col-' + idx + '">'
         + '<div class="cal-day-col-inner">';
       // Hour lines
       for (var h = 0; h < 24; h++) {
@@ -1234,8 +1264,6 @@
         if (!col) return;
         var inner = col.querySelector('.cal-day-col-inner');
         if (!inner) return;
-        var tooltip = document.getElementById('cal-tooltip');
-
         slotAssignments.forEach(function(sa) {
           var item = sa.item;
           var ev   = item.ev;
@@ -1265,22 +1293,7 @@
           el.style.right      = 'auto';
           el.textContent      = ev.calName; // Show room name not booker name
 
-          // Tooltip
-          (function(evCopy, timeStrCopy) {
-            el.addEventListener('mouseenter', function() {
-              tooltip.innerHTML = '<strong>' + evCopy.title + '</strong><br>'
-                + evCopy.calName + '<br>'
-                + timeStrCopy;
-              tooltip.classList.add('visible');
-            });
-          })(ev, timeStr);
-          el.addEventListener('mousemove', function(e) {
-            tooltip.style.left = (e.clientX + 14) + 'px';
-            tooltip.style.top  = (e.clientY - 10) + 'px';
-          });
-          el.addEventListener('mouseleave', function() {
-            tooltip.classList.remove('visible');
-          });
+
 
           inner.appendChild(el);
         });
