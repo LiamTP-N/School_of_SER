@@ -154,50 +154,73 @@
        LAYOUT: sidebar + main
        ============================================================ */
     /* ============================================================
-       LAYOUT: full-width stack (modules bar on top, content below)
-       The sidebar was converted to a horizontal scrollable pill bar
-       that spans the full width above the module blocks.
+       LAYOUT: left sidebar (module list) + right main panel.
+       Clicking a module in the sidebar shows ONLY that module's
+       table in the main panel. All other modules are hidden.
+       This replaces the old "scroll to section" behaviour.
        ============================================================ */
     .layout {
       flex:1; max-width:1600px; margin:0 auto; width:100%;
-      padding:0 32px 48px;
-      display:block;
+      padding:24px 32px 48px;
+      display:grid;
+      grid-template-columns: 220px 1fr;
+      gap:0;
+      align-items:start;
     }
 
-    /* Horizontal module nav bar */
+    /* ── LEFT SIDEBAR: scrollable module list ── */
     .sidebar {
-      background:var(--white); border:1px solid var(--border);
-      border-top:none;                    /* flush with page-band */
-      display:flex; flex-wrap:wrap;
-      gap:0; padding:0;
-      position:sticky; top:60px; z-index:100;
-      overflow-x:auto;
+      position:sticky; top:68px;
+      background:var(--white);
+      border:1px solid var(--border);
+      border-right:none;
+      max-height:calc(100vh - 90px);
+      overflow-y:auto;
     }
     .sidebar-head {
-      display:flex; align-items:center;
-      padding:0 14px; font-size:9px; font-weight:700;
+      padding:10px 14px; font-size:9px; font-weight:700;
       letter-spacing:0.1em; text-transform:uppercase; color:var(--light);
-      border-right:1px solid var(--border);
-      white-space:nowrap; flex-shrink:0;
+      border-bottom:1px solid var(--border);
+      position:sticky; top:0; background:#fff; z-index:1;
+      display:flex; align-items:center; justify-content:space-between;
     }
-    .sidebar-count { font-weight:400; font-size:9px; color:#bbb; margin-left:6px; }
+    .sidebar-count { font-weight:400; color:#bbb; }
+
+    /* Each module pill in the sidebar */
     .mod-link {
-      display:flex; align-items:center; gap:5px;
-      padding:8px 12px; font-size:11.5px; font-weight:600;
-      color:var(--mid); text-decoration:none;
-      border-right:1px solid #f0f0f0;
-      transition:background 0.1s,color 0.1s;
-      white-space:nowrap; flex-shrink:0;
+      display:flex; align-items:center; justify-content:space-between;
+      padding:9px 14px; font-size:12px; font-weight:600;
+      color:var(--mid); cursor:pointer;
+      border-bottom:1px solid #f5f5f5;
+      transition:background 0.1s, color 0.1s;
+      gap:8px; user-select:none;
     }
     .mod-link:hover { background:#f5f5f5; color:var(--black); }
-    .mod-link.active { background:var(--accent); color:#fff; }
-    /* Hide the long sub-label in horizontal mode - just show code + count */
-    .mod-link .mod-sub { display:none; }
-    .mod-link .mod-n { font-size:9px; background:rgba(0,0,0,0.08); border-radius:10px; padding:1px 5px; flex-shrink:0; }
-    .mod-link.active .mod-n { background:rgba(255,255,255,0.2); color:#fff; }
+    .mod-link.active {
+      background:var(--accent); color:#fff;
+      border-bottom-color:var(--accent);
+    }
+    .mod-link .mod-sub { display:none; } /* not used in this layout */
+    .mod-link .mod-n {
+      font-size:10px; font-weight:700;
+      background:rgba(0,0,0,0.08);
+      border-radius:10px; padding:2px 7px; flex-shrink:0;
+    }
+    .mod-link.active .mod-n { background:rgba(255,255,255,0.25); color:#fff; }
 
-    /* Main content needs top padding now the sidebar is above it */
-    .main-content { padding-top:24px; }
+    /* ── RIGHT PANEL: single module view ── */
+    .main-content {
+      border:1px solid var(--border);
+      background:var(--white);
+      min-height:300px;
+    }
+
+    /* Empty state shown before any module is selected */
+    .no-selection {
+      display:flex; align-items:center; justify-content:center;
+      min-height:280px; color:var(--light);
+      font-size:13px; font-style:italic;
+    }
 
     /* ============================================================
        MODULE BLOCKS
@@ -400,9 +423,9 @@
     .footer-links a:hover { color:#fff; }
 
     @media(max-width:900px) {
-      .layout { padding:0 16px 40px; }
-      .sidebar { position:static; flex-wrap:nowrap; overflow-x:auto; }
-      .mod-link { padding:6px 10px; }
+      .layout { grid-template-columns:1fr; padding:16px 16px 40px; }
+      .sidebar { position:static; max-height:180px; border-right:1px solid var(--border); border-bottom:none; }
+      .mod-link { padding:7px 14px; }
       .header-inner { padding:0 16px; }
       .header-dept, .header-sep { display:none; }
     }
@@ -453,8 +476,11 @@
       <span>Modules</span>
       <span class="sidebar-count" id="modCount"></span>
     </div>
+    <!-- Module list rendered by JS renderSidebar() -->
   </aside>
-  <main class="main-content" id="mainContent"></main>
+  <main class="main-content" id="mainContent">
+    <div class="no-selection" id="noSelection">&#8592; Select a module to view its sessions</div>
+  </main>
 </div>
 
 <!-- ============================================================
@@ -698,24 +724,63 @@ async function loadFromFirestore() {
   setStatus(modules.size + ' modules \u00b7 ' + snap.size + ' sessions');
 }
 
-// ── RENDER: sidebar ───────────────────────────────────────────────────────────
+// ── RENDER: sidebar module list ──────────────────────────────────────────────
+// Renders clickable module pills. Clicking one calls selectModule(code)
+// which shows only that module's block and hides everything else.
 function renderSidebar() {
   const sidebar = document.getElementById('sidebar');
-  // Keep header
   sidebar.querySelectorAll('.mod-link').forEach(el => el.remove());
   document.getElementById('modCount').textContent = modules.size + ' total';
 
   [...modules.keys()].sort().forEach(code => {
     const mod = modules.get(code);
-    const a = document.createElement('a');
-    a.className = 'mod-link';
-    a.href = '#mod-' + code;
-    a.id = 'sbl-' + code;
-    a.innerHTML =
-      '<span>' + esc(code) + '<span class="mod-sub">' + esc(mod.name.replace(code,'').trim().replace(/^[-–—\s]+/,'')) + '</span></span>' +
-      '<span class="mod-n">' + mod.sessions.length + '</span>';
-    sidebar.appendChild(a);
+    const div = document.createElement('div');
+    div.className = 'mod-link';
+    div.id = 'sbl-' + code;
+    div.title = mod.name || code;
+    div.innerHTML =
+      '<span>' + esc(code) + '</span>' +
+      '<span class="mod-n" title="' + mod.sessions.length + ' session' + (mod.sessions.length!==1?'s':'') + '">' + mod.sessions.length + '</span>';
+    div.addEventListener('click', () => selectModule(code));
+    sidebar.appendChild(div);
   });
+}
+
+// ── SELECT MODULE: show only the clicked module in the main panel ─────────────
+// Removes any currently-rendered module block, renders the selected one,
+// and marks the sidebar pill as active.
+// selectedCode is module-level state so other functions (addRow, delete, etc.)
+// can reference it for UI updates.
+let selectedCode = null;
+
+function selectModule(code) {
+  // Update sidebar active state
+  document.querySelectorAll('.mod-link').forEach(l => l.classList.remove('active'));
+  const pill = document.getElementById('sbl-' + code);
+  if (pill) {
+    pill.classList.add('active');
+    // Scroll the pill into view within the sidebar if needed
+    pill.scrollIntoView({ block: 'nearest' });
+  }
+
+  // Hide the no-selection placeholder
+  const noSel = document.getElementById('noSelection');
+  if (noSel) noSel.style.display = 'none';
+
+  // Remove the previously rendered block (if any)
+  if (selectedCode && selectedCode !== code) {
+    const old = document.getElementById('mod-' + selectedCode);
+    if (old) old.remove();
+  }
+
+  selectedCode = code;
+
+  // Render the module block if not already in DOM
+  const existing = document.getElementById('mod-' + code);
+  if (!existing) {
+    const block = renderModule(code);
+    document.getElementById('mainContent').appendChild(block);
+  }
 }
 
 // ── RENDER: one module block ──────────────────────────────────────────────────
@@ -754,7 +819,7 @@ function renderModule(code) {
       if (field === 'moduleCode' || field === 'moduleName') {
         // Update sidebar label
         const sbl = document.getElementById('sbl-' + code);
-        if (sbl) sbl.innerHTML = '<span>' + esc(mod.code) + '<span class="mod-sub">' + esc(mod.name.replace(mod.code,'').trim().replace(/^[-\s]+/,'')) + '</span></span><span class="mod-n">' + mod.sessions.length + '</span>';
+        if (sbl) sbl.innerHTML = '<span>' + esc(mod.code) + '<span class="mod-sub">' + esc(mod.name.replace(mod.code,'').trim().replace(/^[-\s]+/,'')) + '</span></span><span class="mod-n" title="' + mod.sessions.length + ' session' + (mod.sessions.length!==1?'s':'') + '">' + mod.sessions.length + '</span>';
       }
     });
     span.addEventListener('keydown', e => { if (e.key==='Enter') { e.preventDefault(); span.blur(); } });
@@ -964,13 +1029,11 @@ window.saveNewModule = async () => {
     renderSidebar();
     const block = renderModule(code);
     document.getElementById('mainContent').appendChild(block);
-    setupObserver();
     updateModCount();
     closeAddModal();
     ['newCode','newName','newLead','newTech'].forEach(id => document.getElementById(id).value='');
     flashSave('saved', 'Saved \u2713');
-    // Scroll to new module
-    setTimeout(() => block.scrollIntoView({ behavior:'smooth', block:'start' }), 100);
+    // selectModule above already handles showing the new block
   } catch(e) {
     console.error(e);
     flashSave('error', 'Failed to add module');
@@ -978,16 +1041,20 @@ window.saveNewModule = async () => {
 };
 
 // ── RENDER ALL ────────────────────────────────────────────────────────────────
+// Now only renders the sidebar list. The main panel is empty until a module
+// is clicked. If there was a previously selected module (e.g. after an add-row
+// action triggers a re-render), re-select it.
 function renderAll() {
-  const main = document.getElementById('mainContent');
-  main.innerHTML = '';
   renderSidebar();
-  [...modules.keys()].sort().forEach(code => {
-    const block = renderModule(code);
-    main.appendChild(block);
-  });
-  setupObserver();
   updateModCount();
+  // If a module was already selected, keep it shown
+  if (selectedCode && modules.has(selectedCode)) {
+    selectModule(selectedCode);
+  } else {
+    // Auto-select first module for convenience on initial load
+    const first = [...modules.keys()].sort()[0];
+    if (first) selectModule(first);
+  }
 }
 
 function updateSessionCount(code) {
@@ -1001,21 +1068,7 @@ function updateModCount() {
   setStatus(modules.size + ' modules');
 }
 
-// ── IntersectionObserver for sidebar active state ─────────────────────────────
-function setupObserver() {
-  if (window._semObserver) window._semObserver.disconnect();
-  window._semObserver = new IntersectionObserver(entries => {
-    entries.forEach(e => {
-      if (e.isIntersecting) {
-        const code = e.target.id.replace('mod-','');
-        document.querySelectorAll('.mod-link').forEach(l => l.classList.remove('active'));
-        const a = document.getElementById('sbl-' + code);
-        if (a) a.classList.add('active');
-      }
-    });
-  }, { rootMargin: '-20% 0px -70% 0px' });
-  document.querySelectorAll('.module-block').forEach(b => window._semObserver.observe(b));
-}
+// IntersectionObserver removed - active state now driven by click (selectModule)
 
 // Close modal on overlay click
 document.getElementById('addModal').addEventListener('click', e => {
