@@ -317,6 +317,13 @@
       transition: background 0.1s;
     }
     .cal-toolbar button:hover { background: var(--cal-btn-hover); }
+    /* Active state for 1/3/5-day view toggle buttons */
+    .cal-toolbar button.cal-view-active {
+      background: #ffdd44;
+      color: #111111;
+      border-color: #ffdd44;
+    }
+    .cal-toolbar button.cal-view-active:hover { background: #ffe566; }
 
     .cal-week-label {
       font-size: 14px;
@@ -758,6 +765,23 @@
       <a href="workflow.html" class="btn-primary">Open Workflow Map</a>
     </div>
 
+    <!-- Teaching Alignment banners -->
+    <div class="primary-action" style="margin-top:12px;">
+      <div class="primary-action-text">
+        <h2>Teaching Alignment &mdash; Semester 1</h2>
+        <p>Full semester timetable for all Semester 1 modules. Edit academic names, PEP links, set-up requirements, and session details. Add or remove rows and modules as needed.</p>
+      </div>
+      <a href="Semester1.html" class="btn-primary">Open Semester 1</a>
+    </div>
+
+    <div class="primary-action" style="margin-top:12px;">
+      <div class="primary-action-text">
+        <h2>Teaching Alignment &mdash; Semester 2</h2>
+        <p>Full semester timetable for all Semester 2 modules. Edit academic names, PEP links, set-up requirements, and session details. Add or remove rows and modules as needed.</p>
+      </div>
+      <a href="Semester2.html" class="btn-primary">Open Semester 2</a>
+    </div>
+
     <!-- ============================================================
          CUSTOM CALENDAR WIDGET
          The widget is built entirely by the JavaScript below.
@@ -870,6 +894,8 @@
       <a href="https://www.northumbria.ac.uk/" target="_blank" rel="noopener">University website</a>
       <a href="https://mynorthumbria.northumbria.ac.uk/" target="_blank" rel="noopener">MyNorthumbria</a>
       <a href="workflow.html">Workflow Map</a>
+      <a href="Semester1.html">Teaching Alignment &mdash; Sem 1</a>
+      <a href="Semester2.html">Teaching Alignment &mdash; Sem 2</a>
     </div>
   </div>
 </footer>
@@ -1106,9 +1132,14 @@
   }
 
   // ----------------------------------------------------------
-  // WEEK STATE
-  // weekStart is always a Monday (day 1). Stored as a Date
-  // set to midnight local time.
+  // VIEW STATE
+  // currentDayCount: how many columns to show (1, 3, or 5).
+  // Default is 1 (today only). Staff can switch via toolbar buttons.
+  //
+  // currentViewStart: Date of the leftmost visible column (midnight).
+  // 1-day:  starts on today (or navigated day)
+  // 3-day:  starts on today (steps forward/back by 3)
+  // 5-day:  always snaps to the Monday of the current week
   // ----------------------------------------------------------
   function getMondayOf(d) {
     var day = d.getDay(); // 0=Sun, 1=Mon ... 6=Sat
@@ -1119,58 +1150,82 @@
     return mon;
   }
 
-  var currentWeekStart = getMondayOf(new Date());
+  // Returns the appropriate view start date for n-day mode.
+  // 5-day snaps to Monday; 1 and 3-day use d itself.
+  function getViewStart(d, n) {
+    var base = new Date(d);
+    base.setHours(0, 0, 0, 0);
+    if (n === 5) return getMondayOf(base);
+    return base;
+  }
+
+  var currentDayCount  = 1;
+  var currentViewStart = getViewStart(new Date(), currentDayCount);
 
   // ----------------------------------------------------------
   // RENDER WIDGET
-  // Builds the HTML structure for the week grid, then fetches
-  // all calendar events and positions them.
-  // Called on load and on every prev/next/today navigation.
+  // Builds the day/3-day/5-day grid, fetches events, positions them.
+  // Called on load and on every navigation or view-mode change.
+  //
+  // viewStart: Date of leftmost column (midnight local time)
+  // dayCount:  1, 3, or 5
   // ----------------------------------------------------------
-  function renderWidget(weekStart) {
+  function renderWidget(viewStart, dayCount) {
     var widget = document.getElementById('cal-widget');
     if (!widget) return;
 
-    // Mon-Fri only - weekends excluded
+    // Build array of Date objects for each visible column
     var days = [];
-    for (var i = 0; i < 5; i++) {
-      var d = new Date(weekStart);
-      d.setDate(weekStart.getDate() + i);
+    for (var i = 0; i < dayCount; i++) {
+      var d = new Date(viewStart);
+      d.setDate(viewStart.getDate() + i);
       days.push(d);
     }
 
     var today = new Date();
     today.setHours(0, 0, 0, 0);
 
-    // Format week label e.g. "28 Apr - 4 May 2026"
-    var months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-    var dayNames = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
-    var startLabel = days[0].getDate() + ' ' + months[days[0].getMonth()];
-    var endLabel   = days[4].getDate() + ' ' + months[days[4].getMonth()] + ' ' + days[4].getFullYear();
-    var weekLabel  = startLabel + ' - ' + endLabel;
+    // Format range label
+    // 1-day: "Wed 29 Apr 2026"  |  3/5-day: "28 Apr - 2 May 2026"
+    var months   = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    var dayNames = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+    var rangeLabel;
+    if (dayCount === 1) {
+      rangeLabel = dayNames[days[0].getDay()] + ' '
+        + days[0].getDate() + ' ' + months[days[0].getMonth()] + ' ' + days[0].getFullYear();
+    } else {
+      rangeLabel = days[0].getDate() + ' ' + months[days[0].getMonth()]
+        + ' – '
+        + days[dayCount-1].getDate() + ' ' + months[days[dayCount-1].getMonth()] + ' ' + days[dayCount-1].getFullYear();
+    }
 
-    // Build toolbar HTML
+    // Toolbar: Today | < | > | range label | loading | [1][3][5] toggle
     var toolbarHTML = '<div class="cal-toolbar">'
       + '<button id="cal-today-btn">Today</button>'
       + '<button id="cal-prev-btn">&#8249;</button>'
       + '<button id="cal-next-btn">&#8250;</button>'
-      + '<span class="cal-week-label">' + weekLabel + '</span>'
+      + '<span class="cal-week-label">' + rangeLabel + '</span>'
       + '<span class="cal-loading" id="cal-loading">Loading...</span>'
+      + '<span style="margin-left:auto;display:flex;gap:4px;">'
+      + '<button id="cal-view-1" class="' + (dayCount===1 ? 'cal-view-active' : '') + '" title="1-day view">1</button>'
+      + '<button id="cal-view-3" class="' + (dayCount===3 ? 'cal-view-active' : '') + '" title="3-day view">3</button>'
+      + '<button id="cal-view-5" class="' + (dayCount===5 ? 'cal-view-active' : '') + '" title="5-day view (Mon-Fri)">5</button>'
+      + '</span>'
       + '</div>';
 
-    // Build day header row
-    var headerHTML = '<div class="cal-header"><div class="cal-header-gutter"></div>';
+    // Day header row - inline grid-template-columns overrides the CSS default
+    var headerHTML = '<div class="cal-header" style="grid-template-columns:48px repeat(' + dayCount + ',1fr);">'
+      + '<div class="cal-header-gutter"></div>';
     days.forEach(function(d) {
       var isToday = d.getTime() === today.getTime();
       headerHTML += '<div class="cal-day-head' + (isToday ? ' today' : '') + '">'
-        + dayNames[days.indexOf(d)]
+        + dayNames[d.getDay()]
         + '<span class="cal-day-num">' + d.getDate() + '</span>'
         + '</div>';
     });
     headerHTML += '</div>';
 
-    // Build time grid body
-    // Time gutter: labels for each hour
+    // Time gutter (24 hour labels, same for all view sizes)
     var timeGutterHTML = '<div class="cal-time-col">';
     for (var h = 0; h < 24; h++) {
       var label = h === 0 ? '' : (h < 10 ? '0' + h : h) + ':00';
@@ -1178,22 +1233,15 @@
     }
     timeGutterHTML += '</div>';
 
-    // Day columns: background grid lines only (events added later by JS)
-    // idx 0=Mon, 1=Tue, 2=Wed, 3=Thu, 4=Fri
-    // even-col applied to Tue(1) and Thu(3) for alternating shade
-    // today-col applied to whichever day matches today
+    // Day columns - alternating shade by column index (not weekday)
     var dayColsHTML = '';
     days.forEach(function(d, idx) {
       var isToday = d.getTime() === today.getTime();
       var colClass = 'cal-day-col';
-      if (isToday) {
-        colClass += ' today-col';
-      } else if (idx % 2 === 1) {
-        colClass += ' even-col';
-      }
+      if (isToday)        colClass += ' today-col';
+      else if (idx % 2)   colClass += ' even-col';
       dayColsHTML += '<div class="' + colClass + '" id="cal-col-' + idx + '">'
         + '<div class="cal-day-col-inner">';
-      // Hour lines
       for (var h = 0; h < 24; h++) {
         dayColsHTML += '<div class="cal-hour-line" style="top:' + (h * 48) + 'px;"></div>';
         dayColsHTML += '<div class="cal-half-line" style="top:' + (h * 48 + 24) + 'px;"></div>';
@@ -1201,32 +1249,46 @@
       dayColsHTML += '</div></div>';
     });
 
-    var bodyHTML = '<div class="cal-body-scroll"><div class="cal-body">'
-      + timeGutterHTML
-      + dayColsHTML
+    var bodyHTML = '<div class="cal-body-scroll">'
+      + '<div class="cal-body" style="grid-template-columns:48px repeat(' + dayCount + ',1fr);">'
+      + timeGutterHTML + dayColsHTML
       + '</div></div>';
 
     widget.innerHTML = toolbarHTML + headerHTML + bodyHTML;
 
-    // Wire up toolbar buttons
+    // ── Toolbar navigation ────────────────────────────────────────────────
+    // Today: jump back to today (snap to Monday if 5-day)
     document.getElementById('cal-today-btn').addEventListener('click', function() {
-      currentWeekStart = getMondayOf(new Date());
-      renderWidget(currentWeekStart);
+      currentViewStart = getViewStart(new Date(), currentDayCount);
+      renderWidget(currentViewStart, currentDayCount);
     });
+    // Prev/Next: step by dayCount days
     document.getElementById('cal-prev-btn').addEventListener('click', function() {
-      currentWeekStart.setDate(currentWeekStart.getDate() - 7);
-      renderWidget(currentWeekStart);
+      currentViewStart.setDate(currentViewStart.getDate() - currentDayCount);
+      renderWidget(currentViewStart, currentDayCount);
     });
     document.getElementById('cal-next-btn').addEventListener('click', function() {
-      currentWeekStart.setDate(currentWeekStart.getDate() + 7);
-      renderWidget(currentWeekStart);
+      currentViewStart.setDate(currentViewStart.getDate() + currentDayCount);
+      renderWidget(currentViewStart, currentDayCount);
     });
 
-    // ISO8601 range for API calls
+    // ── View toggle buttons (1 / 3 / 5 day) ──────────────────────────────
+    // Keeps current leftmost day as anchor; 5-day snaps to its Monday
+    [1, 3, 5].forEach(function(n) {
+      var btn = document.getElementById('cal-view-' + n);
+      if (!btn) return;
+      btn.addEventListener('click', function() {
+        currentDayCount  = n;
+        currentViewStart = getViewStart(currentViewStart, n);
+        renderWidget(currentViewStart, currentDayCount);
+      });
+    });
+
+    // ── ISO8601 range for Google Calendar API ─────────────────────────────
     var timeMin = days[0].toISOString().replace('.000Z', 'Z');
-    var weekEnd = new Date(days[4]);
-    weekEnd.setDate(weekEnd.getDate() + 1);
-    var timeMax = weekEnd.toISOString().replace('.000Z', 'Z');
+    var lastDay = new Date(days[dayCount - 1]);
+    lastDay.setDate(lastDay.getDate() + 1);
+    var timeMax = lastDay.toISOString().replace('.000Z', 'Z');
 
     // Fetch all calendars in parallel then render events
     getToken().then(function(token) {
@@ -1407,8 +1469,8 @@
     });
   }
 
-  // Initial render on page load
-  renderWidget(currentWeekStart);
+  // Initial render on page load - defaults to 1-day view showing today
+  renderWidget(currentViewStart, currentDayCount);
 
 })();
 </script>
