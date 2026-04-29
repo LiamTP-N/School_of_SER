@@ -626,7 +626,7 @@
      ============================================================ -->
 <div class="page-band">
   <div class="page-band-inner">
-    <h1>Sport, Exercise &amp; Rehabilitation</h1>
+    <h1>School of Sport, Exercise &amp; Rehabilitation</h1>
   </div>
 </div>
 
@@ -1116,72 +1116,174 @@
       var allEvents = [];
       results.forEach(function(evs) { allEvents = allEvents.concat(evs); });
 
+      // ----------------------------------------------------------
+      // COLLISION DETECTION AND SIDE-BY-SIDE LAYOUT
+      //
+      // Google Calendar renders overlapping events side by side.
+      // We replicate this by:
+      // 1. Grouping events by day column
+      // 2. For each day, sorting events by start time
+      // 3. Building "clash groups" - sets of events that overlap
+      //    with at least one other event in the group
+      // 4. Within each clash group, assigning each event a
+      //    column slot (0, 1, 2...) so they sit side by side
+      // 5. Each event gets left% and width% calculated from its
+      //    slot index and total slots in the group
+      //
+      // Two events overlap if one starts before the other ends.
+      // All-day events are excluded from collision logic (they
+      // sit at the very top as full-height background strips).
+      // ----------------------------------------------------------
+
+      function fmtTime(iso) {
+        var d = new Date(iso);
+        return (d.getHours() < 10 ? '0' : '') + d.getHours() + ':'
+             + (d.getMinutes() < 10 ? '0' : '') + d.getMinutes();
+      }
+
+      // Step 1: bucket events by day column index
+      var byCol = {};
       allEvents.forEach(function(ev) {
-        // Work out which day column this event belongs to
         var evDate = new Date(ev.start);
         evDate.setHours(0, 0, 0, 0);
-
         var colIdx = -1;
         days.forEach(function(d, i) {
           if (d.getTime() === evDate.getTime()) colIdx = i;
         });
-        if (colIdx === -1) return; // event outside displayed week
+        if (colIdx === -1) return;
+        if (!byCol[colIdx]) byCol[colIdx] = [];
+        // Pre-calculate minutes for collision math
+        var startDate = new Date(ev.start);
+        var endDate   = new Date(ev.end);
+        var startMins = ev.allDay ? 0    : startDate.getHours() * 60 + startDate.getMinutes();
+        var endMins   = ev.allDay ? 1440 : endDate.getHours()   * 60 + endDate.getMinutes();
+        if (!ev.allDay && endMins <= startMins) endMins = startMins + 30;
+        byCol[colIdx].push({ ev: ev, startMins: startMins, endMins: endMins, colIdx: colIdx });
+      });
 
+      // Step 2: for each day column, assign slots within clash groups
+      Object.keys(byCol).forEach(function(colIdx) {
+        var items = byCol[colIdx];
+        // Sort by start time, then by end time descending (longer events first)
+        items.sort(function(a, b) {
+          return a.startMins - b.startMins || b.endMins - a.endMins;
+        });
+
+        // Build clash groups using a sweep-line approach:
+        // maintain a list of "active" groups; an item joins a group
+        // if it overlaps with any item already in that group.
+        // slotAssignments: array of {item, slot, totalSlots (filled later)}
+        var slotAssignments = [];
+        // Each group tracks: end times per slot so we know which slot is free
+        var groups = []; // each group = array of slot end-times
+
+        items.forEach(function(item) {
+          if (item.ev.allDay) {
+            // All-day events get full width, no collision logic
+            slotAssignments.push({ item: item, slot: 0, totalSlots: 1 });
+            return;
+          }
+
+          // Find a group where this item overlaps at least one existing item
+          var placed = false;
+          for (var g = 0; g < groups.length; g++) {
+            var group = groups[g];
+            // Check if item overlaps with ANY item in this group
+            var overlapsGroup = slotAssignments.some(function(sa) {
+              return sa.groupIdx === g &&
+                     item.startMins < sa.item.endMins &&
+                     item.endMins   > sa.item.startMins;
+            });
+            if (overlapsGroup) {
+              // Find the first free slot in this group
+              var slot = 0;
+              while (group[slot] !== undefined && group[slot] > item.startMins) {
+                slot++;
+              }
+              group[slot] = item.endMins;
+              slotAssignments.push({ item: item, slot: slot, groupIdx: g, totalSlots: 0 });
+              placed = true;
+              break;
+            }
+          }
+          if (!placed) {
+            // Start a new group
+            var newGroup = [];
+            newGroup[0] = item.endMins;
+            groups.push(newGroup);
+            slotAssignments.push({ item: item, slot: 0, groupIdx: groups.length - 1, totalSlots: 0 });
+          }
+        });
+
+        // Calculate totalSlots for each group (max slot + 1)
+        var groupMaxSlot = {};
+        slotAssignments.forEach(function(sa) {
+          if (sa.item.ev.allDay) return;
+          var g = sa.groupIdx;
+          if (groupMaxSlot[g] === undefined || sa.slot > groupMaxSlot[g]) {
+            groupMaxSlot[g] = sa.slot;
+          }
+        });
+        slotAssignments.forEach(function(sa) {
+          if (sa.item.ev.allDay) return;
+          sa.totalSlots = (groupMaxSlot[sa.groupIdx] || 0) + 1;
+        });
+
+        // Step 3: render each event with its calculated position
         var col = document.getElementById('cal-col-' + colIdx);
         if (!col) return;
         var inner = col.querySelector('.cal-day-col-inner');
         if (!inner) return;
-
-        // Calculate top and height in pixels
-        // Each hour = 48px. 1 minute = 48/60 = 0.8px.
-        var topPx, heightPx;
-
-        if (ev.allDay) {
-          topPx = 0;
-          heightPx = 1152; // full day
-        } else {
-          var startDate = new Date(ev.start);
-          var endDate   = new Date(ev.end);
-          var startMins = startDate.getHours() * 60 + startDate.getMinutes();
-          var endMins   = endDate.getHours()   * 60 + endDate.getMinutes();
-          if (endMins <= startMins) endMins = startMins + 30; // guard against zero-length
-          topPx    = startMins * 0.8;
-          heightPx = Math.max((endMins - startMins) * 0.8, 18); // min 18px
-        }
-
-        // Format time for tooltip e.g. "09:00 - 10:30"
-        function fmtTime(iso) {
-          var d = new Date(iso);
-          return (d.getHours() < 10 ? '0' : '') + d.getHours() + ':'
-               + (d.getMinutes() < 10 ? '0' : '') + d.getMinutes();
-        }
-        var timeStr = ev.allDay ? 'All day' : fmtTime(ev.start) + ' - ' + fmtTime(ev.end);
-
-        // Create event block
-        var el = document.createElement('div');
-        el.className = 'cal-event';
-        el.style.top       = topPx + 'px';
-        el.style.height    = heightPx + 'px';
-        el.style.background = ev.color;
-        el.textContent = ev.title;
-
-        // Tooltip on hover - uses fixed positioning relative to cursor
         var tooltip = document.getElementById('cal-tooltip');
-        el.addEventListener('mouseenter', function(e) {
-          tooltip.innerHTML = '<strong>' + ev.title + '</strong><br>'
-            + ev.calName + '<br>'
-            + timeStr;
-          tooltip.classList.add('visible');
-        });
-        el.addEventListener('mousemove', function(e) {
-          tooltip.style.left = (e.clientX + 14) + 'px';
-          tooltip.style.top  = (e.clientY - 10) + 'px';
-        });
-        el.addEventListener('mouseleave', function() {
-          tooltip.classList.remove('visible');
-        });
 
-        inner.appendChild(el);
+        slotAssignments.forEach(function(sa) {
+          var item = sa.item;
+          var ev   = item.ev;
+
+          var topPx    = item.startMins * 0.8;
+          var heightPx = Math.max((item.endMins - item.startMins) * 0.8, 18);
+
+          // Side-by-side positioning: divide column width equally among slots.
+          // Small gap (1px) between events for visual separation.
+          // All-day events use full width.
+          var pct       = 100 / sa.totalSlots;
+          var leftPct   = sa.slot * pct;
+          var widthPct  = pct;
+          // Add a tiny right-margin gap except for the last slot
+          var rightGap  = sa.slot < sa.totalSlots - 1 ? 1 : 0;
+
+          var timeStr = ev.allDay ? 'All day' : fmtTime(ev.start) + ' - ' + fmtTime(ev.end);
+
+          var el = document.createElement('div');
+          el.className = 'cal-event';
+          el.style.top        = topPx + 'px';
+          el.style.height     = heightPx + 'px';
+          el.style.background = ev.color;
+          el.style.left       = leftPct + '%';
+          el.style.width      = 'calc(' + widthPct + '% - ' + rightGap + 'px)';
+          // Override the default left/right absolute positioning
+          el.style.right      = 'auto';
+          el.textContent      = ev.calName; // Show room name not booker name
+
+          // Tooltip
+          (function(evCopy, timeStrCopy) {
+            el.addEventListener('mouseenter', function() {
+              tooltip.innerHTML = '<strong>' + evCopy.title + '</strong><br>'
+                + evCopy.calName + '<br>'
+                + timeStrCopy;
+              tooltip.classList.add('visible');
+            });
+          })(ev, timeStr);
+          el.addEventListener('mousemove', function(e) {
+            tooltip.style.left = (e.clientX + 14) + 'px';
+            tooltip.style.top  = (e.clientY - 10) + 'px';
+          });
+          el.addEventListener('mouseleave', function() {
+            tooltip.classList.remove('visible');
+          });
+
+          inner.appendChild(el);
+        });
       });
 
       // Scroll to 07:00 on load (7 * 48 = 336px)
