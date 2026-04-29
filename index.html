@@ -1,10 +1,70 @@
 <!DOCTYPE html>
+<!--
+  ============================================================
+  FILE: index.html
+  PURPOSE: SER Technical Team internal staff portal homepage
+  OWNER: Liam Pearson-Noseworthy, Northumbria University
+  LAST UPDATED: 2026-04-29
+
+  FOR AI/LLM READERS:
+  This is a static single-file HTML portal page for the Sport,
+  Exercise & Rehabilitation (SER) technical team at Northumbria
+  University. It has no backend - everything is hardcoded.
+
+  PAGE STRUCTURE:
+  1. Sticky header - NU branding + nav links
+  2. Page band - department title/strapline
+  3. Two-column main layout:
+     LEFT (75%) - Google Calendar embed showing all lab room
+                  calendars in a read-only week view, plus a
+                  colour-coded legend below it
+     RIGHT (25%) - A-Z useful links sidebar
+  4. Footer
+
+  GOOGLE CALENDAR EMBED:
+  - Uses Google's public iframe embed URL
+  - All calendars are set to public (read-only for viewers)
+  - Each sub-calendar is added as a separate &src= parameter
+  - The embed is read-only - staff cannot edit, create or delete
+  - Excluded: 1) STAFF, Northumbria University personal timetable,
+    nu.sportex.labs@gmail.com (the account itself), Birthdays
+  - The CALENDAR_SOURCES array below lists every included calendar
+    with its name, ID, and hex colour (from Google Apps Script output)
+
+  LEGEND:
+  - Hardcoded colour swatches matching the Google Calendar colours
+  - Groups calendars by location for readability
+  - If a calendar is renamed or recoloured, update BOTH the embed
+    src parameter AND the legend section below
+
+  A-Z LINKS SIDEBAR:
+  - Simple alphabetically sorted list of useful systems
+  - Hardcoded - edit the <ul id="links-list"> section to add/remove
+  - No JavaScript dependency - pure HTML/CSS
+
+  CALENDAR IDs (from Google Apps Script, confirmed 2026-04-29):
+  These are the @group.calendar.google.com IDs for each sub-calendar.
+  The long hex IDs (c1bc9b92... and 1c3645f4...) are valid - Google
+  generates longer IDs for some calendar types.
+
+  MAINTENANCE NOTES:
+  - If a calendar goes missing from the embed, check it is still
+    set to public in Google Calendar settings
+  - The embed URL has a 'mode=WEEK' parameter - change to MONTH
+    for a monthly view if preferred
+  - ctz=Europe/London keeps the timezone correct for UK staff
+  ============================================================
+-->
 <html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Sport, Exercise &amp; Rehabilitation — Technical Team</title>
   <style>
+    /* ============================================================
+       RESET & CSS VARIABLES
+       Monochrome palette with accent only from calendar colours.
+       ============================================================ */
     *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
 
     :root {
@@ -26,7 +86,10 @@
       line-height: 1.5;
     }
 
-    /* ── Header ── */
+    /* ============================================================
+       HEADER
+       Sticky top bar with NU logo, dept name, nav links.
+       ============================================================ */
     header {
       border-bottom: 1px solid var(--border);
       background: var(--white);
@@ -36,7 +99,7 @@
     }
 
     .header-inner {
-      max-width: 1100px;
+      max-width: 1400px;
       margin: 0 auto;
       padding: 0 32px;
       height: 56px;
@@ -50,6 +113,7 @@
       align-items: center;
       gap: 10px;
       text-decoration: none;
+      flex-shrink: 0;
     }
 
     .logo-mark {
@@ -59,7 +123,6 @@
       display: flex;
       align-items: center;
       justify-content: center;
-      flex-shrink: 0;
     }
 
     .logo-mark span {
@@ -94,6 +157,7 @@
       width: 1px;
       height: 24px;
       background: var(--border);
+      flex-shrink: 0;
     }
 
     .header-dept {
@@ -117,93 +181,109 @@
     }
     .header-link:hover { color: var(--black); }
 
-    /* ── Page heading band ── */
+    /* ============================================================
+       PAGE BAND
+       Bold title area below the header.
+       ============================================================ */
     .page-band {
       border-bottom: 3px solid var(--black);
-      padding: 48px 32px 40px;
+      padding: 36px 32px 32px;
     }
 
     .page-band-inner {
-      max-width: 1100px;
+      max-width: 1400px;
       margin: 0 auto;
     }
 
-    .page-band .dept-label {
+    .dept-label {
       font-size: 11px;
       font-weight: 700;
       letter-spacing: 0.12em;
       text-transform: uppercase;
       color: var(--mid);
-      margin-bottom: 10px;
+      margin-bottom: 8px;
     }
 
     .page-band h1 {
-      font-size: clamp(26px, 4vw, 42px);
+      font-size: clamp(22px, 3vw, 36px);
       font-weight: 900;
       letter-spacing: -0.03em;
       line-height: 1.1;
       color: var(--black);
-      margin-bottom: 14px;
+      margin-bottom: 10px;
     }
 
-    .page-band .strapline {
-      font-size: 15px;
+    .strapline {
+      font-size: 14px;
       color: var(--mid);
-      max-width: 520px;
       line-height: 1.6;
     }
 
-    /* ── Main layout ── */
+    /* ============================================================
+       MAIN LAYOUT
+       Two-column: calendar (left, wide) + links sidebar (right)
+       ============================================================ */
     .main {
-      max-width: 1100px;
+      max-width: 1400px;
       margin: 0 auto;
-      padding: 48px 32px;
+      padding: 32px 32px 48px;
+      display: grid;
+      grid-template-columns: 1fr 260px;
+      gap: 40px;
+      align-items: start;
     }
 
+    /* ============================================================
+       SECTION HEADINGS
+       Thin uppercase label above each content block.
+       ============================================================ */
     .section-heading {
-      font-size: 11px;
+      font-size: 10px;
       font-weight: 700;
       letter-spacing: 0.12em;
       text-transform: uppercase;
       color: var(--light);
       border-top: 1px solid var(--border);
-      padding-top: 12px;
-      margin-bottom: 24px;
+      padding-top: 10px;
+      margin-bottom: 16px;
     }
 
-    /* ── Primary action block ── */
+    /* ============================================================
+       WORKFLOW MAP BANNER
+       Primary call-to-action block at top of left column.
+       ============================================================ */
     .primary-action {
       border: 2px solid var(--black);
-      padding: 32px 36px;
-      margin-bottom: 48px;
+      padding: 24px 28px;
+      margin-bottom: 32px;
       display: flex;
       align-items: center;
       justify-content: space-between;
-      gap: 32px;
+      gap: 24px;
       flex-wrap: wrap;
     }
 
     .primary-action-text h2 {
-      font-size: 22px;
+      font-size: 18px;
       font-weight: 800;
       letter-spacing: -0.02em;
-      margin-bottom: 6px;
+      margin-bottom: 4px;
     }
 
     .primary-action-text p {
-      font-size: 14px;
+      font-size: 13px;
       color: var(--mid);
       max-width: 480px;
-      line-height: 1.55;
+      line-height: 1.5;
     }
 
     .btn-primary {
       display: inline-block;
       background: var(--black);
       color: var(--white);
-      font-size: 14px;
+      font-size: 13px;
       font-weight: 700;
-      padding: 12px 28px;
+      padding: 10px 22px;
       text-decoration: none;
       letter-spacing: -0.01em;
       white-space: nowrap;
@@ -212,94 +292,127 @@
     }
     .btn-primary:hover { background: var(--dark); }
 
-    /* ── Link grid ── */
-    .link-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
-      gap: 1px;
-      background: var(--border);
+    /* ============================================================
+       CALENDAR EMBED
+       Google Calendar iframe - read only, week view.
+       The iframe itself has no controls that allow editing.
+       Wrapped in a border to match the page aesthetic.
+       ============================================================ */
+    .calendar-wrap {
       border: 1px solid var(--border);
-      margin-bottom: 48px;
+      margin-bottom: 20px;
+      line-height: 0; /* removes gap below iframe */
     }
 
-    .link-card {
-      background: var(--white);
-      padding: 24px 26px;
-      text-decoration: none;
-      color: var(--black);
-      display: flex;
-      flex-direction: column;
-      gap: 4px;
-      transition: background 0.12s;
+    .calendar-wrap iframe {
+      width: 100%;
+      height: 620px;
+      border: none;
+      display: block;
     }
-    .link-card:hover { background: var(--bg); }
 
-    .link-card-title {
-      font-size: 15px;
+    /* ============================================================
+       CALENDAR LEGEND
+       Colour-coded key so staff know which colour = which room.
+       Grouped by building/location.
+       If a calendar is recoloured in Google Calendar, update the
+       background colour on the matching .legend-dot here.
+       ============================================================ */
+    .legend {
+      margin-bottom: 32px;
+    }
+
+    .legend-groups {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+      gap: 16px 24px;
+    }
+
+    .legend-group-title {
+      font-size: 10px;
       font-weight: 700;
-      color: var(--black);
-      letter-spacing: -0.01em;
-    }
-
-    .link-card-desc {
-      font-size: 13px;
-      color: var(--mid);
-      line-height: 1.5;
-    }
-
-    .link-card-url {
-      font-size: 11px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
       color: var(--light);
-      margin-top: 8px;
-      font-weight: 500;
+      margin-bottom: 6px;
     }
 
-    .link-card-arrow {
-      font-size: 16px;
-      color: var(--light);
-      margin-top: auto;
-      padding-top: 10px;
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      padding: 2px 0;
     }
 
-    /* ── Plain list ── */
-    .plain-list {
+    .legend-dot {
+      width: 11px;
+      height: 11px;
+      border-radius: 50%;
+      flex-shrink: 0;
+      /* border handles white/near-white colours so they're visible */
+      border: 1px solid rgba(0,0,0,0.12);
+    }
+
+    .legend-name {
+      font-size: 12px;
+      color: var(--dark);
+      line-height: 1.3;
+    }
+
+    /* ============================================================
+       A-Z LINKS SIDEBAR
+       Alphabetical list of useful systems. Pure HTML, no JS.
+       To add a link: copy an <li> block and insert in alpha order.
+       ============================================================ */
+    .sidebar {
+      position: sticky;
+      top: 72px; /* clears the sticky header */
+    }
+
+    .links-list {
       list-style: none;
-      margin-bottom: 48px;
     }
 
-    .plain-list li {
+    .links-list li {
       border-top: 1px solid var(--border);
-      padding: 14px 0;
+    }
+
+    .links-list li:last-child {
+      border-bottom: 1px solid var(--border);
+    }
+
+    .links-list a {
       display: flex;
       align-items: baseline;
       justify-content: space-between;
-      gap: 16px;
-    }
-    .plain-list li:last-child { border-bottom: 1px solid var(--border); }
-
-    .plain-list a {
-      font-size: 15px;
+      gap: 8px;
+      padding: 9px 0;
+      font-size: 13px;
       font-weight: 600;
       color: var(--black);
       text-decoration: none;
+      line-height: 1.35;
     }
-    .plain-list a:hover { text-decoration: underline; }
+    .links-list a:hover { color: var(--mid); }
 
-    .plain-list .list-meta {
-      font-size: 12px;
-      color: var(--light);
+    .links-list a span {
+      font-size: 14px;
+      color: var(--border);
       flex-shrink: 0;
+      transition: color 0.12s;
     }
+    .links-list a:hover span { color: var(--light); }
 
-    /* ── Footer ── */
+    /* ============================================================
+       FOOTER
+       ============================================================ */
     footer {
       border-top: 3px solid var(--black);
-      padding: 32px;
-      margin-top: 24px;
+      padding: 28px 32px;
     }
 
     .footer-inner {
-      max-width: 1100px;
+      max-width: 1400px;
       margin: 0 auto;
       display: flex;
       align-items: flex-start;
@@ -311,18 +424,11 @@
     .footer-left {
       display: flex;
       flex-direction: column;
-      gap: 4px;
+      gap: 3px;
     }
 
-    .footer-left strong {
-      font-size: 13px;
-      font-weight: 800;
-    }
-
-    .footer-left span {
-      font-size: 12px;
-      color: var(--mid);
-    }
+    .footer-left strong { font-size: 13px; font-weight: 800; }
+    .footer-left span   { font-size: 12px; color: var(--mid); }
 
     .footer-links {
       display: flex;
@@ -338,18 +444,28 @@
     }
     .footer-links a:hover { color: var(--black); }
 
-    /* ── Responsive ── */
-    @media (max-width: 600px) {
-      .page-band, .main { padding-left: 20px; padding-right: 20px; }
+    /* ============================================================
+       RESPONSIVE
+       On narrow screens, stack to single column.
+       ============================================================ */
+    @media (max-width: 900px) {
+      .main {
+        grid-template-columns: 1fr;
+        padding: 24px 20px 40px;
+      }
+      .sidebar { position: static; }
+      .page-band { padding: 28px 20px 24px; }
       .header-inner { padding: 0 20px; }
       .header-dept, .header-sep { display: none; }
-      .primary-action { padding: 24px; }
       footer { padding: 24px 20px; }
     }
   </style>
 </head>
 <body>
 
+<!-- ============================================================
+     HEADER
+     ============================================================ -->
 <header>
   <div class="header-inner">
     <a class="logo" href="https://www.northumbria.ac.uk/" target="_blank" rel="noopener">
@@ -368,6 +484,9 @@
   </div>
 </header>
 
+<!-- ============================================================
+     PAGE BAND
+     ============================================================ -->
 <div class="page-band">
   <div class="page-band-inner">
     <p class="dept-label">Technical Team &mdash; Internal Staff Portal</p>
@@ -376,85 +495,343 @@
   </div>
 </div>
 
+<!-- ============================================================
+     MAIN CONTENT
+     Left: workflow map banner + calendar + legend
+     Right: A-Z links sidebar
+     ============================================================ -->
 <div class="main">
 
-  <p class="section-heading">Workflows &amp; Processes</p>
+  <!-- LEFT COLUMN -->
+  <div class="left-col">
 
-  <div class="primary-action">
-    <div class="primary-action-text">
-      <h2>Workflow Map</h2>
-      <p>Interactive map of departmental workflows for Teaching and Research. Add and edit process steps, connect stages, and include notes and links for each step.</p>
+    <!-- Workflow map banner -->
+    <p class="section-heading">Workflows &amp; Processes</p>
+    <div class="primary-action">
+      <div class="primary-action-text">
+        <h2>Workflow Map</h2>
+        <p>Interactive map of departmental workflows for Teaching and Research. Add and edit process steps, connect stages, and attach notes and links for each step.</p>
+      </div>
+      <a href="workflow.html" class="btn-primary">Open Workflow Map</a>
     </div>
-    <a href="workflow.html" class="btn-primary">Open Workflow Map</a>
-  </div>
 
-  <p class="section-heading">Frequently Used Systems</p>
+    <!-- ============================================================
+         GOOGLE CALENDAR EMBED
+         Read-only week view. All src= parameters are public
+         @group.calendar.google.com calendar IDs.
 
-  <div class="link-grid">
+         EXCLUDED calendars (intentionally omitted):
+           - 1) STAFF (6lvpj8nk2eg684lkjf9cc5q7n0) - internal only
+           - Northumbria University personal timetable (import cal)
+           - nu.sportex.labs@gmail.com (the account itself)
+           - Birthdays (Google auto-calendar, not relevant here)
 
-    <a href="https://siso.northumbria.ac.uk/" class="link-card" target="_blank" rel="noopener">
-      <span class="link-card-title">SiSo / Online Booking</span>
-      <span class="link-card-desc">Room and equipment booking for Sport Central labs.</span>
-      <span class="link-card-url">siso.northumbria.ac.uk</span>
-      <span class="link-card-arrow">&#8599;</span>
-    </a>
+         To add a new calendar: append &src=CALENDARID%40group.calendar.google.com
+         To remove a calendar: delete its &src= parameter
+         To change view: change mode=WEEK to mode=MONTH or mode=AGENDA
+         ============================================================ -->
+    <p class="section-heading">Lab &amp; Room Bookings</p>
+    <div class="calendar-wrap">
+      <iframe
+        src="https://calendar.google.com/calendar/embed?height=620&wkst=2&bgcolor=%23ffffff&ctz=Europe%2FLondon&mode=WEEK&showTitle=0&showNav=1&showDate=1&showPrint=0&showTabs=0&showCalendars=0&showTz=0
+&src=h804sfk2b7dip0e1qgm390unkk%40group.calendar.google.com
+&src=96go5s17lsafcminkben04ie0s%40group.calendar.google.com
+&src=pbsjrleh7hfsqlhb1r6j8kju90%40group.calendar.google.com
+&src=m5cigndvloih65uev8bu7eopeo%40group.calendar.google.com
+&src=sent0vgjssmprjga87erdb7a7k%40group.calendar.google.com
+&src=se59cdk2p01iommmim29dp676k%40group.calendar.google.com
+&src=88s20jv71cbad9so5ofuj3dqso%40group.calendar.google.com
+&src=rjesrdho65nfjrsm9qddlj1ags%40group.calendar.google.com
+&src=6pavl4h44fj8sr63ta88ku0ufk%40group.calendar.google.com
+&src=1c3645f4608a68991baf49742cc78ba5f07e51ba67a4dc9ba97803ee557a4ea4%40group.calendar.google.com
+&src=bmf88nic6vqhl511uhuh0pd25g%40group.calendar.google.com
+&src=vhjs5dl5qbbcv9e1s0gk6q9jbk%40group.calendar.google.com
+&src=i314dr3dn0fh2i189do5mr3cg4%40group.calendar.google.com
+&src=5269gl4vu6g8eggrrltdcqikfg%40group.calendar.google.com
+&src=cejm41grapqjusl6leq8f2fqj4%40group.calendar.google.com
+&src=h4i58igirtnec7032acksfdtbo%40group.calendar.google.com
+&src=tkbanvf6hdvtmn99hff8gkpps0%40group.calendar.google.com
+&src=518787qcpq77euim3vgts1d3n0%40group.calendar.google.com
+&src=nnq9s5e9kmn37qb358uljrctm4%40group.calendar.google.com
+&src=ad4jh6l9cjn3q7l69mcd5v2i7k%40group.calendar.google.com
+&src=k7k4mii47ecqnn7ost50ma65fc%40group.calendar.google.com
+&src=voprcn4fm5ue9jvbujj8j7abok%40group.calendar.google.com
+&src=aprcoic5khr0p45q4hpfs4e1c0%40group.calendar.google.com
+&src=9uice41g2a0kj48kckch9r3mu4%40group.calendar.google.com
+&src=6satuiq3gsk3k2sk7pvm318qro%40group.calendar.google.com
+&src=7stvrmc1fnr6iscigpl6gk7h8c%40group.calendar.google.com
+&src=kh6uoqbnqcbpr0pg3qk2cicb7o%40group.calendar.google.com
+&src=apu5tukm4pvire3mdmeghrqj9k%40group.calendar.google.com
+&src=uqfhi2p4r9k2kaq8k9l8ev0euo%40group.calendar.google.com
+&src=ara7t96dks2tdj008ssijhscjo%40group.calendar.google.com
+&src=c1bc9b923256db1b7f5fd51ec12b715eed364c1ff368bc096f06481ee32bc284%40group.calendar.google.com"
+        frameborder="0"
+        scrolling="no"
+        title="SER Lab and Room Bookings - read only view">
+      </iframe>
+    </div>
 
-    <a href="https://mytimetable.northumbria.ac.uk/" class="link-card" target="_blank" rel="noopener">
-      <span class="link-card-title">MyTimetable</span>
-      <span class="link-card-desc">View scheduled sessions and semester room allocations.</span>
-      <span class="link-card-url">mytimetable.northumbria.ac.uk</span>
-      <span class="link-card-arrow">&#8599;</span>
-    </a>
+    <!-- ============================================================
+         CALENDAR LEGEND
+         Hex colours sourced directly from Google Apps Script output.
+         Grouped by building for readability.
+         White calendars (#FFFFFF) shown with a light grey fill so
+         the dot is visible against the white page background.
 
-    <a href="https://panopto.northumbria.ac.uk/" class="link-card" target="_blank" rel="noopener">
-      <span class="link-card-title">Panopto</span>
-      <span class="link-card-desc">Video recording and lecture capture platform.</span>
-      <span class="link-card-url">panopto.northumbria.ac.uk</span>
-      <span class="link-card-arrow">&#8599;</span>
-    </a>
+         MAINTENANCE: if a calendar is recoloured in Google Calendar,
+         update the background-color on its .legend-dot here to match.
+         ============================================================ -->
+    <div class="legend">
+      <div class="legend-groups">
 
-    <a href="https://mynorthumbria.northumbria.ac.uk/" class="link-card" target="_blank" rel="noopener">
-      <span class="link-card-title">MyNorthumbria</span>
-      <span class="link-card-desc">Staff and student portal for modules, HR and admin.</span>
-      <span class="link-card-url">mynorthumbria.northumbria.ac.uk</span>
-      <span class="link-card-arrow">&#8599;</span>
-    </a>
+        <!-- Sport Central (SPF) labs -->
+        <div>
+          <div class="legend-group-title">Sport Central &mdash; SPF</div>
+          <!-- SPF109: Sprint Track - red #FF0000 -->
+          <div class="legend-item">
+            <div class="legend-dot" style="background:#FF0000;"></div>
+            <span class="legend-name">SPF109: Sprint Track</span>
+          </div>
+          <!-- SPF110: Integrated Performance Lab - purple #CD74E6 -->
+          <div class="legend-item">
+            <div class="legend-dot" style="background:#CD74E6;"></div>
+            <span class="legend-name">SPF110: Integrated Performance Lab</span>
+          </div>
+          <!-- SPF112: Kitchen - orange #FF7300 -->
+          <div class="legend-item">
+            <div class="legend-dot" style="background:#FF7300;"></div>
+            <span class="legend-name">SPF112: Kitchen</span>
+          </div>
+          <!-- SPF113: Physiology Lab - green #85D800 -->
+          <div class="legend-item">
+            <div class="legend-dot" style="background:#85D800;"></div>
+            <span class="legend-name">SPF113: Physiology Lab</span>
+          </div>
+          <!-- SPF113: Treadmill - green #85D800 (same cal colour) -->
+          <div class="legend-item">
+            <div class="legend-dot" style="background:#85D800;"></div>
+            <span class="legend-name">SPF113: Treadmill</span>
+          </div>
+          <!-- SPF113: Wattbikes 1-4 - red #F83A22 -->
+          <div class="legend-item">
+            <div class="legend-dot" style="background:#F83A22;"></div>
+            <span class="legend-name">SPF113: Wattbikes 1-4</span>
+          </div>
+          <!-- SPF114: Biomechanics lab - light grey/mauve #CABDBF -->
+          <div class="legend-item">
+            <div class="legend-dot" style="background:#CABDBF;"></div>
+            <span class="legend-name">SPF114: Biomechanics Lab</span>
+          </div>
+          <!-- SPF115: Gait Lab - brown #AC725E -->
+          <div class="legend-item">
+            <div class="legend-dot" style="background:#AC725E;"></div>
+            <span class="legend-name">SPF115: Gait Lab</span>
+          </div>
+          <!-- SPF115: Respiratory kit - brown #AC725E (same) -->
+          <div class="legend-item">
+            <div class="legend-dot" style="background:#AC725E;"></div>
+            <span class="legend-name">SPF115: Respiratory Kit</span>
+          </div>
+          <!-- SPF115: Variable-Gravity Suspension System - brown #AC725E -->
+          <div class="legend-item">
+            <div class="legend-dot" style="background:#AC725E;"></div>
+            <span class="legend-name">SPF115: Variable-Gravity System</span>
+          </div>
+          <!-- SPF115: Leg Press - brown #AC725E -->
+          <div class="legend-item">
+            <div class="legend-dot" style="background:#AC725E;"></div>
+            <span class="legend-name">SPF115: Leg Press</span>
+          </div>
+          <!-- SPF118: S&C - rose/mauve #CCA6AC -->
+          <div class="legend-item">
+            <div class="legend-dot" style="background:#CCA6AC;"></div>
+            <span class="legend-name">SPF118: S&amp;C</span>
+          </div>
+        </div>
 
-    <a href="https://worktribe.com/" class="link-card" target="_blank" rel="noopener">
-      <span class="link-card-title">WorkTribe</span>
-      <span class="link-card-desc">Research management and workload planning system.</span>
-      <span class="link-card-url">worktribe.com</span>
-      <span class="link-card-arrow">&#8599;</span>
-    </a>
+        <!-- Sport Central (SC) halls -->
+        <div>
+          <div class="legend-group-title">Sport Central &mdash; Halls</div>
+          <!-- SC: Central Hall - yellow #FAD165 -->
+          <div class="legend-item">
+            <div class="legend-dot" style="background:#FAD165;"></div>
+            <span class="legend-name">SC: Central Hall</span>
+          </div>
+          <!-- SC: North Hall - yellow #FAD165 -->
+          <div class="legend-item">
+            <div class="legend-dot" style="background:#FAD165;"></div>
+            <span class="legend-name">SC: North Hall</span>
+          </div>
+          <!-- SC: South Hall - yellow #FAD165 -->
+          <div class="legend-item">
+            <div class="legend-dot" style="background:#FAD165;"></div>
+            <span class="legend-name">SC: South Hall</span>
+          </div>
+          <!-- SC: Upper Hall - blue #0059E9 -->
+          <div class="legend-item">
+            <div class="legend-dot" style="background:#0059E9;"></div>
+            <span class="legend-name">SC: Upper Hall</span>
+          </div>
+        </div>
 
-    <a href="https://northumbria.sharepoint.com/" class="link-card" target="_blank" rel="noopener">
-      <span class="link-card-title">Teams / SharePoint</span>
-      <span class="link-card-desc">Shared files, PEP documents, and team communication.</span>
-      <span class="link-card-url">northumbria.sharepoint.com</span>
-      <span class="link-card-arrow">&#8599;</span>
-    </a>
+        <!-- Northumberland Building (NB/NBD) -->
+        <div>
+          <div class="legend-group-title">Northumberland Building &mdash; NB/NBD</div>
+          <!-- NB415: Neurophys Lab - pink #FF54E3 -->
+          <div class="legend-item">
+            <div class="legend-dot" style="background:#FF54E3;"></div>
+            <span class="legend-name">NB415: Neurophys Lab</span>
+          </div>
+          <!-- NB421: Exercise Lab - gold #B58500 -->
+          <div class="legend-item">
+            <div class="legend-dot" style="background:#B58500;"></div>
+            <span class="legend-name">NB421: Exercise Lab</span>
+          </div>
+          <!-- NB423: Wet Lab - white #FFFFFF shown as light grey -->
+          <div class="legend-item">
+            <div class="legend-dot" style="background:#e8e8e8;"></div>
+            <span class="legend-name">NB423: Wet Lab</span>
+          </div>
+          <!-- NB425a: Freezer Room - white -->
+          <div class="legend-item">
+            <div class="legend-dot" style="background:#e8e8e8;"></div>
+            <span class="legend-name">NB425a: Freezer Room</span>
+          </div>
+          <!-- NB425b: Clinical Room B - white -->
+          <div class="legend-item">
+            <div class="legend-dot" style="background:#e8e8e8;"></div>
+            <span class="legend-name">NB425b: Clinical Room B</span>
+          </div>
+          <!-- NB425c: Phlebotomy Bed 1 (Window) - white -->
+          <div class="legend-item">
+            <div class="legend-dot" style="background:#e8e8e8;"></div>
+            <span class="legend-name">NB425c: Phlebotomy Bed 1 (Window)</span>
+          </div>
+          <!-- NB425c: Phlebotomy Bed 2 (Wall) - white -->
+          <div class="legend-item">
+            <div class="legend-dot" style="background:#e8e8e8;"></div>
+            <span class="legend-name">NB425c: Phlebotomy Bed 2 (Wall)</span>
+          </div>
+          <!-- NBD 322 (P.A. Suite) - white -->
+          <div class="legend-item">
+            <div class="legend-dot" style="background:#e8e8e8;"></div>
+            <span class="legend-name">NBD 322 (P.A. Suite)</span>
+          </div>
+          <!-- NBD406: Environmental Chamber - dark green #007639 -->
+          <div class="legend-item">
+            <div class="legend-dot" style="background:#007639;"></div>
+            <span class="legend-name">NBD406: Environmental Chamber</span>
+          </div>
+        </div>
 
-  </div>
+        <!-- Other -->
+        <div>
+          <div class="legend-group-title">Other</div>
+          <!-- SGU: Anatomy Teaching Centre Lab - light pink #FFB7B0 -->
+          <div class="legend-item">
+            <div class="legend-dot" style="background:#FFB7B0;"></div>
+            <span class="legend-name">SGU: Anatomy Teaching Centre Lab</span>
+          </div>
+          <!-- HTA - hot pink #E6236A -->
+          <div class="legend-item">
+            <div class="legend-dot" style="background:#E6236A;"></div>
+            <span class="legend-name">HTA</span>
+          </div>
+          <!-- Centrifuge: Wet Lab Bookings - red #F83A22 -->
+          <div class="legend-item">
+            <div class="legend-dot" style="background:#F83A22;"></div>
+            <span class="legend-name">Centrifuge: Wet Lab Bookings</span>
+          </div>
+        </div>
 
-  <p class="section-heading">Additional Resources</p>
+      </div>
+    </div><!-- /legend -->
 
-  <ul class="plain-list">
-    <li>
-      <a href="https://www.northumbria.ac.uk/" target="_blank" rel="noopener">Northumbria University main website</a>
-      <span class="list-meta">northumbria.ac.uk</span>
-    </li>
-    <li>
-      <a href="https://library.northumbria.ac.uk/" target="_blank" rel="noopener">University Library</a>
-      <span class="list-meta">library.northumbria.ac.uk</span>
-    </li>
-    <li>
-      <a href="https://www.northumbria.ac.uk/about-us/our-staff/" target="_blank" rel="noopener">Staff directory</a>
-      <span class="list-meta">northumbria.ac.uk</span>
-    </li>
-  </ul>
+  </div><!-- /left-col -->
 
-</div>
+  <!-- ============================================================
+       RIGHT COLUMN - A-Z USEFUL LINKS SIDEBAR
+       Alphabetically sorted. To add: copy an <li>, insert in
+       alphabetical order by the link text, update href and text.
+       ============================================================ -->
+  <aside class="sidebar">
+    <p class="section-heading">Useful Links A&ndash;Z</p>
+    <ul class="links-list">
 
+      <li>
+        <a href="https://www.northumbria.ac.uk/about-us/our-staff/" target="_blank" rel="noopener">
+          Staff Directory <span>&#8599;</span>
+        </a>
+      </li>
+
+      <li>
+        <a href="https://library.northumbria.ac.uk/" target="_blank" rel="noopener">
+          Library <span>&#8599;</span>
+        </a>
+      </li>
+
+      <li>
+        <a href="https://mynorthumbria.northumbria.ac.uk/" target="_blank" rel="noopener">
+          MyNorthumbria <span>&#8599;</span>
+        </a>
+      </li>
+
+      <li>
+        <a href="https://mytimetable.northumbria.ac.uk/" target="_blank" rel="noopener">
+          MyTimetable <span>&#8599;</span>
+        </a>
+      </li>
+
+      <li>
+        <a href="https://www.northumbria.ac.uk/" target="_blank" rel="noopener">
+          Northumbria University <span>&#8599;</span>
+        </a>
+      </li>
+
+      <li>
+        <a href="https://northumbria.sharepoint.com/" target="_blank" rel="noopener">
+          OneDrive / SharePoint <span>&#8599;</span>
+        </a>
+      </li>
+
+      <li>
+        <a href="https://panopto.northumbria.ac.uk/" target="_blank" rel="noopener">
+          Panopto <span>&#8599;</span>
+        </a>
+      </li>
+
+      <li>
+        <a href="https://siso.northumbria.ac.uk/" target="_blank" rel="noopener">
+          SiSo / Online Booking <span>&#8599;</span>
+        </a>
+      </li>
+
+      <li>
+        <a href="https://northumbria.sharepoint.com/" target="_blank" rel="noopener">
+          Teams / SharePoint <span>&#8599;</span>
+        </a>
+      </li>
+
+      <li>
+        <a href="workflow.html">
+          Workflow Map <span>&#8594;</span>
+        </a>
+      </li>
+
+      <li>
+        <a href="https://worktribe.com/" target="_blank" rel="noopener">
+          WorkTribe <span>&#8599;</span>
+        </a>
+      </li>
+
+    </ul>
+  </aside>
+
+</div><!-- /main -->
+
+<!-- ============================================================
+     FOOTER
+     ============================================================ -->
 <footer>
   <div class="footer-inner">
     <div class="footer-left">
