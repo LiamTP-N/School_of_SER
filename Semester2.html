@@ -118,11 +118,11 @@
     }
     .sem-btn {
       padding:10px 28px; font-size:15px; font-weight:800; letter-spacing:0.02em;
-      border:2px solid rgba(255,255,255,0.4); border-radius:4px;
-      text-decoration:none; color:rgba(255,255,255,0.65); transition:all 0.15s;
+      border:2px solid rgba(255,255,255,0.35); border-radius:4px;
+      text-decoration:none; color:rgba(255,255,255,0.6); transition:all 0.15s;
     }
-    .sem-btn.active { background:#fff; color:#000; border-color:#fff; }
-    .sem-btn:not(.active):hover { background:rgba(255,255,255,0.15); color:#fff; border-color:rgba(255,255,255,0.7); }
+    .sem-btn.active { background:#1e8a3c; color:#fff; border-color:#1e8a3c; }
+    .sem-btn:not(.active):hover { background:rgba(30,138,60,0.25); color:#fff; border-color:rgba(30,138,60,0.7); }
 
     /* ============================================================
        PAGE BAND
@@ -168,9 +168,19 @@
       flex:1; max-width:1600px; margin:0 auto; width:100%;
       padding:24px 32px 48px;
       display:grid;
-      grid-template-columns: 220px 1fr;
+      /* 3 columns: module list | staff filter (shown when module selected) | main content */
+      /* The staff sidebar is hidden initially; JS shows it after module selection */
+      grid-template-columns: 170px 0px 1fr;
+      transition: grid-template-columns 0.2s ease;
       gap:0;
       align-items:start;
+    }
+    /* When staff sidebar is visible, expand its column */
+    .layout.staff-visible {
+      grid-template-columns: 170px 140px 1fr;
+    }
+    .staff-sidebar {
+      border-left: none;
     }
 
     /* ── LEFT SIDEBAR: scrollable module list ── */
@@ -311,7 +321,6 @@
 
     tbody tr { border-bottom:1px solid #f0f0f0; transition:background 0.1s; }
     tbody tr:hover { background:#fafafa; }
-    tbody tr.week-start { border-top:2px solid #e0e0e0; }
 
     td {
       padding:0; vertical-align:middle;
@@ -335,16 +344,6 @@
       overflow:visible; z-index:5; position:relative;
     }
 
-    /* Week cell special styling */
-    td.week-td { background:var(--accent); min-width:36px; }
-    td.week-td .cell {
-      color:#fff; font-weight:700; text-align:center;
-      font-family:'Courier New',monospace; background:transparent;
-    }
-    td.week-td .cell:hover { background:rgba(255,255,255,0.1); }
-    td.week-td .cell:focus { background:rgba(255,255,255,0.15); box-shadow:none; color:#fff; }
-    td.week-td.empty-week { background:transparent; }
-    td.week-td.empty-week .cell { color:var(--light); }
 
     /* Delete row button */
     .btn-del-row {
@@ -441,7 +440,7 @@
       <img src="https://www.northumbria.ac.uk/-/media/take-on-tomorrow/northumbria-university-newcastle.png?modified=20201119190031" alt="Northumbria University">
     </a>
     <div class="header-sep"></div>
-    <a href="index.html" class="header-dept" style="text-decoration:none;color:inherit;">School of Sport, Exercise &amp; Rehabilitation &mdash; Technical Team</a>
+    <a href="index.html" class="header-dept" style="text-decoration:none;color:#ccc;">School of Sport, Exercise &amp; Rehabilitation &mdash; Technical Team</a>
     <div class="header-right">
       <div class="sem-toggle">
         <a href="Semester1.html" class="sem-btn ">Semester 1</a>
@@ -476,6 +475,12 @@
       <span class="sidebar-count" id="modCount"></span>
     </div>
     <!-- Module list rendered by JS renderSidebar() -->
+  </aside>
+
+  <!-- Staff filter sidebar - shown when a module is selected -->
+  <aside class="sidebar staff-sidebar" id="staffSidebar" style="display:none;">
+    <div class="sidebar-head">Staff</div>
+    <!-- Staff list rendered by JS after module selection -->
   </aside>
   <main class="main-content" id="mainContent">
     <div class="no-selection" id="noSelection">&#8592; Select a module to view its sessions</div>
@@ -778,6 +783,85 @@ function selectModule(code) {
     const block = renderModule(code);
     document.getElementById('mainContent').appendChild(block);
   }
+
+  // Populate staff filter for this module
+  renderStaffFilter(code);
+}
+
+// ── STAFF FILTER ──────────────────────────────────────────────────────────────
+// Collects unique academics from the selected module's sessions and renders
+// a clickable list in the staff sidebar. Clicking a name filters table rows
+// to only show rows where that academic is set. 'All staff' resets the filter.
+// Filter is purely visual (CSS display none/block) - no data is changed.
+
+let activeStaffFilter = null; // null = show all
+
+function renderStaffFilter(code) {
+  const mod = modules.get(code);
+  const sidebar = document.getElementById('staffSidebar');
+  const layout  = document.querySelector('.layout');
+  sidebar.innerHTML = '<div class="sidebar-head">Staff</div>';
+  activeStaffFilter = null;
+
+  // Collect unique non-empty academics from this module's sessions
+  const names = [...new Set(
+    (mod ? mod.sessions : [])
+      .map(s => (s.academic || '').trim())
+      .filter(Boolean)
+  )].sort();
+
+  if (!names.length) {
+    sidebar.style.display = 'none';
+    layout.classList.remove('staff-visible');
+    return;
+  }
+
+  sidebar.style.display = '';
+  layout.classList.add('staff-visible');
+
+  // 'All staff' reset option
+  const allDiv = document.createElement('div');
+  allDiv.className = 'mod-link active'; // starts active (= all)
+  allDiv.id = 'sf-all';
+  allDiv.textContent = 'All';
+  allDiv.addEventListener('click', () => applyStaffFilter(null, code));
+  sidebar.appendChild(allDiv);
+
+  names.forEach(name => {
+    const div = document.createElement('div');
+    div.className = 'mod-link';
+    div.id = 'sf-' + name.replace(/\s+/g, '_');
+    // Show first name only to keep pills compact
+    div.textContent = name.split(' ')[0];
+    div.title = name; // full name on hover
+    div.addEventListener('click', () => applyStaffFilter(name, code));
+    sidebar.appendChild(div);
+  });
+}
+
+function applyStaffFilter(name, code) {
+  activeStaffFilter = name;
+
+  // Update active pill
+  document.querySelectorAll('#staffSidebar .mod-link').forEach(el => el.classList.remove('active'));
+  const activeEl = name
+    ? document.getElementById('sf-' + name.replace(/\s+/g, '_'))
+    : document.getElementById('sf-all');
+  if (activeEl) activeEl.classList.add('active');
+
+  // Show/hide table rows based on academic field
+  const tbody = document.getElementById('tbody-' + code);
+  if (!tbody) return;
+  Array.from(tbody.rows).forEach(tr => {
+    if (!name) {
+      tr.style.display = '';
+      return;
+    }
+    // The academic cell is the first td in each row
+    const academicCell = tr.querySelector('td:first-child .cell');
+    const cellVal = (academicCell ? academicCell.textContent : '').trim();
+    tr.style.display = cellVal === name ? '' : 'none';
+  });
 }
 
 // ── RENDER: one module block ──────────────────────────────────────────────────
@@ -862,13 +946,9 @@ function renderModule(code) {
   const table = document.createElement('table');
   table.innerHTML =
     '<thead><tr>' +
-      '<th>Wk</th>' +
-      '<th class="staff-col">Repeats</th>' +
       '<th class="staff-col">Academic</th>' +
       '<th>Date</th><th>Start</th><th>Finish</th><th style="min-width:120px">Lab / Room</th>' +
       '<th class="staff-col" style="min-width:140px">PEP</th>' +
-      '<th class="staff-col">Set-up?</th>' +
-      '<th class="staff-col">Tech support?</th>' +
       '<th class="staff-col">Food?</th>' +
       '<th></th>' +   // delete button column
     '</tr></thead>';
@@ -901,7 +981,6 @@ function renderRow(code, sess) {
 
   const tr = document.createElement('tr');
   tr.id = 'row-' + sess.id;
-  if (sess.week) tr.classList.add('week-start');
 
   const debouncedSave = debounce((id, fields) => saveRow(id, fields), 600);
 
@@ -922,10 +1001,6 @@ function renderRow(code, sess) {
       // Update in-memory state
       sess[field] = newVal;
       debouncedSave(sess.id, { [field]: newVal });
-      // Special case: week cell styling
-      if (field === 'week') {
-        td.className = newVal ? 'week-td' : 'week-td empty-week';
-      }
     });
     div.addEventListener('keydown', e => {
       if (e.key === 'Enter') { e.preventDefault(); div.blur(); }
@@ -934,19 +1009,14 @@ function renderRow(code, sess) {
     return td;
   }
 
-  // Week cell
-  tr.appendChild(makeCell('week', sess.week, sess.week ? 'week-td' : 'week-td empty-week'));
-  // Staff columns (yellow headers)
-  tr.appendChild(makeCell('repeats',  sess.repeats,  null, 'max-width:60px'));
+  // Editable: Academic
   tr.appendChild(makeCell('academic', sess.academic, null, 'max-width:140px'));
-  // Timetable columns (can still be edited - just styled normally)
+  // Timetable columns
   tr.appendChild(makeCell('date',   sess.date,   null, 'max-width:100px'));
   tr.appendChild(makeCell('start',  sess.start,  null, 'max-width:70px'));
   tr.appendChild(makeCell('finish', sess.finish, null, 'max-width:70px'));
   tr.appendChild(makeCell('room',   sess.room,   null, 'max-width:160px'));
   tr.appendChild(makeCell('pep',    sess.pep,    null, 'max-width:180px'));
-  tr.appendChild(makeCell('setup',   sess.setup,   null, 'max-width:100px'));
-  tr.appendChild(makeCell('support', sess.support, null, 'max-width:100px'));
   tr.appendChild(makeCell('food',    sess.food,    null, 'max-width:80px'));
 
   // Delete row button
@@ -979,8 +1049,8 @@ async function addRow(code) {
   const newSess = {
     id: newId, moduleCode: code, moduleName: mod.name,
     moduleLead: mod.lead, techLead: mod.techLead,
-    week:'', repeats:'1', academic:'', date:'', start:'', finish:'',
-    room:'', pep:'', setup:'', support:'', food:'', _order: maxOrder + 1,
+    academic:'', date:'', start:'', finish:'',
+    room:'', pep:'', food:'', _order: maxOrder + 1,
   };
   flashSave('saving', 'Saving...');
   try {
@@ -1015,8 +1085,8 @@ window.saveNewModule = async () => {
   const newSess = {
     id: newId, moduleCode: code, moduleName: name||code,
     moduleLead: lead, techLead: tech,
-    week:'', repeats:'1', academic:'', date:'', start:'', finish:'',
-    room:'', pep:'', setup:'', support:'', food:'', _order: 0,
+    academic:'', date:'', start:'', finish:'',
+    room:'', pep:'', food:'', _order: 0,
   };
 
   flashSave('saving', 'Saving...');
@@ -1044,6 +1114,10 @@ window.saveNewModule = async () => {
 function renderAll() {
   renderSidebar();
   updateModCount();
+  // Reset staff sidebar when re-rendering
+  const sf = document.getElementById('staffSidebar');
+  if (sf) { sf.innerHTML = '<div class="sidebar-head">Staff</div>'; sf.style.display='none'; }
+  document.querySelector('.layout')?.classList.remove('staff-visible');
   // If a module was already selected, keep it shown
   if (selectedCode && modules.has(selectedCode)) {
     selectModule(selectedCode);
