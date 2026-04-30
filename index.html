@@ -4,7 +4,29 @@
   FILE: index.html
   PURPOSE: SER Technical Team internal staff portal homepage
   OWNER: Liam Pearson-Noseworthy, Northumbria University
-  LAST UPDATED: 2026-04-29
+  LAST UPDATED: 2026-04-30
+
+  ============================================================
+  WHAT CHANGED IN THIS REVISION (2026-04-30):
+  ============================================================
+  1. TOPIC NAVIGATION ROW (new, top of white area):
+     - Inline button row links to per-topic pages:
+       teaching.html, research.html, ethics.html,
+       risk-assessment.html, workflows.html, lab-equipment.html,
+       inductions.html, peps.html, timetabling.html, siso.html
+     - Each topic has its own URL (shareable, bookmarkable,
+       back-button friendly).
+     - Topic page contents are stored in Firestore and shared
+       across all pages (edit on one = visible on the other).
+     - To add a new topic: edit generate_topic_pages.py, re-run
+       it, AND add the matching button below.
+
+  2. USEFUL LINKS NOW FULLY EDITABLE:
+     - Hardcoded HARDCODED_LINKS array is now a SEED ONLY
+       (used to populate Firestore on first load if empty).
+     - All links are now stored in Firestore -> all links
+       have BOTH edit AND delete buttons.
+  ============================================================
 
   FOR AI/LLM READERS - ARCHITECTURE OVERVIEW:
   ============================================================
@@ -658,6 +680,68 @@
     .lp-btns .lp-ddel:hover { background: #fff0f0; }
 
     /* ============================================================
+       TOPIC NAVIGATION (NEW 2026-04-30)
+       ------------------------------------------------------------
+       Buttons sit at the top of the white area, above the
+       workflow banner. Each one is a link to a dedicated topic
+       page (teaching.html, research.html, etc.).
+       ============================================================ */
+    .topic-tabs {
+      display: flex;
+      gap: 8px;
+      overflow-x: auto;
+      padding-bottom: 12px;
+      margin-bottom: 24px;
+      border-bottom: 1px solid var(--border);
+      scrollbar-width: thin;
+    }
+    .topic-tabs::-webkit-scrollbar { height: 6px; }
+    .topic-tabs::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+    .topic-btn {
+      flex-shrink: 0;
+      padding: 7px 14px;
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.02em;
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      background: transparent;
+      color: var(--mid);
+      cursor: pointer;
+      font-family: inherit;
+      transition: all 0.12s;
+      white-space: nowrap;
+      text-transform: uppercase;
+      text-decoration: none;
+    }
+    .topic-btn:hover {
+      border-color: var(--black);
+      color: var(--black);
+      background: var(--bg);
+    }
+
+    /* ============================================================
+       LINKS - DELETE BUTTON (NEW 2026-04-30)
+       ============================================================ */
+    .li-del {
+      font-size: 10px;
+      padding: 1px 6px;
+      border: 1px solid var(--border);
+      border-radius: 3px;
+      background: transparent;
+      color: var(--light);
+      cursor: pointer;
+      flex-shrink: 0;
+      margin-left: 4px;
+      font-family: inherit;
+    }
+    .li-del:hover {
+      border-color: #c0392b;
+      color: #c0392b;
+    }
+
+    /* ============================================================
        FOOTER
        Black background matching NU website footer style.
        White text and links on black.
@@ -749,31 +833,52 @@
 
   <div class="left-col">
 
+    <!-- ============================================================
+         TOPIC NAVIGATION (NEW 2026-04-30)
+         ------------------------------------------------------------
+         Each button links to a dedicated topic page. Topic pages
+         share the same Firestore-backed editable content. To add
+         or remove a topic: edit generate_topic_pages.py, re-run it,
+         AND update this list to match.
+         ============================================================ -->
+    <nav class="topic-tabs" aria-label="Topic navigation">
+      <a class="topic-btn" href="teaching.html">Teaching</a>
+      <a class="topic-btn" href="research.html">Research</a>
+      <a class="topic-btn" href="ethics.html">Ethics</a>
+      <a class="topic-btn" href="risk-assessment.html">Risk Assessment</a>
+      <a class="topic-btn" href="workflows.html">Workflows</a>
+      <a class="topic-btn" href="lab-equipment.html">Lab &amp; Equipment</a>
+      <a class="topic-btn" href="inductions.html">Inductions &amp; Training</a>
+      <a class="topic-btn" href="peps.html">PEPs</a>
+      <a class="topic-btn" href="timetabling.html">Timetabling</a>
+      <a class="topic-btn" href="siso.html">SiSo Bookings</a>
+    </nav>
+
     <!-- Workflow map banner -->
     <p class="section-heading">Workflows &amp; Processes</p>
-    <div class="primary-action" style="background:#f5c6c6;">
+    <div class="primary-action" style="background:#fff5f5;">
       <div class="primary-action-text">
         <h2><span style="font-weight:900;color:#cc0000;-webkit-text-stroke:0.5px #111;">HELP REQUIRED</span> - Workflow Map</h2>
         <p>Interactive map of departmental workflows for Teaching and Research. Add and edit process steps, connect stages, and attach notes and links for each step.</p>
       </div>
-      <a href="workflow.html" class="btn-primary" style="background:#b83232;outline:2px solid #111;outline-offset:-2px;">Open Workflow Map</a>
+      <a href="workflow.html" class="btn-primary">Open Workflow Map</a>
     </div>
 
     <!-- Teaching Alignment banners - side by side, compact, below the workflow map banner -->
     <div style="display:flex;gap:12px;margin-top:12px;flex-wrap:wrap;">
-      <div class="primary-action" style="flex:1;min-width:220px;margin-bottom:0;background:#c8ecd4;">
+      <div class="primary-action" style="flex:1;min-width:220px;margin-bottom:0;background:#f0faf4;">
         <div class="primary-action-text">
           <h2>Teaching Alignment &mdash; Semester 1</h2>
           <p>Timetable, PEP links, set-up and support for all Semester 1 modules.</p>
         </div>
-        <a href="Semester1.html" class="btn-primary">Semester 1</a>
+        <a href="Semester1.html" class="btn-primary">Open Sem 1</a>
       </div>
-      <div class="primary-action" style="flex:1;min-width:220px;margin-bottom:0;background:#c8ecd4;">
+      <div class="primary-action" style="flex:1;min-width:220px;margin-bottom:0;background:#f0faf4;">
         <div class="primary-action-text">
           <h2>Teaching Alignment &mdash; Semester 2</h2>
           <p>Timetable, PEP links, set-up and support for all Semester 2 modules.</p>
         </div>
-        <a href="Semester2.html" class="btn-primary">Semester 2</a>
+        <a href="Semester2.html" class="btn-primary">Open Sem 2</a>
       </div>
     </div>
 
@@ -1471,33 +1576,19 @@
 </script>
 
 <!-- ============================================================
-     LINKS SIDEBAR JAVASCRIPT
+     LINKS SIDEBAR JAVASCRIPT  (REWRITTEN 2026-04-30)
      ============================================================
-
      FOR AI/LLM READERS:
-     Uses the same Firebase Firestore project as workflow.html
-     (nu-school-of-sport). Links are stored in the 'links'
-     collection with fields: { name: string, url: string }.
-
-     HARDCODED_LINKS: always present, rendered first in alpha
-     order alongside Firestore links. They cannot be deleted
-     from the UI. To remove one, delete it from this array.
-
-     FLOW:
-     1. Load Firestore links collection on page load
-     2. Merge with HARDCODED_LINKS, sort alphabetically by name
-     3. Render list. Hardcoded items have no edit button.
-     4. + Add: shows lp-form. Save writes to Firestore.
-     5. Edit: pre-fills lp-form with existing data. Save updates
-        the Firestore doc. Delete removes it.
-     6. After any save/delete, re-fetches and re-renders.
+     HARDCODED_LINKS is now a one-time SEED. On first ever load
+     (empty 'links' collection) all entries are written into
+     Firestore. After that, every link is a Firestore doc and
+     so every list item has BOTH an edit and a delete button.
      ============================================================ -->
 <script type="module">
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.0/firebase-app.js';
 import { getFirestore, collection, getDocs, addDoc, updateDoc, deleteDoc, doc }
   from 'https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore.js';
 
-// Same Firebase project as workflow.html
 const firebaseConfig = {
   apiKey:            'AIzaSyDSK-2hI6ML1eykIed6E8S5Ve29phrEolI',
   authDomain:        'nu-school-of-sport.firebaseapp.com',
@@ -1510,99 +1601,66 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig, 'links-app');
 const db  = getFirestore(app);
 
-// ----------------------------------------------------------
-// HARDCODED LINKS
-// Always shown. Cannot be deleted from the UI.
-// To remove a link, delete its entry from this array.
-// To add a permanent link, add an entry here (and optionally
-// remove it from Firestore if it was added via the UI).
-// ----------------------------------------------------------
+// One-time seed - writes to Firestore on first load only.
 const HARDCODED_LINKS = [
-  { name: 'Library',              url: 'https://library.northumbria.ac.uk/' },
-  { name: 'MyNorthumbria',        url: 'https://mynorthumbria.northumbria.ac.uk/' },
-  { name: 'MyTimetable',          url: 'https://mytimetable.northumbria.ac.uk/' },
-  { name: 'Northumbria University', url: 'https://www.northumbria.ac.uk/' },
-  { name: 'OneDrive / SharePoint', url: 'https://northumbria.sharepoint.com/' },
-  { name: 'Panopto',              url: 'https://panopto.northumbria.ac.uk/' },
-  { name: 'SiSo / Online Booking', url: 'https://siso.northumbria.ac.uk/' },
-  { name: 'Staff Directory',      url: 'https://www.northumbria.ac.uk/about-us/our-staff/' },
-  { name: 'Teams / SharePoint',   url: 'https://northumbria.sharepoint.com/' },
-  { name: 'Workflow Map',         url: 'workflow.html' },
-  { name: 'WorkTribe',            url: 'https://worktribe.com/' },
+  { name: 'Library',                 url: 'https://library.northumbria.ac.uk/' },
+  { name: 'MyNorthumbria',           url: 'https://mynorthumbria.northumbria.ac.uk/' },
+  { name: 'MyTimetable',             url: 'https://mytimetable.northumbria.ac.uk/' },
+  { name: 'Northumbria University',  url: 'https://www.northumbria.ac.uk/' },
+  { name: 'OneDrive / SharePoint',   url: 'https://northumbria.sharepoint.com/' },
+  { name: 'Panopto',                 url: 'https://panopto.northumbria.ac.uk/' },
+  { name: 'Risk Assessment Library', url: 'https://livenorthumbriaac.sharepoint.com/sites/RAL/RiskAssessments/Forms/AllItems.aspx?id=%2Fsites%2FRAL%2FRiskAssessments%2FHealth%20and%20Life%20Sciences%2FRisk%20Assessments&viewid=99a3ece3%2D91e1%2D4e4a%2Da245%2D63e7524d228c' },
+  { name: 'SiSo / Online Booking',   url: 'https://siso.northumbria.ac.uk/' },
+  { name: 'Staff Directory',         url: 'https://www.northumbria.ac.uk/about-us/our-staff/' },
+  { name: 'Teams / SharePoint',      url: 'https://northumbria.sharepoint.com/' },
+  { name: 'Workflow Map',            url: 'workflow.html' },
+  { name: 'WorkTribe',               url: 'https://worktribe.com/' },
 ];
 
-// ----------------------------------------------------------
-// STATE
-// editLinkId: Firestore doc ID being edited, or null for new
-// ----------------------------------------------------------
 let editLinkId = null;
-let firestoreLinks = {}; // { id: { name, url } }
+let firestoreLinks = {};
 
-// ----------------------------------------------------------
-// LOAD AND RENDER
-// Fetches Firestore links, merges with hardcoded, sorts A-Z,
-// renders the list. Called on load and after every save/delete.
-// ----------------------------------------------------------
+function esc(s) {
+  return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
 async function loadLinks() {
   try {
     const snap = await getDocs(collection(db, 'links'));
-    firestoreLinks = {};
-    snap.forEach(d => { firestoreLinks[d.id] = d.data(); });
-  } catch(e) {
-    console.warn('Could not load Firestore links:', e);
-  }
+    if (snap.empty) {
+      console.log('[links] First-time seed');
+      for (const l of HARDCODED_LINKS) await addDoc(collection(db, 'links'), l);
+      const seeded = await getDocs(collection(db, 'links'));
+      firestoreLinks = {};
+      seeded.forEach(d => { firestoreLinks[d.id] = d.data(); });
+    } else {
+      firestoreLinks = {};
+      snap.forEach(d => { firestoreLinks[d.id] = d.data(); });
+    }
+  } catch(e) { console.warn('Could not load links:', e); }
   renderLinks();
 }
 
 function renderLinks() {
   const list = document.getElementById('linksList');
   if (!list) return;
-
-  // Merge hardcoded + Firestore, tag each with source
-  const all = [
-    ...HARDCODED_LINKS.map(l => ({ ...l, hardcoded: true })),
-    ...Object.entries(firestoreLinks).map(([id, l]) => ({ ...l, id, hardcoded: false }))
-  ];
-
-  // Sort alphabetically by name (case-insensitive)
-  all.sort((a, b) => a.name.toLowerCase().localeCompare(b.name.toLowerCase()));
-
-  if (!all.length) {
-    list.innerHTML = '<span class="lp-empty">No links yet</span>';
-    return;
-  }
-
-  // Render each link as a list item
-  // Hardcoded links get no edit button
-  // Firestore links get an edit button that opens the form
+  const all = Object.entries(firestoreLinks)
+    .map(([id, l]) => ({ id, ...l }))
+    .sort((a, b) => a.name.toLowerCase().localeCompare(b.name.toLowerCase()));
+  if (!all.length) { list.innerHTML = '<span class="lp-empty">No links yet</span>'; return; }
   list.innerHTML = '';
   all.forEach(link => {
     const li = document.createElement('li');
     const isExternal = link.url.startsWith('http');
     li.innerHTML = `
-      <a href="${esc(link.url)}"${isExternal ? ' target="_blank" rel="noopener"' : ''}>
-        ${esc(link.name)}
-      </a>
-      ${!link.hardcoded
-        ? `<button class="li-edit" onclick="window.editLink('${link.id}')">edit</button>`
-        : ''}`;
+      <a href="${esc(link.url)}"${isExternal ? ' target="_blank" rel="noopener"' : ''}>${esc(link.name)}</a>
+      <button class="li-edit" onclick="window.editLink('${link.id}')">edit</button>
+      <button class="li-del"  onclick="window.deleteLinkById('${link.id}')" title="Delete this link">x</button>
+    `;
     list.appendChild(li);
   });
 }
 
-function esc(s) {
-  return String(s || '')
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
-}
-
-// ----------------------------------------------------------
-// FORM SHOW/HIDE
-// showLinkForm(null) = new link
-// showLinkForm(id)   = edit existing Firestore link
-// ----------------------------------------------------------
 window.showLinkForm = function(id) {
   editLinkId = id;
   const link = id ? firestoreLinks[id] : null;
@@ -1618,28 +1676,18 @@ window.hideLinkForm = function() {
   document.getElementById('lpForm').classList.remove('vis');
 };
 
-// ----------------------------------------------------------
-// SAVE - create new or update existing Firestore doc
-// ----------------------------------------------------------
 window.saveLink = async function() {
   const name = document.getElementById('lpName').value.trim();
   const url  = document.getElementById('lpUrl').value.trim();
   if (!name || !url) { alert('Both name and URL are required.'); return; }
   try {
-    if (editLinkId) {
-      await updateDoc(doc(db, 'links', editLinkId), { name, url });
-    } else {
-      await addDoc(collection(db, 'links'), { name, url });
-    }
+    if (editLinkId) await updateDoc(doc(db, 'links', editLinkId), { name, url });
+    else            await addDoc(collection(db, 'links'), { name, url });
     window.hideLinkForm();
     await loadLinks();
   } catch(e) { alert('Error saving: ' + e.message); }
 };
 
-// ----------------------------------------------------------
-// DELETE - remove Firestore doc (hardcoded links are never
-// passed to this function so there's no risk of deleting them)
-// ----------------------------------------------------------
 window.deleteLink = async function() {
   if (!editLinkId) return;
   const link = firestoreLinks[editLinkId];
@@ -1651,16 +1699,15 @@ window.deleteLink = async function() {
   } catch(e) { alert('Error deleting: ' + e.message); }
 };
 
-// ----------------------------------------------------------
-// EDIT - called from inline onclick on each dynamic list item
-// ----------------------------------------------------------
-window.editLink = function(id) {
-  window.showLinkForm(id);
+window.deleteLinkById = async function(id) {
+  const link = firestoreLinks[id];
+  if (!confirm('Delete "' + (link?.name || 'this link') + '"?')) return;
+  try { await deleteDoc(doc(db, 'links', id)); await loadLinks(); }
+  catch(e) { alert('Error deleting: ' + e.message); }
 };
 
-// ----------------------------------------------------------
-// BOOT
-// ----------------------------------------------------------
+window.editLink = function(id) { window.showLinkForm(id); };
+
 loadLinks();
 </script>
 

@@ -644,7 +644,7 @@ async function deleteModuleRows(moduleCode) {
 // Uses writeBatch in chunks of 500 (Firestore batch limit).
 // Marks sem_meta/seeded with seeded:true when done.
 async function runSeedIfNeeded() {
-  const metaRef = doc(db, META, 'seeded');
+  const metaRef = doc(db, META, 'seeded_v2');
   let seeded = false;
   try {
     const snap = await getDoc(metaRef);
@@ -680,15 +680,19 @@ async function runSeedIfNeeded() {
         }
       });
     });
-    // If a module has no sessions, create one blank placeholder row so it shows up
+    // Empty module: write a flagged placeholder doc so the module
+    // is discoverable to the loader, but the placeholder is NOT shown
+    // as a session row. When the user adds their first real row,
+    // the loader/addRow path deletes the placeholder.
     if (!mod.sessions.length) {
       allRows.push({
-        docId: mod.code + '_0',
+        docId: mod.code + '_placeholder',
         data: {
           moduleCode: mod.code, moduleName: mod.name,
           moduleLead: mod.lead||'', techLead: mod.techLead||'',
-          week:'', repeats:'1', academic:'', date:'', start:'', finish:'',
+          week:'', repeats:'', academic:'', date:'', start:'', finish:'',
           room:'', pep:'', setup:'', support:'', food:'', _order:0,
+          _placeholder: true,
         }
       });
     }
@@ -704,12 +708,17 @@ async function runSeedIfNeeded() {
   }
 
   // Mark as seeded
-  await setDoc(metaRef, { seeded: true, seededAt: new Date().toISOString() });
+  await setDoc(metaRef, { seeded: true, version: 2, seededAt: new Date().toISOString() });
   return true;
 }
 
 // ── LOAD: read all session docs from Firestore ─────────────────────────────────
 async function loadFromFirestore() {
+  // Loads every doc in the COL collection. Modules are registered
+  // even if they only have a _placeholder doc, so empty modules
+  // appear in the sidebar with a normal-looking (but empty) table.
+  // Placeholder docs are tracked separately so addRow can delete
+  // them when the first real row is added.
   const snap = await getDocs(collection(db, COL));
   modules.clear();
   snap.forEach(d => {
@@ -718,14 +727,23 @@ async function loadFromFirestore() {
     if (!modules.has(code)) {
       modules.set(code, {
         code, name: s.moduleName||code, lead: s.moduleLead||'', techLead: s.techLead||'',
-        sessions: []
+        sessions: [],
+        placeholderId: null   // doc id of the placeholder, if this module has one
       });
     }
-    modules.get(code).sessions.push({ id: d.id, ...s });
+    if (s._placeholder) {
+      // Don't push to sessions - just remember the doc id so we
+      // can delete it later when the user adds their first real row.
+      modules.get(code).placeholderId = d.id;
+    } else {
+      modules.get(code).sessions.push({ id: d.id, ...s });
+    }
   });
   // Sort sessions within each module by _order
   modules.forEach(mod => mod.sessions.sort((a,b) => (a._order||0) - (b._order||0)));
-  setStatus(modules.size + ' modules \u00b7 ' + snap.size + ' sessions');
+  // Count real sessions only (placeholders excluded)
+  const sessionCount = [...modules.values()].reduce((acc,m) => acc + m.sessions.length, 0);
+  setStatus(modules.size + ' modules \u00b7 ' + sessionCount + ' sessions');
 }
 
 // ── RENDER: sidebar module list ──────────────────────────────────────────────
@@ -1054,6 +1072,15 @@ function renderRow(code, sess, tbodyEl) {
 
 // ── ADD ROW ───────────────────────────────────────────────────────────────────
 async function addRow(code) {
+  // If this module currently has only a placeholder doc, delete the
+  // placeholder before adding the first real row so the module
+  // doesn't keep an invisible empty doc forever.
+  const _modForPh = modules.get(code);
+  if (_modForPh && _modForPh.placeholderId) {
+    try { await deleteDoc(doc(db, COL, _modForPh.placeholderId)); }
+    catch(e) { console.warn('Failed to clear placeholder:', e); }
+    _modForPh.placeholderId = null;
+  }
   const mod = modules.get(code);
   if (!mod) return;
   const newId = code + '_' + uid();
