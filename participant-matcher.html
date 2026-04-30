@@ -1,0 +1,1579 @@
+<!DOCTYPE html>
+<!--
+  ============================================================
+  FILE: participant-matcher.html
+  PURPOSE: Research Participant Database & Matcher
+           Northumbria University - School of Sport, Exercise
+           & Rehabilitation (SER)
+  OWNER: Liam Pearson-Noseworthy, Northumbria University
+  CREATED: April 2026
+
+  ============================================================
+  FOR AI / LLM READERS - FULL ARCHITECTURE OVERVIEW
+  ============================================================
+
+  WHAT THIS PAGE DOES:
+  This is a standalone, isolated research participant recruitment
+  platform. It allows:
+    1. PARTICIPANTS to self-register (name, email, age, sex,
+       health/clinical conditions, sport/activity level) into
+       a Firestore database.
+    2. RESEARCHERS to log in with a PIN and search/filter that
+       database by any combination of criteria - the system then
+       shows matched participants and sends them an automated
+       email invitation via EmailJS.
+
+  ISOLATION DESIGN (intentional):
+  - No navigation header links back to the SER staff portal.
+  - No back-button trap needed: this page is designed to be
+    opened in a NEW TAB from the portal (target="_blank").
+  - The page is fully self-contained; it has its own header
+    with only a NU logo wordmark, no portal nav bar.
+  - There is deliberately NO link back to index.html or any
+    other portal page visible to participants.
+  - Staff/researchers access via a PIN gate (see RESEARCHER
+    MODE section below).
+
+  ============================================================
+  FIREBASE FIRESTORE BACKEND
+  ============================================================
+
+  PROJECT: nu-school-of-sport (same project as the SER portal)
+  COLLECTION: participants
+    Each document = one registered participant.
+    Document ID: auto-generated Firestore ID.
+    Fields:
+      firstName     {string}   - Participant's first name
+      lastName      {string}   - Participant's last name
+      email         {string}   - Contact email
+      age           {number}   - Age in years (integer)
+      sex           {string}   - "Male" | "Female" | "Other / prefer not to say"
+      conditions    {array}    - List of selected health/clinical conditions
+                                 from a fixed picklist (see CONDITIONS array below)
+      activityLevel {string}   - Self-reported physical activity level
+                                 "Sedentary" | "Lightly active" | "Moderately active"
+                                 | "Very active" | "Elite / competitive athlete"
+      sport         {string}   - Primary sport or activity (free text, optional)
+      registeredAt  {string}   - ISO 8601 timestamp of registration
+      consentGiven  {boolean}  - Must be true before document is written
+
+  COLLECTION: researcher_sessions (optional future use)
+    Could log researcher searches and match events for audit trail.
+    Not currently implemented - placeholder for future development.
+
+  SECURITY NOTE:
+  Firestore rules for this project are currently open (dev mode).
+  Before going live / presenting to IT, the following rules
+  should be applied in Firebase Console > Firestore > Rules:
+
+    rules_version = '2';
+    service cloud.firestore {
+      match /databases/{database}/documents {
+        // Participants can write their own doc; anyone can read (researcher PIN gates this in UI)
+        match /participants/{docId} {
+          allow read: if true;
+          allow create: if request.resource.data.consentGiven == true;
+          allow update, delete: if false;
+        }
+      }
+    }
+
+  For production, consider adding proper Firebase Auth for researcher access
+  rather than the client-side PIN used here for demo purposes.
+
+  ============================================================
+  EMAILJS INTEGRATION
+  ============================================================
+
+  SERVICE: EmailJS (https://www.emailjs.com/)
+  - Sends emails from client-side JS with no backend server.
+  - Free tier: 200 emails/month.
+  - EMAILJS_PUBLIC_KEY, EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID
+    must be set below (see CONFIG section).
+  - The email template in EmailJS dashboard should use these
+    template variables:
+      {{to_email}}      - participant's email address
+      {{to_name}}       - participant's first name
+      {{study_title}}   - study title entered by researcher
+      {{study_details}} - study description entered by researcher
+      {{researcher}}    - researcher's name entered by researcher
+      {{contact_email}} - researcher's reply-to email
+
+  TO SET UP EMAILJS:
+  1. Create account at emailjs.com
+  2. Add an Email Service (e.g. Gmail or Outlook)
+  3. Create an Email Template using the variables above
+  4. Copy your Public Key, Service ID, and Template ID
+  5. Paste them into the CONFIG section below
+
+  ============================================================
+  RESEARCHER MODE
+  ============================================================
+
+  - A "Researcher Access" link in the footer reveals a PIN entry.
+  - The PIN is hardcoded below (RESEARCHER_PIN). Change it.
+  - In demo/PoC mode this is sufficient. For production, replace
+    with Firebase Authentication (email + password, or SSO via
+    the university's identity provider).
+  - Once the correct PIN is entered, the researcher panel slides
+    into view. The PIN state is kept only in memory (sessionStorage
+    would survive refresh; not used here to keep it simple).
+  - Researcher panel features:
+      * Criteria form: min age, max age, sex, conditions (multi-select),
+        activity level, study title, study description, researcher
+        name, researcher email.
+      * "Find Matches" button: queries Firestore client-side and
+        filters against criteria. Results shown in a table.
+      * "Send Invitations" button: iterates matched participants
+        and fires EmailJS for each one. Shows a progress counter.
+
+  ============================================================
+  PAGE STRUCTURE
+  ============================================================
+
+  1. Minimal header - NU logo only, no nav links
+  2. Hero band - page title and strapline
+  3. TAB 1: Register as a Participant
+       - Multi-step form (personal details -> health info -> consent)
+       - On submit: writes to Firestore 'participants' collection
+  4. TAB 2: (hidden, researcher PIN required)
+       Researcher Panel
+       - Criteria filter form
+       - Results table
+       - Send invitations control
+  5. Footer - minimal; "Researcher Access" trigger + NU legal line
+              NO link back to portal (by design)
+
+  ============================================================
+  DEPENDENCY VERSIONS
+  ============================================================
+
+  Firebase JS SDK: 10.7.0 (modular, imported from gstatic CDN)
+  EmailJS SDK:     4.x    (loaded from CDN)
+  Fonts/icons:     none   (system font stack only, matching portal style)
+
+  ============================================================
+-->
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Research Participation - Northumbria University SER</title>
+
+<!-- EmailJS SDK - loaded from official CDN, required for client-side email sending -->
+<script type="text/javascript" src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
+
+<style>
+/* ============================================================
+   GLOBAL RESET & CSS VARIABLES
+   Matches the black-and-white Northumbria identity used across
+   the SER portal (index.html, research.html etc.)
+   No colour, no decorative elements, no emoji.
+   ============================================================ */
+*, *::before, *::after { margin:0; padding:0; box-sizing:border-box; }
+:root {
+  --black:  #111;
+  --dark:   #222;
+  --mid:    #555;
+  --light:  #888;
+  --border: #ddd;
+  --bg:     #f7f7f7;
+  --white:  #fff;
+}
+html { scroll-behavior:smooth; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif;
+  background: var(--white);
+  color: var(--black);
+  line-height: 1.5;
+}
+
+/* ============================================================
+   HEADER
+   Intentionally minimal - no nav links, no portal links.
+   Only the NU wordmark is shown. This is deliberate isolation.
+   ============================================================ */
+header {
+  background: #000;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+}
+.header-inner {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 0 32px;
+  height: 60px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+/* NU wordmark as text - matches visual style without needing image asset */
+.logo-text {
+  font-size: 16px;
+  font-weight: 900;
+  color: #fff;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.logo-sep { width: 1px; height: 24px; background: #444; }
+.logo-sub { font-size: 12px; color: #aaa; font-weight: 400; }
+
+/* ============================================================
+   HERO BAND
+   Full-width black title area, matching portal page-band style
+   ============================================================ */
+.hero {
+  background: #000;
+  padding: 44px 32px 40px;
+}
+.hero-inner { max-width: 1100px; margin: 0 auto; }
+.hero h1 {
+  font-size: clamp(22px, 3.5vw, 44px);
+  font-weight: 900;
+  letter-spacing: -0.01em;
+  line-height: 1.05;
+  color: #fff;
+  text-transform: uppercase;
+}
+.hero p {
+  font-size: 13px;
+  color: #aaa;
+  margin-top: 10px;
+  max-width: 680px;
+  line-height: 1.6;
+}
+
+/* ============================================================
+   TAB SWITCHER
+   Two tabs: "Register" (public) and "Researcher" (PIN-gated).
+   The researcher tab is hidden until PIN is verified.
+   ============================================================ */
+.tabs {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 0 32px;
+  display: flex;
+  gap: 0;
+  border-bottom: 2px solid var(--border);
+  margin-top: 28px;
+}
+.tab-btn {
+  padding: 10px 20px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  border: none;
+  background: transparent;
+  color: var(--light);
+  cursor: pointer;
+  font-family: inherit;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -2px;
+  transition: all 0.12s;
+}
+.tab-btn:hover { color: var(--black); }
+.tab-btn.active { color: var(--black); border-bottom-color: var(--black); }
+/* Researcher tab starts hidden until PIN is correct */
+#researcherTabBtn { display: none; }
+
+/* ============================================================
+   MAIN CONTENT AREA
+   ============================================================ */
+.main { max-width: 1100px; margin: 0 auto; padding: 32px 32px 60px; }
+
+/* Tab panels - only the active panel is shown */
+.tab-panel { display: none; }
+.tab-panel.active { display: block; }
+
+/* ============================================================
+   SECTION LABELS (matching portal style)
+   ============================================================ */
+.section-label {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--light);
+  border-top: 1px solid var(--border);
+  padding-top: 10px;
+  margin-bottom: 18px;
+}
+
+/* ============================================================
+   REGISTRATION FORM STYLES
+   Multi-step form. Step visibility controlled by JS.
+   ============================================================ */
+.form-step { display: none; }
+.form-step.active { display: block; }
+
+.step-indicator {
+  font-size: 11px;
+  color: var(--light);
+  margin-bottom: 20px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.form-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+  max-width: 680px;
+}
+.form-grid.single { grid-template-columns: 1fr; }
+
+/* Individual form field wrapper */
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.field.full { grid-column: 1 / -1; } /* spans both columns */
+
+label {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--mid);
+}
+
+input[type="text"],
+input[type="email"],
+input[type="number"],
+select,
+textarea {
+  padding: 9px 11px;
+  font-size: 13px;
+  font-family: inherit;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  background: var(--white);
+  color: var(--black);
+  outline: none;
+  transition: border-color 0.12s;
+  width: 100%;
+}
+input:focus, select:focus, textarea:focus {
+  border-color: var(--black);
+}
+textarea { resize: vertical; min-height: 80px; }
+
+/* Multi-select checklist for conditions */
+.check-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 8px;
+  max-width: 680px;
+  margin-bottom: 12px;
+}
+.check-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--dark);
+  padding: 7px 10px;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  cursor: pointer;
+  transition: border-color 0.12s;
+}
+.check-item:hover { border-color: var(--black); }
+.check-item input[type="checkbox"] {
+  width: auto;
+  margin: 0;
+  cursor: pointer;
+}
+.check-item.selected { border-color: var(--black); background: var(--bg); }
+
+/* Consent block */
+.consent-box {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  padding: 16px 18px;
+  margin-bottom: 18px;
+  max-width: 680px;
+  font-size: 13px;
+  color: var(--dark);
+  line-height: 1.6;
+}
+.consent-box h3 {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--black);
+  margin-bottom: 10px;
+}
+.consent-check {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin-top: 14px;
+  font-size: 13px;
+  cursor: pointer;
+}
+.consent-check input { margin-top: 2px; width: auto; }
+
+/* Navigation buttons between form steps */
+.form-nav {
+  display: flex;
+  gap: 10px;
+  margin-top: 22px;
+  max-width: 680px;
+}
+
+/* ============================================================
+   BUTTON STYLES
+   Primary (black fill) and secondary (outlined)
+   ============================================================ */
+.btn {
+  padding: 9px 20px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  font-family: inherit;
+  border-radius: 3px;
+  cursor: pointer;
+  transition: all 0.12s;
+  border: 1px solid var(--black);
+}
+.btn-primary {
+  background: var(--black);
+  color: var(--white);
+}
+.btn-primary:hover { background: var(--dark); }
+.btn-primary:disabled { background: var(--light); border-color: var(--light); cursor: not-allowed; }
+.btn-secondary {
+  background: transparent;
+  color: var(--black);
+}
+.btn-secondary:hover { background: var(--bg); }
+
+/* ============================================================
+   STATUS / FEEDBACK MESSAGES
+   Used for form submission feedback and email send progress
+   ============================================================ */
+.status-msg {
+  font-size: 13px;
+  padding: 10px 14px;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  margin-top: 14px;
+  max-width: 680px;
+  display: none; /* hidden by default; shown by JS */
+}
+.status-msg.success { border-color: #2e7d32; color: #2e7d32; background: #f1faf1; }
+.status-msg.error   { border-color: #c62828; color: #c62828; background: #fdf1f1; }
+.status-msg.info    { border-color: var(--mid); color: var(--dark); }
+
+/* ============================================================
+   RESEARCHER PANEL STYLES
+   PIN gate, criteria form, results table, send controls
+   ============================================================ */
+.pin-gate {
+  max-width: 360px;
+  text-align: center;
+  margin: 40px auto;
+}
+.pin-gate p {
+  font-size: 13px;
+  color: var(--mid);
+  margin-bottom: 18px;
+}
+.pin-input-wrap {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+  align-items: center;
+}
+.pin-input-wrap input {
+  max-width: 160px;
+  text-align: center;
+  letter-spacing: 0.2em;
+  font-size: 16px;
+  font-weight: 700;
+}
+.pin-error {
+  font-size: 12px;
+  color: #c62828;
+  margin-top: 8px;
+  min-height: 18px;
+}
+
+/* Researcher criteria form */
+.criteria-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 14px;
+  max-width: 900px;
+  margin-bottom: 20px;
+}
+.criteria-grid .field.full { grid-column: 1 / -1; }
+
+/* Results table */
+.results-wrap { overflow-x: auto; margin-top: 20px; }
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+/* Scientific manuscript table style: no title on table,
+   no grid lines inside cells, only header bottom border */
+thead tr {
+  border-bottom: 2px solid var(--black);
+}
+thead th {
+  text-align: left;
+  padding: 6px 10px 8px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--mid);
+  white-space: nowrap;
+}
+tbody tr { border-bottom: 1px solid var(--border); }
+tbody tr:last-child { border-bottom: 2px solid var(--black); }
+tbody td { padding: 8px 10px; vertical-align: top; color: var(--dark); }
+.match-count {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--mid);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  margin-bottom: 8px;
+}
+
+/* Email send progress bar */
+.send-progress {
+  max-width: 680px;
+  margin-top: 16px;
+}
+.progress-bar-wrap {
+  height: 6px;
+  background: var(--border);
+  border-radius: 3px;
+  overflow: hidden;
+  margin-bottom: 8px;
+}
+.progress-bar-fill {
+  height: 100%;
+  background: var(--black);
+  width: 0%;
+  transition: width 0.3s;
+}
+.progress-label {
+  font-size: 11px;
+  color: var(--mid);
+  letter-spacing: 0.04em;
+}
+
+/* ============================================================
+   FOOTER
+   Intentionally minimal. The "Researcher Access" trigger is
+   here so it's unobtrusive to participants.
+   NO link back to the SER portal. By design.
+   ============================================================ */
+footer {
+  background: #000;
+  padding: 24px 32px;
+  margin-top: 40px;
+}
+.footer-inner {
+  max-width: 1100px;
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.footer-legal {
+  font-size: 11px;
+  color: #666;
+}
+/* Subtle researcher access link - doesn't draw participant attention */
+.footer-researcher-link {
+  font-size: 11px;
+  color: #444;
+  text-decoration: none;
+  cursor: pointer;
+  background: none;
+  border: none;
+  font-family: inherit;
+  padding: 0;
+}
+.footer-researcher-link:hover { color: #fff; }
+
+/* Responsive: collapse to single column on smaller screens */
+@media (max-width: 640px) {
+  .form-grid { grid-template-columns: 1fr; }
+  .criteria-grid { grid-template-columns: 1fr; }
+  .main { padding: 24px 16px 48px; }
+  .hero { padding: 32px 16px 28px; }
+}
+</style>
+</head>
+<body>
+
+<!-- ============================================================
+     HEADER
+     Minimal isolation header. No nav, no portal link.
+     Only NU branding. Participants should not be able to
+     navigate away to the staff portal from here.
+     ============================================================ -->
+<header>
+  <div class="header-inner">
+    <span class="logo-text">Northumbria University</span>
+    <div class="logo-sep"></div>
+    <span class="logo-sub">Sport, Exercise &amp; Rehabilitation</span>
+  </div>
+</header>
+
+<!-- ============================================================
+     HERO BAND
+     ============================================================ -->
+<div class="hero">
+  <div class="hero-inner">
+    <h1>Research Participation Register</h1>
+    <p>
+      Register your interest in taking part in research studies conducted by the
+      School of Sport, Exercise &amp; Rehabilitation at Northumbria University.
+      You will only be contacted when a study matches your profile. Participation
+      is entirely voluntary and you may withdraw at any time.
+    </p>
+  </div>
+</div>
+
+<!-- ============================================================
+     TAB NAVIGATION
+     "Register" is always visible.
+     "Researcher" tab only becomes visible after PIN is verified.
+     ============================================================ -->
+<div class="tabs">
+  <button class="tab-btn active" id="registerTabBtn" onclick="switchTab('register')">Register as a Participant</button>
+  <button class="tab-btn" id="researcherTabBtn" onclick="switchTab('researcher')">Researcher Panel</button>
+</div>
+
+<div class="main">
+
+  <!-- ===========================================================
+       TAB PANEL 1: PARTICIPANT REGISTRATION
+       Multi-step form. Three steps:
+         Step 1 - Personal details (name, email, age, sex)
+         Step 2 - Health & activity profile (conditions, activity level, sport)
+         Step 3 - Consent and submission
+       =========================================================== -->
+  <div class="tab-panel active" id="registerPanel">
+
+    <!-- Step counter display -->
+    <div class="step-indicator" id="stepIndicator">Step 1 of 3 - Personal Details</div>
+
+    <!-- ── STEP 1: Personal details ──────────────────────────── -->
+    <div class="form-step active" id="step1">
+      <p class="section-label">Personal Details</p>
+      <div class="form-grid">
+        <div class="field">
+          <label for="firstName">First Name</label>
+          <input type="text" id="firstName" placeholder="e.g. Jane" autocomplete="given-name">
+        </div>
+        <div class="field">
+          <label for="lastName">Last Name</label>
+          <input type="text" id="lastName" placeholder="e.g. Smith" autocomplete="family-name">
+        </div>
+        <div class="field">
+          <label for="email">Email Address</label>
+          <input type="email" id="email" placeholder="e.g. jane.smith@email.com" autocomplete="email">
+        </div>
+        <div class="field">
+          <label for="age">Age (years)</label>
+          <input type="number" id="age" min="16" max="120" placeholder="e.g. 34">
+        </div>
+        <div class="field full">
+          <label for="sex">Sex</label>
+          <select id="sex">
+            <option value="">-- Select --</option>
+            <option value="Male">Male</option>
+            <option value="Female">Female</option>
+            <option value="Other / prefer not to say">Other / prefer not to say</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-nav">
+        <button class="btn btn-primary" onclick="nextStep(1)">Continue</button>
+      </div>
+      <div class="status-msg" id="step1Error"></div>
+    </div>
+
+    <!-- ── STEP 2: Health & activity profile ─────────────────── -->
+    <div class="form-step" id="step2">
+      <p class="section-label">Health &amp; Activity Profile</p>
+
+      <!-- CONDITIONS CHECKLIST
+           The CONDITIONS array in the JS below mirrors this HTML.
+           When adding/removing conditions, update both places.
+           Conditions stored in Firestore as an array of strings. -->
+      <label style="margin-bottom:10px;display:block;">
+        Health / Clinical Conditions
+        <span style="font-weight:400;text-transform:none;letter-spacing:0;font-size:12px;color:var(--light);">
+          &nbsp;Select all that apply. Leave all unchecked if none.
+        </span>
+      </label>
+      <div class="check-grid" id="conditionsGrid">
+        <!-- Populated dynamically from CONDITIONS array in JS below -->
+      </div>
+
+      <div class="form-grid" style="margin-top:16px;">
+        <div class="field full">
+          <label for="activityLevel">Physical Activity Level</label>
+          <select id="activityLevel">
+            <option value="">-- Select --</option>
+            <option value="Sedentary">Sedentary (little or no exercise)</option>
+            <option value="Lightly active">Lightly active (light exercise 1-3 days/week)</option>
+            <option value="Moderately active">Moderately active (moderate exercise 3-5 days/week)</option>
+            <option value="Very active">Very active (hard exercise 6-7 days/week)</option>
+            <option value="Elite / competitive athlete">Elite / competitive athlete</option>
+          </select>
+        </div>
+        <div class="field full">
+          <label for="sport">Primary Sport or Physical Activity <span style="font-weight:400;text-transform:none;letter-spacing:0;font-size:12px;">(optional)</span></label>
+          <input type="text" id="sport" placeholder="e.g. Running, Swimming, Football">
+        </div>
+      </div>
+      <div class="form-nav">
+        <button class="btn btn-secondary" onclick="prevStep(2)">Back</button>
+        <button class="btn btn-primary" onclick="nextStep(2)">Continue</button>
+      </div>
+      <div class="status-msg" id="step2Error"></div>
+    </div>
+
+    <!-- ── STEP 3: Consent and submission ────────────────────── -->
+    <div class="form-step" id="step3">
+      <p class="section-label">Consent &amp; Registration</p>
+
+      <div class="consent-box">
+        <h3>Information for Participants</h3>
+        <p>
+          Your details will be stored securely in a database maintained by the School
+          of Sport, Exercise &amp; Rehabilitation at Northumbria University. Your information
+          will only be used to identify whether you may be eligible for research studies
+          run by the School.
+        </p>
+        <p style="margin-top:10px;">
+          You will only be contacted if a study matches your profile. You may request
+          removal of your details at any time by contacting
+          <strong>sport.research@northumbria.ac.uk</strong>.
+          Your data will not be shared with third parties outside of the University.
+        </p>
+        <p style="margin-top:10px;">
+          Data is held in accordance with the UK General Data Protection Regulation
+          (UK GDPR) and the Northumbria University Data Protection Policy.
+        </p>
+        <!-- Consent checkbox - Firestore write is blocked unless this is checked -->
+        <label class="consent-check" id="consentLabel">
+          <input type="checkbox" id="consentCheck">
+          <span>
+            I have read and understood the above information and I consent to my
+            details being stored and used for the purposes described.
+          </span>
+        </label>
+      </div>
+
+      <div class="form-nav">
+        <button class="btn btn-secondary" onclick="prevStep(3)">Back</button>
+        <button class="btn btn-primary" id="submitBtn" onclick="submitRegistration()">Register</button>
+      </div>
+      <div class="status-msg" id="step3Status"></div>
+    </div>
+
+  </div><!-- end #registerPanel -->
+
+  <!-- ===========================================================
+       TAB PANEL 2: RESEARCHER PANEL
+       Gated behind a PIN. The tab button for this panel is hidden
+       in the CSS until the correct PIN is entered via the footer link.
+       =========================================================== -->
+  <div class="tab-panel" id="researcherPanel">
+
+    <!-- PIN GATE
+         Shown until PIN is verified. PIN verification is client-side
+         only - suitable for PoC/demo. Replace with Firebase Auth for
+         production use. -->
+    <div id="pinGate" class="pin-gate">
+      <p class="section-label" style="border:none;padding:0;margin-bottom:12px;">Researcher Access</p>
+      <p>Enter the researcher PIN to access the participant database.</p>
+      <div class="pin-input-wrap">
+        <input type="password" id="pinInput" placeholder="PIN" maxlength="12"
+               onkeydown="if(event.key==='Enter')verifyPin()">
+        <button class="btn btn-primary" onclick="verifyPin()">Unlock</button>
+      </div>
+      <div class="pin-error" id="pinError"></div>
+    </div>
+
+    <!-- RESEARCHER TOOLS
+         Hidden until PIN verified. Shown by JS (display:block). -->
+    <div id="researcherTools" style="display:none;">
+
+      <!-- Search / criteria form -->
+      <p class="section-label">Search Criteria</p>
+      <p style="font-size:13px;color:var(--mid);margin-bottom:18px;max-width:700px;">
+        Define your eligibility criteria below. Leave fields blank to include all values.
+        Conditions are matched inclusively (participants matching ANY selected condition
+        will be returned). All other fields are treated as AND filters.
+      </p>
+
+      <div class="criteria-grid">
+        <div class="field">
+          <label for="cMinAge">Min Age</label>
+          <input type="number" id="cMinAge" min="16" max="120" placeholder="e.g. 18">
+        </div>
+        <div class="field">
+          <label for="cMaxAge">Max Age</label>
+          <input type="number" id="cMaxAge" min="16" max="120" placeholder="e.g. 65">
+        </div>
+        <div class="field">
+          <label for="cSex">Sex</label>
+          <select id="cSex">
+            <option value="">Any</option>
+            <option value="Male">Male</option>
+            <option value="Female">Female</option>
+            <option value="Other / prefer not to say">Other / prefer not to say</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="cActivity">Activity Level</label>
+          <select id="cActivity">
+            <option value="">Any</option>
+            <option value="Sedentary">Sedentary</option>
+            <option value="Lightly active">Lightly active</option>
+            <option value="Moderately active">Moderately active</option>
+            <option value="Very active">Very active</option>
+            <option value="Elite / competitive athlete">Elite / competitive athlete</option>
+          </select>
+        </div>
+        <!-- Conditions multi-select for researcher criteria -->
+        <div class="field full">
+          <label for="cConditions">Conditions (select one or more; or leave blank for any)</label>
+          <select id="cConditions" multiple size="5" style="height:auto;">
+            <!-- Populated dynamically from CONDITIONS array in JS below -->
+          </select>
+        </div>
+      </div>
+
+      <!-- Study information (used to populate the invitation email) -->
+      <p class="section-label" style="margin-top:10px;">Study Information (for invitation email)</p>
+      <div class="criteria-grid">
+        <div class="field full">
+          <label for="studyTitle">Study Title</label>
+          <input type="text" id="studyTitle" placeholder="e.g. Effects of exercise on metabolic health">
+        </div>
+        <div class="field full">
+          <label for="studyDetails">Brief Description</label>
+          <textarea id="studyDetails" placeholder="Describe what participation involves, duration, location etc."></textarea>
+        </div>
+        <div class="field">
+          <label for="researcherName">Your Name</label>
+          <input type="text" id="researcherName" placeholder="e.g. Dr Jane Smith">
+        </div>
+        <div class="field">
+          <label for="researcherEmail">Your Contact Email</label>
+          <input type="email" id="researcherEmail" placeholder="e.g. j.smith@northumbria.ac.uk">
+        </div>
+      </div>
+
+      <div class="form-nav" style="margin-bottom:28px;">
+        <button class="btn btn-primary" onclick="findMatches()">Find Matches</button>
+        <button class="btn btn-secondary" onclick="clearCriteria()">Clear</button>
+      </div>
+      <div class="status-msg" id="searchStatus"></div>
+
+      <!-- RESULTS TABLE
+           Populated by findMatches(). Shows matching participants.
+           Styled to scientific manuscript standards (no title on table,
+           no internal grid lines, header and footer rules only).
+           The table caption/note is rendered BELOW the table, not on it. -->
+      <div id="resultsSection" style="display:none;">
+        <div class="match-count" id="matchCount"></div>
+        <div class="results-wrap">
+          <table id="resultsTable">
+            <thead>
+              <tr>
+                <th><input type="checkbox" id="selectAll" onchange="toggleSelectAll(this)" title="Select all"></th>
+                <th>First Name</th>
+                <th>Last Name</th>
+                <th>Email</th>
+                <th>Age</th>
+                <th>Sex</th>
+                <th>Conditions</th>
+                <th>Activity Level</th>
+                <th>Sport</th>
+              </tr>
+            </thead>
+            <tbody id="resultsBody">
+              <!-- Populated by JS -->
+            </tbody>
+          </table>
+        </div>
+        <!-- Table note - rendered below table, not on it (scientific manuscript standard) -->
+        <p id="tableNote" style="font-size:11px;color:var(--light);margin-top:8px;font-style:italic;max-width:900px;"></p>
+
+        <!-- Send invitations controls -->
+        <div style="margin-top:20px;max-width:680px;">
+          <p class="section-label">Send Invitations</p>
+          <p style="font-size:13px;color:var(--mid);margin-bottom:14px;">
+            Invitation emails will be sent to all selected (ticked) participants.
+            Ensure you have entered study information above before sending.
+          </p>
+          <button class="btn btn-primary" id="sendBtn" onclick="sendInvitations()">Send Invitations to Selected</button>
+          <div class="send-progress" id="sendProgress" style="display:none;">
+            <div class="progress-bar-wrap"><div class="progress-bar-fill" id="progressFill"></div></div>
+            <div class="progress-label" id="progressLabel"></div>
+          </div>
+          <div class="status-msg" id="sendStatus"></div>
+        </div>
+      </div>
+
+    </div><!-- end #researcherTools -->
+
+  </div><!-- end #researcherPanel -->
+
+</div><!-- end .main -->
+
+<!-- ============================================================
+     FOOTER
+     Minimal. No link to the SER portal (by design - isolation).
+     "Researcher access" is a subtle trigger, not a prominent link,
+     so it does not attract participant attention.
+     ============================================================ -->
+<footer>
+  <div class="footer-inner">
+    <span class="footer-legal">
+      &copy; Northumbria University &mdash; School of Sport, Exercise &amp; Rehabilitation.
+      Data handled in accordance with UK GDPR.
+    </span>
+    <!-- This button opens the researcher PIN gate without linking to the portal -->
+    <button class="footer-researcher-link" onclick="openResearcherAccess()">Researcher access</button>
+  </div>
+</footer>
+
+
+<!-- ============================================================
+     JAVASCRIPT
+     ============================================================
+
+     SECTION OVERVIEW:
+       1. CONFIG              - Firebase keys, EmailJS keys, PIN, constants
+       2. CONDITIONS array    - Master list of health/clinical conditions
+       3. Firebase init       - SDK import + db initialisation
+       4. Tab switching       - switchTab()
+       5. Form step logic     - nextStep(), prevStep(), validation helpers
+       6. Conditions grid     - buildConditionsGrid(), buildResearcherConditionsSelect()
+       7. Registration submit - submitRegistration(), writes to Firestore
+       8. Researcher PIN      - verifyPin(), openResearcherAccess()
+       9. Participant search  - findMatches(), loads all Firestore docs and filters client-side
+      10. Select all toggle   - toggleSelectAll()
+      11. Clear criteria      - clearCriteria()
+      12. Send invitations    - sendInvitations(), loops EmailJS calls
+      13. Utility functions   - showStatus(), delay()
+      14. Init                - called on DOMContentLoaded
+
+     NOTE ON CLIENT-SIDE FILTERING:
+     All participant docs are loaded from Firestore and filtered in
+     the browser. This is fine for PoC/demo with small numbers (<1000).
+     For production scale, use Firestore composite queries instead.
+     ============================================================ -->
+<script type="module">
+
+// ============================================================
+// 1. CONFIG
+// ============================================================
+
+// Firebase project: nu-school-of-sport
+// Same project and credentials as the SER staff portal.
+const FIREBASE_CONFIG = {
+  apiKey:            'AIzaSyDSK-2hI6ML1eykIed6E8S5Ve29phrEolI',
+  authDomain:        'nu-school-of-sport.firebaseapp.com',
+  projectId:         'nu-school-of-sport',
+  storageBucket:     'nu-school-of-sport.firebasestorage.app',
+  messagingSenderId: '396866213410',
+  appId:             '1:396866213410:web:bc7f31d1eb1833306d1c7b'
+};
+
+// EmailJS credentials
+// TODO: Replace these placeholder values with real EmailJS credentials before use.
+// Sign up at https://www.emailjs.com/, create a service and template, then paste IDs here.
+// Template variables expected: to_email, to_name, study_title, study_details, researcher, contact_email
+const EMAILJS_PUBLIC_KEY  = 'YOUR_EMAILJS_PUBLIC_KEY';   // <-- replace
+const EMAILJS_SERVICE_ID  = 'YOUR_EMAILJS_SERVICE_ID';   // <-- replace
+const EMAILJS_TEMPLATE_ID = 'YOUR_EMAILJS_TEMPLATE_ID';  // <-- replace
+
+// Researcher PIN gate
+// TODO: Change this PIN before distributing to staff.
+// For production: replace with Firebase Authentication.
+const RESEARCHER_PIN = '1234';
+
+// Firestore collection name for participant records
+const COLLECTION_NAME = 'participants';
+
+// Delay between EmailJS sends (ms) - stays within free tier rate limits
+// EmailJS free tier allows ~1 email/second. 1200ms is a safe margin.
+const EMAIL_DELAY_MS = 1200;
+
+// ============================================================
+// 2. CONDITIONS ARRAY
+// Master list of health / clinical conditions shown in the
+// participant registration checklist and the researcher filter.
+// To add/remove conditions, edit this array only.
+// The HTML checkboxes and researcher select are both built from this.
+// ============================================================
+const CONDITIONS = [
+  'None / healthy',
+  'Asthma / respiratory condition',
+  'Cardiovascular disease',
+  'Type 1 Diabetes',
+  'Type 2 Diabetes',
+  'Hypertension (high blood pressure)',
+  'Obesity (BMI > 30)',
+  'Musculoskeletal injury / chronic pain',
+  'Osteoarthritis',
+  'Osteoporosis',
+  'Neurological condition (e.g. Parkinson\'s, MS)',
+  'Mental health condition (e.g. depression, anxiety)',
+  'Cancer (current or previous)',
+  'Kidney disease',
+  'Liver disease',
+  'Eating disorder (current or previous)',
+  'Pregnancy (current)',
+  'Post-natal (within 12 months)',
+  'Other (please specify in sport/activity field)',
+];
+
+// ============================================================
+// 3. FIREBASE INIT
+// Using modular Firebase v10 SDK (ES module import).
+// Same version and pattern as Semester1.html / Semester2.html.
+// ============================================================
+import { initializeApp }        from 'https://www.gstatic.com/firebasejs/10.7.0/firebase-app.js';
+import { getFirestore, collection, addDoc, getDocs }
+  from 'https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore.js';
+
+// Initialise Firebase app with a unique name to avoid conflicts if
+// other Firebase apps are initialised on the same page in future.
+const fbApp = initializeApp(FIREBASE_CONFIG, 'participant-matcher-app');
+const db    = getFirestore(fbApp);
+
+// ============================================================
+// 4. TAB SWITCHING
+// ============================================================
+
+// Active tab name - used by other functions to know which tab is visible
+let activeTab = 'register';
+
+// Switches the visible tab panel and updates tab button styles.
+// tabName: 'register' | 'researcher'
+window.switchTab = function(tabName) {
+  document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById(tabName + 'Panel').classList.add('active');
+  document.getElementById(tabName + 'TabBtn').classList.add('active');
+  activeTab = tabName;
+};
+
+// ============================================================
+// 5. FORM STEP LOGIC (registration multi-step form)
+// ============================================================
+
+// Current step tracker
+let currentStep = 1;
+const TOTAL_STEPS = 3;
+
+// Step labels shown to the participant
+const STEP_LABELS = {
+  1: 'Step 1 of 3 - Personal Details',
+  2: 'Step 2 of 3 - Health & Activity Profile',
+  3: 'Step 3 of 3 - Consent & Registration',
+};
+
+// Advances to the next step after validating the current step.
+// stepNum: the step we are leaving (1 or 2)
+window.nextStep = function(stepNum) {
+  if (!validateStep(stepNum)) return;
+  document.getElementById('step' + stepNum).classList.remove('active');
+  currentStep = stepNum + 1;
+  document.getElementById('step' + currentStep).classList.add('active');
+  document.getElementById('stepIndicator').textContent = STEP_LABELS[currentStep];
+};
+
+// Returns to the previous step.
+// stepNum: the step we are leaving (2 or 3)
+window.prevStep = function(stepNum) {
+  document.getElementById('step' + stepNum).classList.remove('active');
+  currentStep = stepNum - 1;
+  document.getElementById('step' + currentStep).classList.add('active');
+  document.getElementById('stepIndicator').textContent = STEP_LABELS[currentStep];
+};
+
+// Validates inputs for a given step.
+// Returns true if valid; shows inline error and returns false if not.
+function validateStep(stepNum) {
+  const errorEl = document.getElementById('step' + stepNum + 'Error');
+
+  if (stepNum === 1) {
+    // Validate: first name, last name, email, age, sex
+    const fn  = document.getElementById('firstName').value.trim();
+    const ln  = document.getElementById('lastName').value.trim();
+    const em  = document.getElementById('email').value.trim();
+    const age = parseInt(document.getElementById('age').value, 10);
+    const sex = document.getElementById('sex').value;
+
+    if (!fn)              return showStepError(errorEl, 'Please enter your first name.');
+    if (!ln)              return showStepError(errorEl, 'Please enter your last name.');
+    if (!em || !em.includes('@')) return showStepError(errorEl, 'Please enter a valid email address.');
+    if (isNaN(age) || age < 16 || age > 120)
+                          return showStepError(errorEl, 'Please enter a valid age (16-120).');
+    if (!sex)             return showStepError(errorEl, 'Please select a sex option.');
+    hideStatus(errorEl);
+    return true;
+  }
+
+  if (stepNum === 2) {
+    // Activity level is required; conditions and sport are optional
+    const activity = document.getElementById('activityLevel').value;
+    if (!activity) return showStepError(document.getElementById('step2Error'), 'Please select your activity level.');
+    hideStatus(document.getElementById('step2Error'));
+    return true;
+  }
+
+  return true;
+}
+
+// Shows an error message inside a status element and returns false
+// (so validateStep can use: return showStepError(...))
+function showStepError(el, msg) {
+  el.textContent = msg;
+  el.className = 'status-msg error';
+  el.style.display = 'block';
+  return false;
+}
+
+// Hides a status element
+function hideStatus(el) {
+  el.style.display = 'none';
+}
+
+// Generic status display used throughout the page
+window.showStatus = function(elId, msg, type) {
+  // type: 'success' | 'error' | 'info'
+  const el = document.getElementById(elId);
+  el.textContent = msg;
+  el.className = 'status-msg ' + (type || 'info');
+  el.style.display = 'block';
+};
+
+// ============================================================
+// 6. CONDITIONS GRID BUILD
+// Builds the participant-facing checkbox grid and the researcher
+// filter multi-select from the same CONDITIONS array.
+// Must be called during init (see bottom of script).
+// ============================================================
+
+function buildConditionsGrid() {
+  // Build participant registration checklist
+  const grid = document.getElementById('conditionsGrid');
+  if (!grid) return;
+  CONDITIONS.forEach(cond => {
+    const label = document.createElement('label');
+    label.className = 'check-item';
+    label.innerHTML = `<input type="checkbox" value="${cond}" onchange="toggleCheckStyle(this)"> ${cond}`;
+    grid.appendChild(label);
+  });
+}
+
+// Toggles the 'selected' CSS class on a check-item label when its checkbox changes
+window.toggleCheckStyle = function(cb) {
+  cb.closest('.check-item').classList.toggle('selected', cb.checked);
+};
+
+function buildResearcherConditionsSelect() {
+  // Build researcher filter multi-select
+  const sel = document.getElementById('cConditions');
+  if (!sel) return;
+  CONDITIONS.forEach(cond => {
+    const opt = document.createElement('option');
+    opt.value = cond;
+    opt.textContent = cond;
+    sel.appendChild(opt);
+  });
+}
+
+// ============================================================
+// 7. REGISTRATION SUBMIT
+// Collects form values, writes to Firestore 'participants' collection.
+// Firestore document structure documented in the file header above.
+// ============================================================
+
+window.submitRegistration = async function() {
+  // Check consent checkbox - this is a hard block; no Firestore write without it
+  if (!document.getElementById('consentCheck').checked) {
+    showStatus('step3Status', 'You must consent before registering.', 'error');
+    return;
+  }
+
+  // Collect selected conditions (checkboxes)
+  const condCheckboxes = document.querySelectorAll('#conditionsGrid input[type="checkbox"]:checked');
+  const conditions = Array.from(condCheckboxes).map(cb => cb.value);
+
+  // Build participant document
+  const participantData = {
+    firstName:     document.getElementById('firstName').value.trim(),
+    lastName:      document.getElementById('lastName').value.trim(),
+    email:         document.getElementById('email').value.trim(),
+    age:           parseInt(document.getElementById('age').value, 10),
+    sex:           document.getElementById('sex').value,
+    conditions:    conditions,
+    activityLevel: document.getElementById('activityLevel').value,
+    sport:         document.getElementById('sport').value.trim(),
+    registeredAt:  new Date().toISOString(),
+    consentGiven:  true, // Firestore rule requires this to be true
+  };
+
+  // Disable submit button during write to prevent double-submission
+  const btn = document.getElementById('submitBtn');
+  btn.disabled = true;
+  btn.textContent = 'Registering...';
+  showStatus('step3Status', 'Saving your registration...', 'info');
+
+  try {
+    // Write to Firestore - addDoc creates a new doc with auto-generated ID
+    await addDoc(collection(db, COLLECTION_NAME), participantData);
+
+    // Success - show confirmation and reset form
+    showStatus('step3Status',
+      'Thank you, ' + participantData.firstName + '. Your registration has been saved. ' +
+      'You will be contacted if a study matches your profile.',
+      'success'
+    );
+    btn.textContent = 'Registered';
+    // Do NOT re-enable the button - prevent re-submission
+
+  } catch (err) {
+    // Write failed - re-enable button and show error
+    console.error('Firestore write error:', err);
+    showStatus('step3Status',
+      'Registration failed. Please try again or contact sport.research@northumbria.ac.uk.',
+      'error'
+    );
+    btn.disabled = false;
+    btn.textContent = 'Register';
+  }
+};
+
+// ============================================================
+// 8. RESEARCHER PIN GATE
+// ============================================================
+
+// Called by the "Researcher access" button in the footer.
+// Switches to the researcher tab (showing the PIN gate) and scrolls up.
+window.openResearcherAccess = function() {
+  // Reveal the researcher tab button before switching to it
+  document.getElementById('researcherTabBtn').style.display = 'inline-block';
+  switchTab('researcher');
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+};
+
+// Checks the entered PIN against RESEARCHER_PIN.
+// On success: hides PIN gate, shows researcher tools.
+// On failure: shows error message.
+window.verifyPin = function() {
+  const entered = document.getElementById('pinInput').value;
+  const errorEl = document.getElementById('pinError');
+
+  if (entered === RESEARCHER_PIN) {
+    // PIN correct - hide gate, reveal tools
+    document.getElementById('pinGate').style.display = 'none';
+    document.getElementById('researcherTools').style.display = 'block';
+    errorEl.textContent = '';
+  } else {
+    // PIN wrong - show error, clear input
+    errorEl.textContent = 'Incorrect PIN. Please try again.';
+    document.getElementById('pinInput').value = '';
+  }
+};
+
+// ============================================================
+// 9. PARTICIPANT SEARCH / MATCHING
+// Loads all docs from Firestore and applies filter criteria client-side.
+// For PoC scale this is fine. For large datasets use Firestore queries.
+// ============================================================
+
+// Module-level cache of matched participants (used by sendInvitations)
+let matchedParticipants = [];
+
+window.findMatches = async function() {
+  showStatus('searchStatus', 'Loading participant database...', 'info');
+  document.getElementById('resultsSection').style.display = 'none';
+
+  // Read criteria from the form
+  const minAge   = parseInt(document.getElementById('cMinAge').value, 10)   || 0;
+  const maxAge   = parseInt(document.getElementById('cMaxAge').value, 10)   || 999;
+  const sex      = document.getElementById('cSex').value;
+  const activity = document.getElementById('cActivity').value;
+
+  // Multi-select: get array of selected condition values
+  const condSelect  = document.getElementById('cConditions');
+  const selectedConds = Array.from(condSelect.selectedOptions).map(o => o.value);
+
+  try {
+    // Load all participant documents from Firestore
+    const snap = await getDocs(collection(db, COLLECTION_NAME));
+    const all  = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+
+    // Apply filters
+    const matches = all.filter(p => {
+      // Age range (both ends inclusive)
+      if (p.age < minAge || p.age > maxAge) return false;
+
+      // Sex (exact match if specified)
+      if (sex && p.sex !== sex) return false;
+
+      // Activity level (exact match if specified)
+      if (activity && p.activityLevel !== activity) return false;
+
+      // Conditions: participant must have AT LEAST ONE of the selected conditions
+      // If no conditions selected in criteria, all participants pass this filter
+      if (selectedConds.length > 0) {
+        const pConds = p.conditions || [];
+        const hasMatch = selectedConds.some(c => pConds.includes(c));
+        if (!hasMatch) return false;
+      }
+
+      return true;
+    });
+
+    matchedParticipants = matches;
+
+    // Render results
+    renderResultsTable(matches);
+
+    // Update status
+    if (matches.length === 0) {
+      showStatus('searchStatus', 'No participants matched your criteria.', 'info');
+    } else {
+      document.getElementById('searchStatus').style.display = 'none';
+    }
+
+  } catch (err) {
+    console.error('Firestore read error:', err);
+    showStatus('searchStatus', 'Failed to load database. Check your connection and try again.', 'error');
+  }
+};
+
+// Renders the matched participants into the results table.
+// Called by findMatches() after filtering.
+function renderResultsTable(participants) {
+  const tbody = document.getElementById('resultsBody');
+  tbody.innerHTML = '';
+
+  if (participants.length === 0) return;
+
+  participants.forEach((p, i) => {
+    const tr = document.createElement('tr');
+    tr.dataset.idx = i; // index into matchedParticipants for sendInvitations
+
+    // Conditions array joined to readable string
+    const condStr = (p.conditions || []).join(', ') || 'None specified';
+
+    tr.innerHTML = `
+      <td><input type="checkbox" class="row-check" data-idx="${i}" checked></td>
+      <td>${escHtml(p.firstName || '')}</td>
+      <td>${escHtml(p.lastName  || '')}</td>
+      <td>${escHtml(p.email     || '')}</td>
+      <td>${p.age || ''}</td>
+      <td>${escHtml(p.sex       || '')}</td>
+      <td>${escHtml(condStr)}</td>
+      <td>${escHtml(p.activityLevel || '')}</td>
+      <td>${escHtml(p.sport    || '')}</td>
+    `;
+    tbody.appendChild(tr);
+  });
+
+  // Table note (below table, per scientific manuscript convention)
+  document.getElementById('tableNote').textContent =
+    'Note. Table shows ' + participants.length + ' participant' +
+    (participants.length !== 1 ? 's' : '') +
+    ' matching the specified criteria. All rows are pre-selected for invitation. Deselect individual rows as required.';
+
+  // Update match count display
+  document.getElementById('matchCount').textContent =
+    participants.length + ' participant' + (participants.length !== 1 ? 's' : '') + ' matched';
+
+  document.getElementById('resultsSection').style.display = 'block';
+}
+
+// Escapes HTML special characters to prevent XSS when rendering
+// Firestore data into the table innerHTML
+function escHtml(str) {
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+// ============================================================
+// 10. SELECT ALL TOGGLE
+// ============================================================
+
+window.toggleSelectAll = function(masterCb) {
+  document.querySelectorAll('.row-check').forEach(cb => {
+    cb.checked = masterCb.checked;
+  });
+};
+
+// ============================================================
+// 11. CLEAR CRITERIA
+// ============================================================
+
+window.clearCriteria = function() {
+  document.getElementById('cMinAge').value   = '';
+  document.getElementById('cMaxAge').value   = '';
+  document.getElementById('cSex').value      = '';
+  document.getElementById('cActivity').value = '';
+  // Deselect all options in multi-select
+  Array.from(document.getElementById('cConditions').options).forEach(o => o.selected = false);
+  document.getElementById('resultsSection').style.display = 'none';
+  document.getElementById('searchStatus').style.display   = 'none';
+  matchedParticipants = [];
+};
+
+// ============================================================
+// 12. SEND INVITATIONS
+// Loops over checked rows and sends an EmailJS email per participant.
+// Shows a progress bar. Respects EMAIL_DELAY_MS between sends to
+// stay within EmailJS free tier rate limits.
+// ============================================================
+
+window.sendInvitations = async function() {
+  // Validate study info before sending
+  const studyTitle   = document.getElementById('studyTitle').value.trim();
+  const studyDetails = document.getElementById('studyDetails').value.trim();
+  const resName      = document.getElementById('researcherName').value.trim();
+  const resEmail     = document.getElementById('researcherEmail').value.trim();
+
+  if (!studyTitle)   { showStatus('sendStatus', 'Please enter a study title before sending.', 'error'); return; }
+  if (!studyDetails) { showStatus('sendStatus', 'Please enter a study description before sending.', 'error'); return; }
+  if (!resName)      { showStatus('sendStatus', 'Please enter your name before sending.', 'error'); return; }
+  if (!resEmail)     { showStatus('sendStatus', 'Please enter your contact email before sending.', 'error'); return; }
+
+  // Get checked rows
+  const checkedBoxes = Array.from(document.querySelectorAll('.row-check:checked'));
+  if (checkedBoxes.length === 0) {
+    showStatus('sendStatus', 'No participants selected. Please check at least one row.', 'error');
+    return;
+  }
+
+  const toSend = checkedBoxes.map(cb => matchedParticipants[parseInt(cb.dataset.idx, 10)]);
+
+  // Initialise EmailJS with the public key
+  // emailjs is loaded from CDN (non-module script tag at top of file)
+  // It is available as window.emailjs
+  try {
+    window.emailjs.init({ publicKey: EMAILJS_PUBLIC_KEY });
+  } catch (e) {
+    showStatus('sendStatus', 'EmailJS initialisation failed. Check your public key.', 'error');
+    console.error('EmailJS init error:', e);
+    return;
+  }
+
+  // Show progress bar
+  const progressWrap = document.getElementById('sendProgress');
+  const progressFill = document.getElementById('progressFill');
+  const progressLabel = document.getElementById('progressLabel');
+  progressWrap.style.display = 'block';
+  document.getElementById('sendBtn').disabled = true;
+
+  let sent    = 0;
+  let failed  = 0;
+  const total = toSend.length;
+
+  // Update progress display helper
+  function updateProgress() {
+    const pct = Math.round(((sent + failed) / total) * 100);
+    progressFill.style.width = pct + '%';
+    progressLabel.textContent =
+      'Sent ' + sent + ' of ' + total + (failed > 0 ? ' (' + failed + ' failed)' : '');
+  }
+
+  updateProgress();
+
+  for (const participant of toSend) {
+    // Build template parameters matching your EmailJS template variables
+    const templateParams = {
+      to_email:      participant.email,
+      to_name:       participant.firstName,
+      study_title:   studyTitle,
+      study_details: studyDetails,
+      researcher:    resName,
+      contact_email: resEmail,
+    };
+
+    try {
+      await window.emailjs.send(EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, templateParams);
+      sent++;
+    } catch (err) {
+      console.warn('EmailJS send failed for ' + participant.email + ':', err);
+      failed++;
+    }
+
+    updateProgress();
+
+    // Rate-limit delay between sends
+    if ((sent + failed) < total) {
+      await delay(EMAIL_DELAY_MS);
+    }
+  }
+
+  // Final status
+  if (failed === 0) {
+    showStatus('sendStatus',
+      'All ' + sent + ' invitation' + (sent !== 1 ? 's' : '') + ' sent successfully.',
+      'success'
+    );
+  } else {
+    showStatus('sendStatus',
+      sent + ' invitation' + (sent !== 1 ? 's' : '') + ' sent. ' +
+      failed + ' failed - check the browser console for details.',
+      'error'
+    );
+  }
+
+  document.getElementById('sendBtn').disabled = false;
+};
+
+// ============================================================
+// 13. UTILITY FUNCTIONS
+// ============================================================
+
+// Promise-based delay for rate-limiting email sends
+function delay(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+// ============================================================
+// 14. INIT - runs on DOMContentLoaded
+// Builds dynamic UI elements from the CONDITIONS array.
+// ============================================================
+document.addEventListener('DOMContentLoaded', () => {
+  buildConditionsGrid();
+  buildResearcherConditionsSelect();
+});
+
+</script>
+</body>
+</html>
