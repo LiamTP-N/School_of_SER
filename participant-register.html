@@ -1,0 +1,992 @@
+<!DOCTYPE html>
+<!--
+  ============================================================
+  FILE: participant-register.html
+  PURPOSE: Public-facing participant registration page.
+           Part of the SER Research Participant Matcher system.
+           Northumbria University - School of Sport, Exercise
+           & Rehabilitation (SER)
+  OWNER: Liam Pearson-Noseworthy, Northumbria University
+  CREATED: April 2026
+
+  COMPANION FILE: participant-researcher.html (researcher-only panel)
+
+  ============================================================
+  FOR AI / LLM READERS - ARCHITECTURE OVERVIEW
+  ============================================================
+
+  WHAT THIS PAGE DOES:
+  Public-facing registration form. Participants fill in a single
+  scrollable page covering all profile fields and submit once.
+  They can also return later to UPDATE their record by entering
+  their email - the system finds their existing Firestore doc
+  and overwrites it with fresh data.
+
+  UPDATE FLOW:
+  1. Participant enters their email and clicks "Look up my record"
+  2. Firestore is queried for a doc where email == entered value
+  3. If found: form pre-fills with existing data, submit button
+     changes to "Update my record", and the existing doc ID is
+     stored in memory so setDoc() targets the correct document.
+  4. If not found: form stays blank, submit creates a new doc.
+  5. On submit: if existingDocId is set, setDoc() with merge:true
+     overwrites; otherwise addDoc() creates new.
+
+  FIELDS CAPTURED (all tickbox/select except name, email, DOB):
+    Personal:
+      firstName, lastName, email, dateOfBirth (date input),
+      sex (select), ethnicity (select)
+    Body:
+      bmiCategory (select), smokingStatus (select)
+    Clinical conditions (checkbox array):
+      see CONDITIONS object below
+    Injury history (checkbox array - body area):
+      see INJURY_AREAS array below
+    Medications (checkbox array - broad categories):
+      see MEDICATIONS array below
+    Activity:
+      activityLevel (select),
+      sportLevel (select - recreational through international),
+      sports (checkbox array - common sports/activities),
+      availability (checkbox array - weekday/evening/weekend)
+    Research history:
+      previousResearch (select - yes/no/unsure)
+    nuAffiliation (select - student/staff/neither)
+
+  FIRESTORE:
+    Project:    nu-school-of-sport
+    Collection: participants
+    Doc ID:     auto on create; existing ID on update
+    Fields:     all of the above + registeredAt + updatedAt + consentGiven
+
+  ISOLATION:
+  This page has no link to the staff portal or the researcher panel.
+  Designed to be linked publicly (e.g. from the department website
+  or a QR code at reception).
+  ============================================================
+-->
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Register as a Research Participant - Northumbria University SER</title>
+<style>
+/* ============================================================
+   GLOBAL RESET & CSS VARIABLES
+   Black-and-white Northumbria identity.
+   ============================================================ */
+*, *::before, *::after { margin:0; padding:0; box-sizing:border-box; }
+:root {
+  --black:  #111;
+  --dark:   #222;
+  --mid:    #555;
+  --light:  #888;
+  --border: #ddd;
+  --bg:     #f7f7f7;
+  --white:  #fff;
+}
+html { scroll-behavior:smooth; }
+body { font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif; background:var(--bg); color:var(--black); line-height:1.5; }
+
+/* ── Header ── */
+header { background:#000; position:sticky; top:0; z-index:100; }
+.header-inner { max-width:860px; margin:0 auto; padding:0 24px; height:56px; display:flex; align-items:center; gap:14px; }
+.logo-text { font-size:15px; font-weight:900; color:#fff; letter-spacing:0.04em; text-transform:uppercase; }
+.logo-sep { width:1px; height:20px; background:#444; }
+.logo-sub { font-size:11px; color:#aaa; }
+
+/* ── Hero ── */
+.hero { background:#000; padding:36px 24px 32px; }
+.hero-inner { max-width:860px; margin:0 auto; }
+.hero h1 { font-size:clamp(20px,3.5vw,38px); font-weight:900; letter-spacing:-0.01em; color:#fff; text-transform:uppercase; }
+.hero p { font-size:13px; color:#aaa; margin-top:8px; max-width:640px; line-height:1.6; }
+
+/* ── Form card ── */
+.card { background:var(--white); border:1px solid var(--border); max-width:860px; margin:28px auto; padding:28px 28px 32px; }
+@media(max-width:600px){ .card{ margin:16px; padding:20px 16px; } }
+
+/* ── Lookup band ── */
+.lookup-band { background:var(--bg); border:1px solid var(--border); padding:16px 18px; margin-bottom:28px; }
+.lookup-band p { font-size:13px; color:var(--mid); margin-bottom:10px; }
+.lookup-row { display:flex; gap:10px; flex-wrap:wrap; }
+.lookup-row input { flex:1; min-width:200px; padding:8px 10px; font-size:13px; font-family:inherit; border:1px solid var(--border); border-radius:3px; }
+.lookup-row input:focus { border-color:var(--black); outline:none; }
+.lookup-status { font-size:12px; margin-top:8px; min-height:16px; color:var(--mid); }
+.lookup-status.found { color:#2e7d32; font-weight:600; }
+.lookup-status.notfound { color:var(--mid); }
+
+/* ── Section headings ── */
+.form-section { margin-bottom:28px; }
+.form-section-title {
+  font-size:10px; font-weight:700; letter-spacing:0.12em; text-transform:uppercase;
+  color:var(--light); border-top:2px solid var(--black); padding-top:10px; margin-bottom:16px;
+}
+
+/* ── Field grid ── */
+.field-grid { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+.field-grid.three { grid-template-columns:1fr 1fr 1fr; }
+@media(max-width:560px){ .field-grid, .field-grid.three { grid-template-columns:1fr; } }
+.field { display:flex; flex-direction:column; gap:5px; }
+.field.span2 { grid-column:1/-1; }
+label.field-label { font-size:10px; font-weight:700; letter-spacing:0.08em; text-transform:uppercase; color:var(--mid); }
+.optional { font-weight:400; text-transform:none; letter-spacing:0; font-size:11px; color:var(--light); }
+
+input[type="text"], input[type="email"], input[type="date"],
+select {
+  padding:8px 10px; font-size:13px; font-family:inherit;
+  border:1px solid var(--border); border-radius:3px;
+  background:var(--white); color:var(--black); outline:none;
+  transition:border-color 0.12s; width:100%;
+}
+input:focus, select:focus { border-color:var(--black); }
+
+/* ── Checkbox grids ── */
+.check-section-label {
+  font-size:10px; font-weight:700; letter-spacing:0.08em; text-transform:uppercase;
+  color:var(--mid); margin-bottom:8px; display:block;
+}
+.check-note { font-size:11px; color:var(--light); margin-bottom:10px; display:block; }
+.check-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(210px,1fr)); gap:6px; margin-bottom:16px; }
+.check-item {
+  display:flex; align-items:center; gap:8px; font-size:12px; color:var(--dark);
+  padding:6px 9px; border:1px solid var(--border); border-radius:3px;
+  cursor:pointer; transition:border-color 0.1s; user-select:none;
+}
+.check-item:hover { border-color:var(--mid); }
+.check-item.selected { border-color:var(--black); background:var(--bg); font-weight:600; }
+.check-item input[type="checkbox"] { width:13px; height:13px; flex-shrink:0; cursor:pointer; accent-color:var(--black); }
+
+/* ── Consent block ── */
+.consent-box { background:var(--bg); border:1px solid var(--border); padding:14px 16px; margin-bottom:18px; font-size:12px; color:var(--dark); line-height:1.6; }
+.consent-box h3 { font-size:10px; font-weight:700; letter-spacing:0.1em; text-transform:uppercase; color:var(--black); margin-bottom:8px; }
+.consent-check { display:flex; align-items:flex-start; gap:10px; margin-top:12px; font-size:12px; cursor:pointer; }
+.consent-check input { margin-top:2px; width:13px; height:13px; flex-shrink:0; accent-color:var(--black); }
+
+/* ── Buttons ── */
+.btn { padding:10px 22px; font-size:12px; font-weight:700; letter-spacing:0.06em; text-transform:uppercase; font-family:inherit; border-radius:3px; cursor:pointer; transition:all 0.12s; border:1px solid var(--black); }
+.btn-primary { background:var(--black); color:var(--white); }
+.btn-primary:hover { background:var(--dark); }
+.btn-primary:disabled { background:var(--light); border-color:var(--light); cursor:not-allowed; }
+.btn-secondary { background:transparent; color:var(--black); }
+.btn-secondary:hover { background:var(--bg); }
+.btn-sm { padding:7px 14px; font-size:11px; }
+
+/* ── Status message ── */
+.status-msg { font-size:13px; padding:10px 14px; border:1px solid var(--border); border-radius:3px; margin-top:12px; display:none; }
+.status-msg.success { border-color:#2e7d32; color:#2e7d32; background:#f1faf1; }
+.status-msg.error   { border-color:#c62828; color:#c62828; background:#fdf1f1; }
+.status-msg.info    { border-color:var(--mid); color:var(--dark); }
+
+/* ── Footer ── */
+footer { background:#000; padding:20px 24px; margin-top:40px; }
+.footer-inner { max-width:860px; margin:0 auto; }
+.footer-legal { font-size:11px; color:#666; }
+</style>
+</head>
+<body>
+
+<!--
+  HEADER
+  Minimal isolation header - no links back to the staff portal.
+  This page is public-facing; participants should not be able to
+  navigate to internal staff pages from here.
+-->
+<header>
+  <div class="header-inner">
+    <span class="logo-text">Northumbria University</span>
+    <div class="logo-sep"></div>
+    <span class="logo-sub">Sport, Exercise &amp; Rehabilitation</span>
+  </div>
+</header>
+
+<div class="hero">
+  <div class="hero-inner">
+    <h1>Research Participant Register</h1>
+    <p>
+      Register your interest in taking part in research studies run by the School of Sport,
+      Exercise &amp; Rehabilitation. You will only be contacted when a study matches your profile.
+      Participation is always voluntary.
+    </p>
+  </div>
+</div>
+
+<div class="card">
+
+  <!--
+    LOOKUP BAND
+    Allows returning participants to pre-fill the form with their existing record
+    before updating it. Queries Firestore by email address.
+    If no match is found, a fresh registration is created on submit.
+  -->
+  <div class="lookup-band">
+    <p>Already registered? Enter your email address to load and update your existing record.</p>
+    <div class="lookup-row">
+      <input type="email" id="lookupEmail" placeholder="Your email address" autocomplete="email">
+      <button class="btn btn-secondary btn-sm" onclick="lookupRecord()">Look up my record</button>
+    </div>
+    <div class="lookup-status" id="lookupStatus"></div>
+  </div>
+
+  <!-- ============================================================
+       SECTION 1 - PERSONAL DETAILS
+       Name and email are free text. Everything else is select/tick.
+       dateOfBirth stored as string (YYYY-MM-DD) from date input.
+       sex and ethnicity are selects matching standard NHS/HESA categories.
+       ============================================================ -->
+  <div class="form-section">
+    <p class="form-section-title">Personal Details</p>
+    <div class="field-grid">
+      <div class="field">
+        <label class="field-label" for="firstName">First Name</label>
+        <input type="text" id="firstName" placeholder="e.g. Jane" autocomplete="given-name">
+      </div>
+      <div class="field">
+        <label class="field-label" for="lastName">Last Name</label>
+        <input type="text" id="lastName" placeholder="e.g. Smith" autocomplete="family-name">
+      </div>
+      <div class="field">
+        <label class="field-label" for="email">Email Address</label>
+        <input type="email" id="email" placeholder="e.g. jane.smith@email.com" autocomplete="email">
+      </div>
+      <div class="field">
+        <label class="field-label" for="dateOfBirth">Date of Birth</label>
+        <!-- Stored as YYYY-MM-DD string. Age is calculated at query time by the researcher panel. -->
+        <input type="date" id="dateOfBirth">
+      </div>
+      <div class="field">
+        <label class="field-label" for="sex">Sex</label>
+        <select id="sex">
+          <option value="">-- Select --</option>
+          <option value="Male">Male</option>
+          <option value="Female">Female</option>
+          <option value="Intersex">Intersex</option>
+          <option value="Prefer not to say">Prefer not to say</option>
+        </select>
+      </div>
+      <div class="field">
+        <label class="field-label" for="ethnicity">Ethnicity <span class="optional">(optional)</span></label>
+        <!-- Categories based on UK Census 2021 / NHS ethnicity framework -->
+        <select id="ethnicity">
+          <option value="">-- Select --</option>
+          <optgroup label="Asian or Asian British">
+            <option value="Asian - Bangladeshi">Bangladeshi</option>
+            <option value="Asian - Chinese">Chinese</option>
+            <option value="Asian - Indian">Indian</option>
+            <option value="Asian - Pakistani">Pakistani</option>
+            <option value="Asian - Other">Any other Asian background</option>
+          </optgroup>
+          <optgroup label="Black, African, Caribbean or Black British">
+            <option value="Black - African">African</option>
+            <option value="Black - Caribbean">Caribbean</option>
+            <option value="Black - Other">Any other Black background</option>
+          </optgroup>
+          <optgroup label="Mixed or Multiple ethnic groups">
+            <option value="Mixed - White and Asian">White and Asian</option>
+            <option value="Mixed - White and Black African">White and Black African</option>
+            <option value="Mixed - White and Black Caribbean">White and Black Caribbean</option>
+            <option value="Mixed - Other">Any other Mixed background</option>
+          </optgroup>
+          <optgroup label="White">
+            <option value="White - British">British</option>
+            <option value="White - Irish">Irish</option>
+            <option value="White - Other">Any other White background</option>
+          </optgroup>
+          <optgroup label="Other ethnic group">
+            <option value="Other - Arab">Arab</option>
+            <option value="Other - Other">Any other ethnic group</option>
+          </optgroup>
+          <option value="Prefer not to say">Prefer not to say</option>
+        </select>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================================================
+       SECTION 2 - BODY & LIFESTYLE
+       BMI category avoids asking for actual height/weight.
+       Smoking status stored as a single select value.
+       ============================================================ -->
+  <div class="form-section">
+    <p class="form-section-title">Body &amp; Lifestyle</p>
+    <div class="field-grid">
+      <div class="field">
+        <label class="field-label" for="bmiCategory">BMI Category <span class="optional">(self-reported)</span></label>
+        <!-- Using standard WHO BMI bands. Avoids capturing actual weight/height. -->
+        <select id="bmiCategory">
+          <option value="">-- Select --</option>
+          <option value="Underweight (BMI < 18.5)">Underweight (BMI below 18.5)</option>
+          <option value="Healthy weight (BMI 18.5-24.9)">Healthy weight (BMI 18.5-24.9)</option>
+          <option value="Overweight (BMI 25-29.9)">Overweight (BMI 25-29.9)</option>
+          <option value="Obese class I (BMI 30-34.9)">Obese class I (BMI 30-34.9)</option>
+          <option value="Obese class II (BMI 35-39.9)">Obese class II (BMI 35-39.9)</option>
+          <option value="Obese class III (BMI 40+)">Obese class III (BMI 40+)</option>
+          <option value="Prefer not to say">Prefer not to say</option>
+        </select>
+      </div>
+      <div class="field">
+        <label class="field-label" for="smokingStatus">Smoking Status</label>
+        <select id="smokingStatus">
+          <option value="">-- Select --</option>
+          <option value="Never smoked">Never smoked</option>
+          <option value="Ex-smoker">Ex-smoker</option>
+          <option value="Current smoker">Current smoker</option>
+          <option value="Prefer not to say">Prefer not to say</option>
+        </select>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================================================
+       SECTION 3 - HEALTH CONDITIONS
+       All tickbox. The CONDITIONS object is defined in the JS below.
+       Groups: Cardiovascular, Respiratory, Metabolic, Musculoskeletal,
+               Neurological, Mental Health, Cancer, Reproductive, Other.
+       Stored in Firestore as a flat array of selected string values.
+       ============================================================ -->
+  <div class="form-section">
+    <p class="form-section-title">Health &amp; Clinical Conditions</p>
+    <span class="check-note">Tick all that currently apply. Leave all unticked if none.</span>
+    <div id="conditionsGrid">
+      <!-- Populated dynamically by buildCheckGrid() on DOMContentLoaded -->
+    </div>
+  </div>
+
+  <!-- ============================================================
+       SECTION 4 - INJURY HISTORY
+       Checkbox grid of body areas with history of injury or surgery.
+       Stored as array of strings in Firestore field: injuryAreas
+       ============================================================ -->
+  <div class="form-section">
+    <p class="form-section-title">Injury History</p>
+    <span class="check-note">Tick any areas where you have a history of injury, surgery, or chronic pain.</span>
+    <div class="check-grid" id="injuryGrid">
+      <!-- Populated from INJURY_AREAS array in JS -->
+    </div>
+  </div>
+
+  <!-- ============================================================
+       SECTION 5 - MEDICATIONS
+       Broad categories only - not specific drug names.
+       Stored as array of strings in Firestore field: medications
+       ============================================================ -->
+  <div class="form-section">
+    <p class="form-section-title">Medications <span class="optional" style="font-size:11px;color:var(--light);">(broad categories only)</span></p>
+    <span class="check-note">Tick any broad medication types you currently take regularly. You do not need to name specific drugs.</span>
+    <div class="check-grid" id="medicationsGrid">
+      <!-- Populated from MEDICATIONS array in JS -->
+    </div>
+  </div>
+
+  <!-- ============================================================
+       SECTION 6 - PHYSICAL ACTIVITY & SPORT
+       activityLevel = general exercise frequency (select)
+       sportLevel    = competitive level (select)
+       sports        = checkbox grid of common sports/activities
+       Stored as: activityLevel (string), sportLevel (string), sports (array)
+       ============================================================ -->
+  <div class="form-section">
+    <p class="form-section-title">Physical Activity &amp; Sport</p>
+    <div class="field-grid" style="margin-bottom:14px;">
+      <div class="field">
+        <label class="field-label" for="activityLevel">General Activity Level</label>
+        <select id="activityLevel">
+          <option value="">-- Select --</option>
+          <option value="Sedentary">Sedentary (little or no exercise)</option>
+          <option value="Lightly active">Lightly active (1-2 days/week)</option>
+          <option value="Moderately active">Moderately active (3-4 days/week)</option>
+          <option value="Very active">Very active (5-6 days/week)</option>
+          <option value="Extremely active">Extremely active (twice daily / intense training)</option>
+        </select>
+      </div>
+      <div class="field">
+        <label class="field-label" for="sportLevel">Competitive Level <span class="optional">(if applicable)</span></label>
+        <select id="sportLevel">
+          <option value="">Not applicable / recreational only</option>
+          <option value="Club / recreational">Club / recreational</option>
+          <option value="County / regional">County / regional</option>
+          <option value="National">National</option>
+          <option value="International">International</option>
+        </select>
+      </div>
+    </div>
+    <span class="check-section-label">Sports &amp; Activities <span class="optional">(tick all that you regularly do)</span></span>
+    <div class="check-grid" id="sportsGrid">
+      <!-- Populated from SPORTS array in JS -->
+    </div>
+  </div>
+
+  <!-- ============================================================
+       SECTION 7 - AVAILABILITY & OTHER INFO
+       availability = checkbox grid of when they can attend sessions
+       previousResearch = select yes/no
+       nuAffiliation = select student/staff/neither
+       Stored as: availability (array), previousResearch (string), nuAffiliation (string)
+       ============================================================ -->
+  <div class="form-section">
+    <p class="form-section-title">Availability &amp; Other Information</p>
+    <div class="field-grid" style="margin-bottom:14px;">
+      <div class="field">
+        <label class="field-label" for="previousResearch">Taken part in research before?</label>
+        <select id="previousResearch">
+          <option value="">-- Select --</option>
+          <option value="Yes">Yes</option>
+          <option value="No">No</option>
+          <option value="Not sure">Not sure</option>
+        </select>
+      </div>
+      <div class="field">
+        <label class="field-label" for="nuAffiliation">Northumbria University affiliation</label>
+        <select id="nuAffiliation">
+          <option value="">-- Select --</option>
+          <option value="Current student">Current student</option>
+          <option value="Current staff">Current staff</option>
+          <option value="Alumni">Alumni</option>
+          <option value="No affiliation">No affiliation</option>
+        </select>
+      </div>
+    </div>
+    <span class="check-section-label">Availability <span class="optional">(tick all that generally apply)</span></span>
+    <div class="check-grid" id="availabilityGrid">
+      <!-- Populated from AVAILABILITY array in JS -->
+    </div>
+  </div>
+
+  <!-- ============================================================
+       SECTION 8 - CONSENT
+       consentGiven must be true before Firestore write is permitted.
+       On update, consent is re-confirmed.
+       ============================================================ -->
+  <div class="form-section">
+    <p class="form-section-title">Consent &amp; Submission</p>
+    <div class="consent-box">
+      <h3>Information for Participants</h3>
+      <p>
+        Your details will be stored securely in a database maintained by the School of Sport,
+        Exercise &amp; Rehabilitation at Northumbria University. Your information will only be
+        used to identify whether you may be eligible for research studies run by the School.
+      </p>
+      <p style="margin-top:8px;">
+        You will only be contacted if a study matches your profile. You may request removal
+        of your details at any time by contacting
+        <strong>sport.research@northumbria.ac.uk</strong>.
+        Your data will not be shared with third parties outside of the University.
+      </p>
+      <p style="margin-top:8px;">
+        Data is held in accordance with the UK General Data Protection Regulation (UK GDPR)
+        and the Northumbria University Data Protection Policy.
+      </p>
+      <label class="consent-check">
+        <input type="checkbox" id="consentCheck">
+        <span>
+          I have read and understood the above and I consent to my details being stored
+          and used as described. I understand I can request removal at any time.
+        </span>
+      </label>
+    </div>
+    <button class="btn btn-primary" id="submitBtn" onclick="submitForm()">Register</button>
+    <div class="status-msg" id="formStatus"></div>
+  </div>
+
+</div><!-- end .card -->
+
+<footer>
+  <div class="footer-inner">
+    <span class="footer-legal">
+      &copy; Northumbria University &mdash; School of Sport, Exercise &amp; Rehabilitation.
+      Data handled in accordance with UK GDPR.
+    </span>
+  </div>
+</footer>
+
+<script type="module">
+// ============================================================
+// FIREBASE IMPORTS
+// Modular Firebase v10 SDK. addDoc for new records, setDoc with
+// merge:true for updates, getDocs+query for lookup by email.
+// ============================================================
+import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.0/firebase-app.js';
+import {
+  getFirestore, collection, addDoc, setDoc,
+  getDocs, query, where, doc
+} from 'https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore.js';
+
+// ============================================================
+// CONFIG
+// Same Firebase project as the SER staff portal and the
+// original participant-matcher.html.
+// ============================================================
+const FIREBASE_CONFIG = {
+  apiKey:            'AIzaSyDSK-2hI6ML1eykIed6E8S5Ve29phrEolI',
+  authDomain:        'nu-school-of-sport.firebaseapp.com',
+  projectId:         'nu-school-of-sport',
+  storageBucket:     'nu-school-of-sport.firebasestorage.app',
+  messagingSenderId: '396866213410',
+  appId:             '1:396866213410:web:bc7f31d1eb1833306d1c7b'
+};
+
+const COLLECTION = 'participants';
+
+const fbApp = initializeApp(FIREBASE_CONFIG, 'participant-register-app');
+const db    = getFirestore(fbApp);
+
+// ============================================================
+// STATE
+// existingDocId: set when a lookup finds an existing record.
+// When set, submit uses setDoc() to update rather than addDoc().
+// ============================================================
+let existingDocId = null;
+
+// ============================================================
+// PICKLIST DATA
+// All arrays/objects used to build checkbox grids and selects.
+// To add/remove options, edit here only - the UI builds itself
+// from these at runtime.
+// ============================================================
+
+// CONDITIONS - grouped by clinical category.
+// Each group has a label and an array of condition strings.
+// Rendered as labelled sub-groups within the conditions section.
+// Stored flat as an array of selected strings in Firestore.
+const CONDITIONS = [
+  {
+    group: 'Cardiovascular',
+    items: [
+      'Cardiovascular disease (general)',
+      'Hypertension (high blood pressure)',
+      'Heart failure',
+      'Atrial fibrillation',
+      'History of heart attack',
+      'History of stroke / TIA',
+      'Peripheral artery disease',
+    ]
+  },
+  {
+    group: 'Respiratory',
+    items: [
+      'Asthma',
+      'COPD',
+      'Exercise-induced bronchoconstriction',
+      'Other respiratory condition',
+    ]
+  },
+  {
+    group: 'Metabolic & Endocrine',
+    items: [
+      'Type 1 Diabetes',
+      'Type 2 Diabetes',
+      'Pre-diabetes',
+      'Obesity (BMI 30+)',
+      'Thyroid condition',
+      'Polycystic ovary syndrome (PCOS)',
+    ]
+  },
+  {
+    group: 'Musculoskeletal',
+    items: [
+      'Osteoarthritis',
+      'Rheumatoid arthritis',
+      'Osteoporosis / low bone density',
+      'Chronic musculoskeletal pain',
+      'Hypermobility / EDS',
+      'Scoliosis',
+    ]
+  },
+  {
+    group: 'Neurological',
+    items: [
+      'Parkinson\'s disease',
+      'Multiple sclerosis',
+      'Epilepsy',
+      'Traumatic brain injury (history of)',
+      'Other neurological condition',
+    ]
+  },
+  {
+    group: 'Mental Health',
+    items: [
+      'Depression',
+      'Anxiety disorder',
+      'Eating disorder (current or history of)',
+      'Other mental health condition',
+    ]
+  },
+  {
+    group: 'Cancer',
+    items: [
+      'Current cancer diagnosis',
+      'Cancer survivor (treatment completed)',
+    ]
+  },
+  {
+    group: 'Reproductive / Hormonal',
+    items: [
+      'Current pregnancy',
+      'Post-natal (within 12 months)',
+      'Menopause / peri-menopause',
+    ]
+  },
+  {
+    group: 'Kidney & Liver',
+    items: [
+      'Chronic kidney disease',
+      'Liver disease',
+    ]
+  },
+  {
+    group: 'Other',
+    items: [
+      'None of the above / healthy',
+      'Other condition not listed',
+    ]
+  },
+];
+
+// INJURY_AREAS - body regions with injury/surgery/chronic pain history.
+// Stored as array of strings in Firestore field: injuryAreas
+const INJURY_AREAS = [
+  'Head / concussion history',
+  'Neck / cervical spine',
+  'Shoulder (left)',
+  'Shoulder (right)',
+  'Elbow (left)',
+  'Elbow (right)',
+  'Wrist / hand (left)',
+  'Wrist / hand (right)',
+  'Upper back / thoracic spine',
+  'Lower back / lumbar spine',
+  'Hip (left)',
+  'Hip (right)',
+  'Knee (left)',
+  'Knee (right)',
+  'Ankle / foot (left)',
+  'Ankle / foot (right)',
+  'Groin / abdominal',
+  'No injury history',
+];
+
+// MEDICATIONS - broad categories only, not drug names.
+// Stored as array of strings in Firestore field: medications
+const MEDICATIONS = [
+  'Anti-hypertensives (blood pressure)',
+  'Statins (cholesterol)',
+  'Anticoagulants / blood thinners',
+  'Insulin',
+  'Oral diabetes medication (non-insulin)',
+  'Inhaled corticosteroids (asthma/COPD)',
+  'Beta-blockers',
+  'Anti-depressants / anti-anxiety',
+  'Hormone replacement therapy (HRT)',
+  'Oral contraceptive pill',
+  'NSAIDs (ibuprofen / naproxen etc.)',
+  'Immunosuppressants',
+  'Chemotherapy / oncology medication',
+  'No regular medication',
+];
+
+// SPORTS - common sports and physical activities.
+// Stored as array of strings in Firestore field: sports
+const SPORTS = [
+  'Running / jogging',
+  'Cycling (road)',
+  'Cycling (mountain bike)',
+  'Swimming',
+  'Triathlon',
+  'Football / soccer',
+  'Rugby union',
+  'Rugby league',
+  'Cricket',
+  'Tennis / squash / badminton',
+  'Golf',
+  'Rowing / kayaking',
+  'Weightlifting / powerlifting',
+  'CrossFit / functional fitness',
+  'Gym / resistance training',
+  'HIIT / circuit training',
+  'Yoga / Pilates',
+  'Martial arts / combat sports',
+  'Dance / gymnastics',
+  'Walking / hiking',
+  'Team sports (other)',
+  'None / no regular sport',
+];
+
+// AVAILABILITY - when participant is generally able to attend sessions.
+// Stored as array of strings in Firestore field: availability
+const AVAILABILITY = [
+  'Weekday mornings (before 12pm)',
+  'Weekday afternoons (12pm-5pm)',
+  'Weekday evenings (after 5pm)',
+  'Saturday mornings',
+  'Saturday afternoons',
+  'Sunday mornings',
+  'Sunday afternoons',
+];
+
+// ============================================================
+// UI BUILDERS
+// Build the checkbox grids from the arrays above.
+// Called once on DOMContentLoaded.
+// ============================================================
+
+// Builds the grouped conditions grid.
+// Each group gets a sub-heading, then a check-grid of items.
+function buildConditionsGrid() {
+  const wrap = document.getElementById('conditionsGrid');
+  if (!wrap) return;
+  CONDITIONS.forEach(group => {
+    const heading = document.createElement('span');
+    heading.className = 'check-section-label';
+    heading.style.marginTop = '10px';
+    heading.textContent = group.group;
+    wrap.appendChild(heading);
+
+    const grid = document.createElement('div');
+    grid.className = 'check-grid';
+    group.items.forEach(item => {
+      grid.appendChild(makeCheckItem(item, 'cond'));
+    });
+    wrap.appendChild(grid);
+  });
+}
+
+// Builds a flat checkbox grid from a simple string array.
+// gridId: the id of the target container element
+// prefix: a short string used in the checkbox value (for disambiguation)
+function buildFlatGrid(arr, gridId) {
+  const grid = document.getElementById(gridId);
+  if (!grid) return;
+  arr.forEach(item => {
+    grid.appendChild(makeCheckItem(item, gridId));
+  });
+}
+
+// Creates a single .check-item label element with a checkbox inside.
+function makeCheckItem(value, prefix) {
+  const label = document.createElement('label');
+  label.className = 'check-item';
+  label.dataset.value = value;
+  const cb = document.createElement('input');
+  cb.type = 'checkbox';
+  cb.value = value;
+  cb.addEventListener('change', () => label.classList.toggle('selected', cb.checked));
+  label.appendChild(cb);
+  label.appendChild(document.createTextNode(value));
+  return label;
+}
+
+// ============================================================
+// FORM READ / PRE-FILL HELPERS
+// collectFormData: reads all inputs and returns a plain object.
+// fillForm: takes a Firestore doc data object and populates all inputs.
+// ============================================================
+
+// Reads all form inputs and returns the participant data object.
+// This is the shape that gets written to Firestore.
+function collectFormData() {
+  return {
+    firstName:        val('firstName'),
+    lastName:         val('lastName'),
+    email:            val('email'),
+    dateOfBirth:      val('dateOfBirth'),
+    sex:              val('sex'),
+    ethnicity:        val('ethnicity'),
+    bmiCategory:      val('bmiCategory'),
+    smokingStatus:    val('smokingStatus'),
+    conditions:       checkedValues('conditionsGrid'),
+    injuryAreas:      checkedValues('injuryGrid'),
+    medications:      checkedValues('medicationsGrid'),
+    activityLevel:    val('activityLevel'),
+    sportLevel:       val('sportLevel'),
+    sports:           checkedValues('sportsGrid'),
+    availability:     checkedValues('availabilityGrid'),
+    previousResearch: val('previousResearch'),
+    nuAffiliation:    val('nuAffiliation'),
+    consentGiven:     document.getElementById('consentCheck').checked,
+  };
+}
+
+// Pre-fills the form from a Firestore doc data object.
+// Called after a successful email lookup.
+function fillForm(data) {
+  setVal('firstName',        data.firstName);
+  setVal('lastName',         data.lastName);
+  setVal('email',            data.email);
+  setVal('dateOfBirth',      data.dateOfBirth);
+  setVal('sex',              data.sex);
+  setVal('ethnicity',        data.ethnicity);
+  setVal('bmiCategory',      data.bmiCategory);
+  setVal('smokingStatus',    data.smokingStatus);
+  setChecked('conditionsGrid', data.conditions   || []);
+  setChecked('injuryGrid',     data.injuryAreas  || []);
+  setChecked('medicationsGrid',data.medications  || []);
+  setVal('activityLevel',    data.activityLevel);
+  setVal('sportLevel',       data.sportLevel);
+  setChecked('sportsGrid',     data.sports       || []);
+  setChecked('availabilityGrid',data.availability|| []);
+  setVal('previousResearch', data.previousResearch);
+  setVal('nuAffiliation',    data.nuAffiliation);
+  // Consent must be re-ticked manually on update - do not pre-tick
+}
+
+// Helpers: read/write individual input values
+function val(id)         { return (document.getElementById(id)?.value || '').trim(); }
+function setVal(id, v)   { const el = document.getElementById(id); if (el && v) el.value = v; }
+
+// Returns array of checked values from all checkboxes within a container
+function checkedValues(containerId) {
+  return Array.from(
+    document.querySelectorAll('#' + containerId + ' input[type="checkbox"]:checked')
+  ).map(cb => cb.value);
+}
+
+// Checks the checkboxes whose values appear in the provided array
+function setChecked(containerId, values) {
+  document.querySelectorAll('#' + containerId + ' input[type="checkbox"]').forEach(cb => {
+    const checked = values.includes(cb.value);
+    cb.checked = checked;
+    cb.closest('.check-item')?.classList.toggle('selected', checked);
+  });
+}
+
+// ============================================================
+// LOOKUP
+// Queries Firestore for a participant with the given email.
+// If found: pre-fills form, stores doc ID for update on submit.
+// If not found: shows message, form stays blank for new registration.
+// ============================================================
+window.lookupRecord = async function() {
+  const email = document.getElementById('lookupEmail').value.trim();
+  const statusEl = document.getElementById('lookupStatus');
+
+  if (!email || !email.includes('@')) {
+    statusEl.textContent = 'Please enter a valid email address.';
+    statusEl.className = 'lookup-status';
+    return;
+  }
+
+  statusEl.textContent = 'Searching...';
+  statusEl.className = 'lookup-status';
+
+  try {
+    // Query Firestore for doc(s) where email field matches
+    const q    = query(collection(db, COLLECTION), where('email', '==', email));
+    const snap = await getDocs(q);
+
+    if (snap.empty) {
+      existingDocId = null;
+      statusEl.textContent = 'No record found for that email. Fill in the form below to register.';
+      statusEl.className = 'lookup-status notfound';
+    } else {
+      // Take the first match (email should be unique, but take first if duplicates exist)
+      const docSnap = snap.docs[0];
+      existingDocId = docSnap.id;
+      fillForm(docSnap.data());
+      statusEl.textContent = 'Record found and loaded. Update any fields below, then click "Update my record".';
+      statusEl.className = 'lookup-status found';
+      // Change submit button label so it's clear this is an update
+      document.getElementById('submitBtn').textContent = 'Update my record';
+      // Scroll down to the form
+      document.querySelector('.form-section').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  } catch (err) {
+    console.error('Lookup error:', err);
+    statusEl.textContent = 'Lookup failed. Please try again.';
+    statusEl.className = 'lookup-status';
+  }
+};
+
+// ============================================================
+// VALIDATION
+// Checks required fields before allowing submit.
+// Returns true if valid; shows error and returns false otherwise.
+// ============================================================
+function validateForm(data) {
+  const statusEl = document.getElementById('formStatus');
+
+  if (!data.firstName) return showErr(statusEl, 'Please enter your first name.');
+  if (!data.lastName)  return showErr(statusEl, 'Please enter your last name.');
+  if (!data.email || !data.email.includes('@')) return showErr(statusEl, 'Please enter a valid email address.');
+  if (!data.dateOfBirth) return showErr(statusEl, 'Please enter your date of birth.');
+  if (!data.sex)       return showErr(statusEl, 'Please select your sex.');
+  if (!data.activityLevel) return showErr(statusEl, 'Please select your activity level.');
+  if (!data.nuAffiliation) return showErr(statusEl, 'Please select your Northumbria University affiliation.');
+  if (!data.consentGiven)  return showErr(statusEl, 'Please tick the consent box before submitting.');
+  return true;
+}
+
+function showErr(el, msg) {
+  el.textContent = msg;
+  el.className = 'status-msg error';
+  el.style.display = 'block';
+  el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  return false;
+}
+
+// ============================================================
+// SUBMIT
+// Creates a new Firestore doc (addDoc) or updates an existing one
+// (setDoc with merge:true) depending on whether existingDocId is set.
+// ============================================================
+window.submitForm = async function() {
+  const data = collectFormData();
+  if (!validateForm(data)) return;
+
+  const btn = document.getElementById('submitBtn');
+  btn.disabled = true;
+  btn.textContent = 'Saving...';
+
+  const now = new Date().toISOString();
+
+  try {
+    if (existingDocId) {
+      // UPDATE existing record
+      // merge:true means fields not included here are NOT deleted
+      await setDoc(
+        doc(db, COLLECTION, existingDocId),
+        { ...data, updatedAt: now },
+        { merge: true }
+      );
+      document.getElementById('formStatus').textContent =
+        'Your record has been updated. Thank you, ' + data.firstName + '.';
+    } else {
+      // NEW registration
+      await addDoc(collection(db, COLLECTION), {
+        ...data,
+        registeredAt: now,
+        updatedAt:    now,
+      });
+      document.getElementById('formStatus').textContent =
+        'Thank you, ' + data.firstName + '. You\'ve been registered. ' +
+        'You will be contacted if a study matches your profile.';
+    }
+
+    document.getElementById('formStatus').className = 'status-msg success';
+    document.getElementById('formStatus').style.display = 'block';
+    btn.textContent = existingDocId ? 'Updated' : 'Registered';
+
+  } catch (err) {
+    console.error('Submit error:', err);
+    document.getElementById('formStatus').textContent =
+      'Submission failed. Please try again or contact sport.research@northumbria.ac.uk.';
+    document.getElementById('formStatus').className = 'status-msg error';
+    document.getElementById('formStatus').style.display = 'block';
+    btn.disabled = false;
+    btn.textContent = existingDocId ? 'Update my record' : 'Register';
+  }
+};
+
+// ============================================================
+// INIT
+// Build all dynamic checkbox grids on page load.
+// ============================================================
+document.addEventListener('DOMContentLoaded', () => {
+  buildConditionsGrid();
+  buildFlatGrid(INJURY_AREAS,  'injuryGrid');
+  buildFlatGrid(MEDICATIONS,   'medicationsGrid');
+  buildFlatGrid(SPORTS,        'sportsGrid');
+  buildFlatGrid(AVAILABILITY,  'availabilityGrid');
+});
+
+</script>
+</body>
+</html>

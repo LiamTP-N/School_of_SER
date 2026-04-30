@@ -1,0 +1,921 @@
+<!DOCTYPE html>
+<!--
+  ============================================================
+  FILE: participant-researcher.html
+  PURPOSE: Researcher-only panel for the SER Research Participant
+           Matcher system. PIN-gated. Allows filtering the
+           participant database and sending invitation emails.
+           Northumbria University - School of Sport, Exercise
+           & Rehabilitation (SER)
+  OWNER: Liam Pearson-Noseworthy, Northumbria University
+  CREATED: April 2026
+
+  COMPANION FILE: participant-register.html (public registration page)
+
+  ============================================================
+  FOR AI / LLM READERS - ARCHITECTURE OVERVIEW
+  ============================================================
+
+  WHAT THIS PAGE DOES:
+  PIN-gated researcher panel. After PIN entry the researcher can:
+    1. Set eligibility criteria using tickboxes/selects that mirror
+       the fields captured on participant-register.html.
+    2. Click "Find Matches" - all Firestore participant docs are
+       loaded and filtered client-side against the criteria.
+    3. View a results table, deselect individuals if needed.
+    4. Enter study info and send EmailJS invitation emails to all
+       selected matched participants.
+
+  FILTER LOGIC:
+  - Age range: derived from dateOfBirth at query time (not stored age)
+  - Sex: exact match if selected
+  - Ethnicity: any of selected values (multi-select)
+  - BMI category: any of selected
+  - Smoking: any of selected
+  - Conditions: participant must have AT LEAST ONE of selected
+  - Injury areas: participant must have AT LEAST ONE of selected
+  - Medications: participant must have AT LEAST ONE of selected
+  - Activity level: any of selected
+  - Sport level: any of selected
+  - Sports: participant must do AT LEAST ONE of selected
+  - Availability: participant must have AT LEAST ONE of selected
+  - Previous research: exact match if selected
+  - NU affiliation: any of selected
+  All active filters are ANDed together (participant must pass all).
+  Leaving a filter blank/unselected means "any" for that field.
+
+  FIRESTORE:
+  Project:    nu-school-of-sport
+  Collection: participants
+  All docs are loaded once on "Find Matches"; filtered in memory.
+  For PoC scale this is fine. For >1000 participants, switch to
+  Firestore composite queries.
+
+  EMAILJS:
+  Service: EmailJS free tier (200 emails/month)
+  Credentials: set EMAILJS_PUBLIC_KEY, EMAILJS_SERVICE_ID,
+               EMAILJS_TEMPLATE_ID below.
+  Template variables: to_email, to_name, study_title,
+                      study_details, researcher, contact_email
+
+  PIN:
+  Change RESEARCHER_PIN below before distributing to staff.
+  PIN is client-side only - suitable for PoC/demo.
+  For production: replace with Firebase Authentication.
+
+  ISOLATION:
+  This page has no link to the public registration page or the
+  staff portal. It is accessed directly by staff via a known URL.
+  ============================================================
+-->
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Researcher Panel - SER Participant Database</title>
+
+<!-- EmailJS SDK - required for client-side email sending without a backend -->
+<script type="text/javascript" src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
+
+<style>
+/* ============================================================
+   GLOBAL RESET & CSS VARIABLES
+   Black-and-white Northumbria identity, matching the SER portal.
+   ============================================================ */
+*, *::before, *::after { margin:0; padding:0; box-sizing:border-box; }
+:root {
+  --black:  #111;
+  --dark:   #222;
+  --mid:    #555;
+  --light:  #888;
+  --border: #ddd;
+  --bg:     #f7f7f7;
+  --white:  #fff;
+}
+html { scroll-behavior:smooth; }
+body { font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif; background:var(--bg); color:var(--black); line-height:1.5; }
+
+/* ── Header ── */
+header { background:#000; position:sticky; top:0; z-index:100; }
+.header-inner { max-width:1200px; margin:0 auto; padding:0 24px; height:56px; display:flex; align-items:center; gap:14px; }
+.logo-text { font-size:15px; font-weight:900; color:#fff; letter-spacing:0.04em; text-transform:uppercase; }
+.logo-sep { width:1px; height:20px; background:#444; }
+.logo-sub { font-size:11px; color:#aaa; }
+.header-right { margin-left:auto; font-size:11px; color:#666; }
+
+/* ── Hero ── */
+.hero { background:#000; padding:36px 24px 32px; }
+.hero-inner { max-width:1200px; margin:0 auto; }
+.hero h1 { font-size:clamp(20px,3vw,34px); font-weight:900; letter-spacing:-0.01em; color:#fff; text-transform:uppercase; }
+.hero p { font-size:13px; color:#aaa; margin-top:8px; max-width:680px; line-height:1.6; }
+
+/* ── PIN gate ── */
+.pin-gate { max-width:400px; margin:60px auto; background:var(--white); border:1px solid var(--border); padding:28px 24px; text-align:center; }
+.pin-gate h2 { font-size:13px; font-weight:900; letter-spacing:0.08em; text-transform:uppercase; margin-bottom:10px; }
+.pin-gate p { font-size:13px; color:var(--mid); margin-bottom:18px; }
+.pin-row { display:flex; gap:8px; justify-content:center; }
+.pin-row input { max-width:140px; text-align:center; letter-spacing:0.2em; font-size:18px; font-weight:700; padding:8px 10px; border:1px solid var(--border); border-radius:3px; font-family:inherit; }
+.pin-row input:focus { border-color:var(--black); outline:none; }
+.pin-error { font-size:12px; color:#c62828; margin-top:8px; min-height:16px; }
+
+/* ── Main layout ── */
+.main { max-width:1200px; margin:0 auto; padding:28px 24px 60px; display:none; }
+/* Shown by JS after PIN verified */
+.main.visible { display:block; }
+
+/* ── Cards ── */
+.card { background:var(--white); border:1px solid var(--border); padding:22px 22px 24px; margin-bottom:20px; }
+.card-title { font-size:10px; font-weight:700; letter-spacing:0.12em; text-transform:uppercase; color:var(--light); border-top:2px solid var(--black); padding-top:10px; margin-bottom:16px; }
+
+/* ── Criteria grid ── */
+.criteria-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(180px,1fr)); gap:10px; margin-bottom:14px; }
+.field { display:flex; flex-direction:column; gap:4px; }
+.field.span2 { grid-column:span 2; }
+.field.span3 { grid-column:span 3; }
+label.field-label { font-size:10px; font-weight:700; letter-spacing:0.08em; text-transform:uppercase; color:var(--mid); }
+.optional { font-weight:400; text-transform:none; letter-spacing:0; font-size:10px; color:var(--light); }
+
+input[type="text"], input[type="email"], input[type="number"],
+select, textarea {
+  padding:7px 9px; font-size:12px; font-family:inherit;
+  border:1px solid var(--border); border-radius:3px;
+  background:var(--white); color:var(--black); outline:none;
+  transition:border-color 0.12s; width:100%;
+}
+input:focus, select:focus, textarea:focus { border-color:var(--black); }
+textarea { resize:vertical; min-height:70px; }
+
+/* Age range row */
+.age-row { display:flex; gap:8px; align-items:center; }
+.age-row input { flex:1; }
+.age-row span { font-size:12px; color:var(--light); flex-shrink:0; }
+
+/* ── Checkbox filter grids ── */
+/* These are compact versions of the participant-register.html check-items */
+.check-section-label { font-size:10px; font-weight:700; letter-spacing:0.08em; text-transform:uppercase; color:var(--mid); margin-bottom:6px; margin-top:12px; display:block; }
+.filter-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(190px,1fr)); gap:5px; margin-bottom:10px; }
+.filter-item {
+  display:flex; align-items:center; gap:7px; font-size:11px; color:var(--dark);
+  padding:5px 8px; border:1px solid var(--border); border-radius:3px;
+  cursor:pointer; transition:border-color 0.1s; user-select:none;
+}
+.filter-item:hover { border-color:var(--mid); }
+.filter-item.selected { border-color:var(--black); background:var(--bg); font-weight:600; }
+.filter-item input[type="checkbox"] { width:12px; height:12px; flex-shrink:0; cursor:pointer; accent-color:var(--black); }
+
+/* Collapsible filter sections */
+.filter-section { margin-bottom:4px; }
+.filter-toggle {
+  display:flex; align-items:center; justify-content:space-between;
+  cursor:pointer; padding:6px 0; border-bottom:1px solid var(--border);
+  font-size:10px; font-weight:700; letter-spacing:0.1em; text-transform:uppercase;
+  color:var(--mid); user-select:none;
+}
+.filter-toggle:hover { color:var(--black); }
+.filter-toggle .toggle-arrow { font-size:10px; transition:transform 0.15s; }
+.filter-toggle.open .toggle-arrow { transform:rotate(90deg); }
+.filter-body { display:none; padding:10px 0 4px; }
+.filter-body.open { display:block; }
+
+/* ── Buttons ── */
+.btn { padding:9px 20px; font-size:11px; font-weight:700; letter-spacing:0.06em; text-transform:uppercase; font-family:inherit; border-radius:3px; cursor:pointer; transition:all 0.12s; border:1px solid var(--black); }
+.btn-primary { background:var(--black); color:var(--white); }
+.btn-primary:hover { background:var(--dark); }
+.btn-primary:disabled { background:var(--light); border-color:var(--light); cursor:not-allowed; }
+.btn-secondary { background:transparent; color:var(--black); }
+.btn-secondary:hover { background:var(--bg); }
+.btn-danger { border-color:#c62828; color:#c62828; background:transparent; }
+.btn-row { display:flex; gap:10px; flex-wrap:wrap; margin-top:16px; }
+
+/* ── Status messages ── */
+.status-msg { font-size:12px; padding:9px 12px; border:1px solid var(--border); border-radius:3px; margin-top:10px; display:none; }
+.status-msg.success { border-color:#2e7d32; color:#2e7d32; background:#f1faf1; }
+.status-msg.error   { border-color:#c62828; color:#c62828; background:#fdf1f1; }
+.status-msg.info    { border-color:var(--mid); color:var(--dark); }
+
+/* ── Results section ── */
+.results-card { background:var(--white); border:1px solid var(--border); padding:22px; margin-top:20px; display:none; }
+.results-card.visible { display:block; }
+.match-count { font-size:11px; font-weight:700; color:var(--mid); letter-spacing:0.04em; text-transform:uppercase; margin-bottom:12px; }
+
+/* Results table - scientific manuscript style:
+   no title on the table itself, top and bottom rules only,
+   no internal vertical grid lines. Caption below. */
+.table-wrap { overflow-x:auto; }
+table { width:100%; border-collapse:collapse; font-size:12px; }
+thead tr { border-bottom:2px solid var(--black); }
+thead th { text-align:left; padding:5px 9px 7px; font-size:10px; font-weight:700; letter-spacing:0.08em; text-transform:uppercase; color:var(--mid); white-space:nowrap; }
+tbody tr { border-bottom:1px solid var(--border); }
+tbody tr:last-child { border-bottom:2px solid var(--black); }
+tbody td { padding:7px 9px; vertical-align:top; color:var(--dark); font-size:12px; }
+.table-note { font-size:11px; color:var(--light); margin-top:6px; font-style:italic; }
+
+/* Tag chips for array fields in the table */
+.tag { display:inline-block; font-size:10px; padding:1px 6px; border:1px solid var(--border); border-radius:2px; margin:1px; white-space:nowrap; }
+
+/* ── Send panel ── */
+.send-card { background:var(--white); border:1px solid var(--border); padding:22px; margin-top:16px; display:none; }
+.send-card.visible { display:block; }
+.progress-wrap { margin-top:12px; }
+.progress-bar-outer { height:5px; background:var(--border); border-radius:3px; overflow:hidden; margin-bottom:6px; }
+.progress-bar-inner { height:100%; background:var(--black); width:0; transition:width 0.25s; }
+.progress-label { font-size:11px; color:var(--mid); }
+
+/* ── Footer ── */
+footer { background:#000; padding:18px 24px; margin-top:40px; }
+.footer-inner { max-width:1200px; margin:0 auto; }
+.footer-legal { font-size:11px; color:#666; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="header-inner">
+    <span class="logo-text">Northumbria University</span>
+    <div class="logo-sep"></div>
+    <span class="logo-sub">Sport, Exercise &amp; Rehabilitation</span>
+    <span class="header-right">Researcher Panel &mdash; authorised staff only</span>
+  </div>
+</header>
+
+<div class="hero">
+  <div class="hero-inner">
+    <h1>Participant Database &mdash; Researcher Panel</h1>
+    <p>Search the participant register, view matched profiles, and send study invitation emails.</p>
+  </div>
+</div>
+
+<!--
+  PIN GATE
+  Shown until correct PIN is entered. PIN verified client-side.
+  Replace with Firebase Auth for production use.
+-->
+<div id="pinGate" class="pin-gate">
+  <h2>Researcher Access</h2>
+  <p>Enter your PIN to access the participant database.</p>
+  <div class="pin-row">
+    <input type="password" id="pinInput" placeholder="PIN" maxlength="12"
+           onkeydown="if(event.key==='Enter')verifyPin()">
+    <button class="btn btn-primary" onclick="verifyPin()">Unlock</button>
+  </div>
+  <div class="pin-error" id="pinError"></div>
+</div>
+
+<!--
+  MAIN PANEL
+  Hidden until PIN verified. Shown by JS (main.classList.add('visible')).
+-->
+<div class="main" id="mainPanel">
+
+  <!-- ============================================================
+       CRITERIA CARD
+       All filter fields mirror the fields on participant-register.html.
+       Filters are collapsible sections to keep the page manageable.
+       Leaving any section entirely blank means "no filter on that field".
+       ============================================================ -->
+  <div class="card">
+    <p class="card-title">Eligibility Criteria</p>
+    <p style="font-size:12px;color:var(--mid);margin-bottom:16px;max-width:700px;">
+      Set criteria below. All active filters are combined with AND logic - participants must
+      pass every filter you set. Leave a filter section entirely unticked/blank to include
+      all values for that field. Within a filter (e.g. multiple conditions ticked), the
+      logic is OR - the participant must match at least one.
+    </p>
+
+    <!-- Age range - uses dateOfBirth to calculate age at query time -->
+    <div class="criteria-grid" style="max-width:500px;">
+      <div class="field">
+        <label class="field-label">Min Age</label>
+        <input type="number" id="fMinAge" min="16" max="120" placeholder="e.g. 18">
+      </div>
+      <div class="field">
+        <label class="field-label">Max Age</label>
+        <input type="number" id="fMaxAge" min="16" max="120" placeholder="e.g. 65">
+      </div>
+      <div class="field">
+        <label class="field-label">Sex</label>
+        <select id="fSex">
+          <option value="">Any</option>
+          <option value="Male">Male</option>
+          <option value="Female">Female</option>
+          <option value="Intersex">Intersex</option>
+          <option value="Prefer not to say">Prefer not to say</option>
+        </select>
+      </div>
+      <div class="field">
+        <label class="field-label">Previous Research</label>
+        <select id="fPreviousResearch">
+          <option value="">Any</option>
+          <option value="Yes">Yes</option>
+          <option value="No">No</option>
+          <option value="Not sure">Not sure</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- Collapsible filter sections - one per major field group -->
+
+    <div class="filter-section">
+      <div class="filter-toggle" onclick="toggleFilter(this)">
+        Ethnicity <span class="toggle-arrow">&#9658;</span>
+      </div>
+      <div class="filter-body">
+        <div class="filter-grid" id="fEthnicityGrid">
+          <!-- Populated from ETHNICITY_OPTIONS in JS -->
+        </div>
+      </div>
+    </div>
+
+    <div class="filter-section">
+      <div class="filter-toggle" onclick="toggleFilter(this)">
+        BMI Category <span class="toggle-arrow">&#9658;</span>
+      </div>
+      <div class="filter-body">
+        <div class="filter-grid" id="fBmiGrid"><!-- JS --></div>
+      </div>
+    </div>
+
+    <div class="filter-section">
+      <div class="filter-toggle" onclick="toggleFilter(this)">
+        Smoking Status <span class="toggle-arrow">&#9658;</span>
+      </div>
+      <div class="filter-body">
+        <div class="filter-grid" id="fSmokingGrid"><!-- JS --></div>
+      </div>
+    </div>
+
+    <div class="filter-section">
+      <div class="filter-toggle" onclick="toggleFilter(this)">
+        Health &amp; Clinical Conditions <span class="toggle-arrow">&#9658;</span>
+      </div>
+      <div class="filter-body" id="fConditionsBody">
+        <!-- Grouped conditions filter - built by JS -->
+      </div>
+    </div>
+
+    <div class="filter-section">
+      <div class="filter-toggle" onclick="toggleFilter(this)">
+        Injury History <span class="toggle-arrow">&#9658;</span>
+      </div>
+      <div class="filter-body">
+        <div class="filter-grid" id="fInjuryGrid"><!-- JS --></div>
+      </div>
+    </div>
+
+    <div class="filter-section">
+      <div class="filter-toggle" onclick="toggleFilter(this)">
+        Medications <span class="toggle-arrow">&#9658;</span>
+      </div>
+      <div class="filter-body">
+        <div class="filter-grid" id="fMedicationsGrid"><!-- JS --></div>
+      </div>
+    </div>
+
+    <div class="filter-section">
+      <div class="filter-toggle" onclick="toggleFilter(this)">
+        Activity Level &amp; Sport <span class="toggle-arrow">&#9658;</span>
+      </div>
+      <div class="filter-body">
+        <span class="check-section-label">Activity Level</span>
+        <div class="filter-grid" id="fActivityGrid"><!-- JS --></div>
+        <span class="check-section-label">Competitive Level</span>
+        <div class="filter-grid" id="fSportLevelGrid"><!-- JS --></div>
+        <span class="check-section-label">Sports / Activities</span>
+        <div class="filter-grid" id="fSportsGrid"><!-- JS --></div>
+      </div>
+    </div>
+
+    <div class="filter-section">
+      <div class="filter-toggle" onclick="toggleFilter(this)">
+        Availability <span class="toggle-arrow">&#9658;</span>
+      </div>
+      <div class="filter-body">
+        <div class="filter-grid" id="fAvailabilityGrid"><!-- JS --></div>
+      </div>
+    </div>
+
+    <div class="filter-section">
+      <div class="filter-toggle" onclick="toggleFilter(this)">
+        NU Affiliation <span class="toggle-arrow">&#9658;</span>
+      </div>
+      <div class="filter-body">
+        <div class="filter-grid" id="fAffiliationGrid"><!-- JS --></div>
+      </div>
+    </div>
+
+    <div class="btn-row">
+      <button class="btn btn-primary" onclick="findMatches()">Find Matches</button>
+      <button class="btn btn-secondary" onclick="clearAllFilters()">Clear all filters</button>
+    </div>
+    <div class="status-msg" id="searchStatus"></div>
+  </div>
+
+  <!-- ============================================================
+       RESULTS TABLE
+       Shown after Find Matches runs. Researcher can deselect rows.
+       Table caption rendered below table (scientific manuscript standard).
+       ============================================================ -->
+  <div class="results-card" id="resultsCard">
+    <p class="card-title">Matched Participants</p>
+    <p class="match-count" id="matchCount"></p>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th><input type="checkbox" id="selectAll" onchange="toggleSelectAll(this)" title="Select / deselect all"></th>
+            <th>Name</th>
+            <th>Email</th>
+            <th>Age</th>
+            <th>Sex</th>
+            <th>Activity Level</th>
+            <th>Conditions</th>
+            <th>Sports</th>
+            <th>Availability</th>
+          </tr>
+        </thead>
+        <tbody id="resultsBody"></tbody>
+      </table>
+    </div>
+    <!-- Table note below table, per scientific manuscript convention -->
+    <p class="table-note" id="tableNote"></p>
+  </div>
+
+  <!-- ============================================================
+       SEND INVITATIONS CARD
+       Shown once results are loaded. Researcher fills in study info
+       then sends EmailJS emails to all selected (ticked) participants.
+       ============================================================ -->
+  <div class="send-card" id="sendCard">
+    <p class="card-title">Send Invitations</p>
+    <p style="font-size:12px;color:var(--mid);margin-bottom:16px;max-width:700px;">
+      Fill in your study details below. Invitation emails will be sent to all ticked
+      participants in the results table above. Ensure EmailJS credentials are configured
+      before sending.
+    </p>
+    <div class="criteria-grid">
+      <div class="field span2">
+        <label class="field-label" for="studyTitle">Study Title</label>
+        <input type="text" id="studyTitle" placeholder="e.g. Effects of exercise intensity on glucose regulation">
+      </div>
+      <div class="field span3">
+        <label class="field-label" for="studyDetails">Brief Description</label>
+        <textarea id="studyDetails" placeholder="Describe what participation involves, time commitment, location, any payments / compensation etc."></textarea>
+      </div>
+      <div class="field">
+        <label class="field-label" for="researcherName">Your Name</label>
+        <input type="text" id="researcherName" placeholder="e.g. Dr Jane Smith">
+      </div>
+      <div class="field">
+        <label class="field-label" for="researcherEmail">Your Contact Email</label>
+        <input type="email" id="researcherEmail" placeholder="e.g. j.smith@northumbria.ac.uk">
+      </div>
+    </div>
+    <div class="btn-row">
+      <button class="btn btn-primary" id="sendBtn" onclick="sendInvitations()">Send Invitations to Selected</button>
+    </div>
+    <div class="progress-wrap" id="sendProgress" style="display:none;">
+      <div class="progress-bar-outer"><div class="progress-bar-inner" id="progressFill"></div></div>
+      <div class="progress-label" id="progressLabel"></div>
+    </div>
+    <div class="status-msg" id="sendStatus"></div>
+  </div>
+
+</div><!-- end .main -->
+
+<footer>
+  <div class="footer-inner">
+    <span class="footer-legal">
+      &copy; Northumbria University &mdash; School of Sport, Exercise &amp; Rehabilitation.
+      Authorised researcher access only. Data handled in accordance with UK GDPR.
+    </span>
+  </div>
+</footer>
+
+<script type="module">
+// ============================================================
+// FIREBASE IMPORTS
+// ============================================================
+import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.0/firebase-app.js';
+import { getFirestore, collection, getDocs }
+  from 'https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore.js';
+
+// ============================================================
+// CONFIG
+// ============================================================
+const FIREBASE_CONFIG = {
+  apiKey:            'AIzaSyDSK-2hI6ML1eykIed6E8S5Ve29phrEolI',
+  authDomain:        'nu-school-of-sport.firebaseapp.com',
+  projectId:         'nu-school-of-sport',
+  storageBucket:     'nu-school-of-sport.firebasestorage.app',
+  messagingSenderId: '396866213410',
+  appId:             '1:396866213410:web:bc7f31d1eb1833306d1c7b'
+};
+
+// TODO: Replace placeholder values with real EmailJS credentials.
+// See participant-register README for setup instructions.
+const EMAILJS_PUBLIC_KEY  = 'YOUR_EMAILJS_PUBLIC_KEY';
+const EMAILJS_SERVICE_ID  = 'YOUR_EMAILJS_SERVICE_ID';
+const EMAILJS_TEMPLATE_ID = 'YOUR_EMAILJS_TEMPLATE_ID';
+
+// TODO: Change this PIN before distributing to staff.
+const RESEARCHER_PIN = '1234';
+
+// Firestore collection name - must match participant-register.html
+const COLLECTION = 'participants';
+
+// Delay between EmailJS sends (ms). 1200ms stays within free-tier rate limits.
+const EMAIL_DELAY_MS = 1200;
+
+const fbApp = initializeApp(FIREBASE_CONFIG, 'researcher-panel-app');
+const db    = getFirestore(fbApp);
+
+// Module-level cache of matched participants (used by sendInvitations)
+let matchedParticipants = [];
+
+// ============================================================
+// PICKLIST DATA
+// Must mirror participant-register.html exactly so filter values
+// match stored values in Firestore.
+// ============================================================
+
+const CONDITIONS = [
+  { group:'Cardiovascular', items:['Cardiovascular disease (general)','Hypertension (high blood pressure)','Heart failure','Atrial fibrillation','History of heart attack','History of stroke / TIA','Peripheral artery disease'] },
+  { group:'Respiratory',    items:['Asthma','COPD','Exercise-induced bronchoconstriction','Other respiratory condition'] },
+  { group:'Metabolic & Endocrine', items:['Type 1 Diabetes','Type 2 Diabetes','Pre-diabetes','Obesity (BMI 30+)','Thyroid condition','Polycystic ovary syndrome (PCOS)'] },
+  { group:'Musculoskeletal', items:['Osteoarthritis','Rheumatoid arthritis','Osteoporosis / low bone density','Chronic musculoskeletal pain','Hypermobility / EDS','Scoliosis'] },
+  { group:'Neurological',   items:['Parkinson\'s disease','Multiple sclerosis','Epilepsy','Traumatic brain injury (history of)','Other neurological condition'] },
+  { group:'Mental Health',  items:['Depression','Anxiety disorder','Eating disorder (current or history of)','Other mental health condition'] },
+  { group:'Cancer',         items:['Current cancer diagnosis','Cancer survivor (treatment completed)'] },
+  { group:'Reproductive / Hormonal', items:['Current pregnancy','Post-natal (within 12 months)','Menopause / peri-menopause'] },
+  { group:'Kidney & Liver', items:['Chronic kidney disease','Liver disease'] },
+  { group:'Other',          items:['None of the above / healthy','Other condition not listed'] },
+];
+
+const INJURY_AREAS = ['Head / concussion history','Neck / cervical spine','Shoulder (left)','Shoulder (right)','Elbow (left)','Elbow (right)','Wrist / hand (left)','Wrist / hand (right)','Upper back / thoracic spine','Lower back / lumbar spine','Hip (left)','Hip (right)','Knee (left)','Knee (right)','Ankle / foot (left)','Ankle / foot (right)','Groin / abdominal','No injury history'];
+
+const MEDICATIONS = ['Anti-hypertensives (blood pressure)','Statins (cholesterol)','Anticoagulants / blood thinners','Insulin','Oral diabetes medication (non-insulin)','Inhaled corticosteroids (asthma/COPD)','Beta-blockers','Anti-depressants / anti-anxiety','Hormone replacement therapy (HRT)','Oral contraceptive pill','NSAIDs (ibuprofen / naproxen etc.)','Immunosuppressants','Chemotherapy / oncology medication','No regular medication'];
+
+const SPORTS = ['Running / jogging','Cycling (road)','Cycling (mountain bike)','Swimming','Triathlon','Football / soccer','Rugby union','Rugby league','Cricket','Tennis / squash / badminton','Golf','Rowing / kayaking','Weightlifting / powerlifting','CrossFit / functional fitness','Gym / resistance training','HIIT / circuit training','Yoga / Pilates','Martial arts / combat sports','Dance / gymnastics','Walking / hiking','Team sports (other)','None / no regular sport'];
+
+const AVAILABILITY = ['Weekday mornings (before 12pm)','Weekday afternoons (12pm-5pm)','Weekday evenings (after 5pm)','Saturday mornings','Saturday afternoons','Sunday mornings','Sunday afternoons'];
+
+const ETHNICITY_OPTIONS = ['Asian - Bangladeshi','Asian - Chinese','Asian - Indian','Asian - Pakistani','Asian - Other','Black - African','Black - Caribbean','Black - Other','Mixed - White and Asian','Mixed - White and Black African','Mixed - White and Black Caribbean','Mixed - Other','White - British','White - Irish','White - Other','Other - Arab','Other - Other','Prefer not to say'];
+
+const BMI_OPTIONS = ['Underweight (BMI < 18.5)','Healthy weight (BMI 18.5-24.9)','Overweight (BMI 25-29.9)','Obese class I (BMI 30-34.9)','Obese class II (BMI 35-39.9)','Obese class III (BMI 40+)','Prefer not to say'];
+
+const SMOKING_OPTIONS = ['Never smoked','Ex-smoker','Current smoker','Prefer not to say'];
+
+const ACTIVITY_OPTIONS = ['Sedentary','Lightly active','Moderately active','Very active','Extremely active'];
+
+const SPORT_LEVEL_OPTIONS = ['Not applicable / recreational only','Club / recreational','County / regional','National','International'];
+
+const AFFILIATION_OPTIONS = ['Current student','Current staff','Alumni','No affiliation'];
+
+// ============================================================
+// PIN GATE
+// ============================================================
+
+window.verifyPin = function() {
+  const entered  = document.getElementById('pinInput').value;
+  const errorEl  = document.getElementById('pinError');
+  if (entered === RESEARCHER_PIN) {
+    document.getElementById('pinGate').style.display  = 'none';
+    document.getElementById('mainPanel').classList.add('visible');
+    errorEl.textContent = '';
+  } else {
+    errorEl.textContent = 'Incorrect PIN. Please try again.';
+    document.getElementById('pinInput').value = '';
+  }
+};
+
+// ============================================================
+// COLLAPSIBLE FILTER SECTIONS
+// ============================================================
+
+window.toggleFilter = function(headerEl) {
+  headerEl.classList.toggle('open');
+  const body = headerEl.nextElementSibling;
+  body.classList.toggle('open');
+};
+
+// ============================================================
+// UI BUILDERS - build filter checkbox grids from picklist arrays
+// ============================================================
+
+// Builds a flat filter-grid from a string array
+function buildFilterGrid(arr, gridId) {
+  const grid = document.getElementById(gridId);
+  if (!grid) return;
+  arr.forEach(val => grid.appendChild(makeFilterItem(val)));
+}
+
+// Builds the grouped conditions filter (mirrors participant-register layout)
+function buildConditionsFilter() {
+  const body = document.getElementById('fConditionsBody');
+  if (!body) return;
+  CONDITIONS.forEach(group => {
+    const label = document.createElement('span');
+    label.className = 'check-section-label';
+    label.textContent = group.group;
+    body.appendChild(label);
+    const grid = document.createElement('div');
+    grid.className = 'filter-grid';
+    group.items.forEach(item => grid.appendChild(makeFilterItem(item)));
+    body.appendChild(grid);
+  });
+}
+
+// Creates a single .filter-item label with a checkbox
+function makeFilterItem(value) {
+  const label = document.createElement('label');
+  label.className = 'filter-item';
+  label.dataset.value = value;
+  const cb = document.createElement('input');
+  cb.type = 'checkbox';
+  cb.value = value;
+  cb.addEventListener('change', () => label.classList.toggle('selected', cb.checked));
+  label.appendChild(cb);
+  label.appendChild(document.createTextNode(value));
+  return label;
+}
+
+// Returns array of checked values from all checkboxes within a container
+function checkedIn(containerId) {
+  return Array.from(
+    document.querySelectorAll('#' + containerId + ' input[type="checkbox"]:checked')
+  ).map(cb => cb.value);
+}
+
+// Clears all checked filters across every filter grid
+window.clearAllFilters = function() {
+  document.getElementById('fMinAge').value = '';
+  document.getElementById('fMaxAge').value = '';
+  document.getElementById('fSex').value    = '';
+  document.getElementById('fPreviousResearch').value = '';
+  document.querySelectorAll('.filter-item input[type="checkbox"]').forEach(cb => {
+    cb.checked = false;
+    cb.closest('.filter-item').classList.remove('selected');
+  });
+  document.getElementById('resultsCard').classList.remove('visible');
+  document.getElementById('sendCard').classList.remove('visible');
+  document.getElementById('searchStatus').style.display = 'none';
+  matchedParticipants = [];
+};
+
+// ============================================================
+// AGE CALCULATION
+// Derives current age in whole years from a YYYY-MM-DD date string.
+// Used at query time so stored data never goes stale.
+// ============================================================
+function calcAge(dobStr) {
+  if (!dobStr) return null;
+  const dob   = new Date(dobStr);
+  const today = new Date();
+  let age = today.getFullYear() - dob.getFullYear();
+  const m = today.getMonth() - dob.getMonth();
+  if (m < 0 || (m === 0 && today.getDate() < dob.getDate())) age--;
+  return age;
+}
+
+// ============================================================
+// FIND MATCHES
+// Loads all Firestore participant docs and filters client-side.
+// ============================================================
+window.findMatches = async function() {
+  showStatus('searchStatus', 'Loading participant database...', 'info');
+  document.getElementById('resultsCard').classList.remove('visible');
+  document.getElementById('sendCard').classList.remove('visible');
+
+  // Collect all active filter values
+  const minAge   = parseInt(document.getElementById('fMinAge').value, 10) || 0;
+  const maxAge   = parseInt(document.getElementById('fMaxAge').value, 10) || 999;
+  const sex      = document.getElementById('fSex').value;
+  const prevRes  = document.getElementById('fPreviousResearch').value;
+
+  // Array-based filters - empty array = no filter on that field
+  const fEthnicity   = checkedIn('fEthnicityGrid');
+  const fBmi         = checkedIn('fBmiGrid');
+  const fSmoking     = checkedIn('fSmokingGrid');
+  const fConditions  = checkedIn('fConditionsBody');
+  const fInjury      = checkedIn('fInjuryGrid');
+  const fMedications = checkedIn('fMedicationsGrid');
+  const fActivity    = checkedIn('fActivityGrid');
+  const fSportLevel  = checkedIn('fSportLevelGrid');
+  const fSports      = checkedIn('fSportsGrid');
+  const fAvailability= checkedIn('fAvailabilityGrid');
+  const fAffiliation = checkedIn('fAffiliationGrid');
+
+  try {
+    const snap = await getDocs(collection(db, COLLECTION));
+    const all  = snap.docs.map(d => ({ _id: d.id, ...d.data() }));
+
+    const matches = all.filter(p => {
+      // Age - calculated from dateOfBirth field
+      const age = calcAge(p.dateOfBirth);
+      if (age !== null && (age < minAge || age > maxAge)) return false;
+
+      // Single-value exact-match filters
+      if (sex    && p.sex    !== sex)    return false;
+      if (prevRes && p.previousResearch !== prevRes) return false;
+
+      // Single-value any-of filters (researcher can tick multiple options)
+      if (fEthnicity.length  && !fEthnicity.includes(p.ethnicity))     return false;
+      if (fBmi.length        && !fBmi.includes(p.bmiCategory))          return false;
+      if (fSmoking.length    && !fSmoking.includes(p.smokingStatus))    return false;
+      if (fActivity.length   && !fActivity.includes(p.activityLevel))   return false;
+      if (fSportLevel.length && !fSportLevel.includes(p.sportLevel))    return false;
+      if (fAffiliation.length && !fAffiliation.includes(p.nuAffiliation)) return false;
+
+      // Array-intersection filters - participant must have AT LEAST ONE match
+      if (fConditions.length  && !anyMatch(fConditions,  p.conditions  || [])) return false;
+      if (fInjury.length      && !anyMatch(fInjury,      p.injuryAreas || [])) return false;
+      if (fMedications.length && !anyMatch(fMedications, p.medications || [])) return false;
+      if (fSports.length      && !anyMatch(fSports,      p.sports      || [])) return false;
+      if (fAvailability.length && !anyMatch(fAvailability, p.availability || [])) return false;
+
+      return true;
+    });
+
+    matchedParticipants = matches;
+    renderResults(matches, all.length);
+
+    if (matches.length === 0) {
+      showStatus('searchStatus', 'No participants matched the specified criteria.', 'info');
+    } else {
+      document.getElementById('searchStatus').style.display = 'none';
+    }
+
+  } catch (err) {
+    console.error('Firestore read error:', err);
+    showStatus('searchStatus', 'Failed to load database. Check your connection and try again.', 'error');
+  }
+};
+
+// Returns true if arrays a and b share at least one common value
+function anyMatch(a, b) {
+  return a.some(v => b.includes(v));
+}
+
+// ============================================================
+// RENDER RESULTS TABLE
+// ============================================================
+
+function renderResults(participants, totalInDb) {
+  const tbody = document.getElementById('resultsBody');
+  tbody.innerHTML = '';
+
+  document.getElementById('matchCount').textContent =
+    participants.length + ' of ' + totalInDb + ' participant' +
+    (totalInDb !== 1 ? 's' : '') + ' matched';
+
+  participants.forEach((p, i) => {
+    const age = calcAge(p.dateOfBirth);
+    const tr  = document.createElement('tr');
+    tr.innerHTML = `
+      <td><input type="checkbox" class="row-check" data-idx="${i}" checked></td>
+      <td>${esc(p.firstName || '')} ${esc(p.lastName || '')}</td>
+      <td>${esc(p.email || '')}</td>
+      <td>${age !== null ? age : ''}</td>
+      <td>${esc(p.sex || '')}</td>
+      <td>${esc(p.activityLevel || '')}</td>
+      <td>${tagsHtml(p.conditions)}</td>
+      <td>${tagsHtml(p.sports)}</td>
+      <td>${tagsHtml(p.availability)}</td>
+    `;
+    tbody.appendChild(tr);
+  });
+
+  // Table note below table per scientific manuscript convention
+  document.getElementById('tableNote').textContent =
+    'Note. All rows pre-selected for invitation. Untick any participants you do not wish to contact.';
+
+  document.getElementById('resultsCard').classList.add('visible');
+  document.getElementById('sendCard').classList.add('visible');
+  document.getElementById('selectAll').checked = true;
+}
+
+// Renders an array of strings as small tag chips for the table
+function tagsHtml(arr) {
+  if (!arr || !arr.length) return '<span style="color:var(--light);font-size:11px;">none</span>';
+  return arr.map(v => '<span class="tag">' + esc(v) + '</span>').join('');
+}
+
+// Escapes HTML special characters to prevent XSS
+function esc(s) {
+  return String(s)
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;')
+    .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// ============================================================
+// SELECT ALL TOGGLE
+// ============================================================
+window.toggleSelectAll = function(masterCb) {
+  document.querySelectorAll('.row-check').forEach(cb => { cb.checked = masterCb.checked; });
+};
+
+// ============================================================
+// SEND INVITATIONS
+// Iterates checked rows, fires EmailJS for each participant.
+// Shows progress bar. Rate-limited by EMAIL_DELAY_MS.
+// ============================================================
+window.sendInvitations = async function() {
+  const studyTitle   = document.getElementById('studyTitle').value.trim();
+  const studyDetails = document.getElementById('studyDetails').value.trim();
+  const resName      = document.getElementById('researcherName').value.trim();
+  const resEmail     = document.getElementById('researcherEmail').value.trim();
+
+  if (!studyTitle)   { showStatus('sendStatus','Please enter a study title.','error'); return; }
+  if (!studyDetails) { showStatus('sendStatus','Please enter a study description.','error'); return; }
+  if (!resName)      { showStatus('sendStatus','Please enter your name.','error'); return; }
+  if (!resEmail)     { showStatus('sendStatus','Please enter your contact email.','error'); return; }
+
+  const checked = Array.from(document.querySelectorAll('.row-check:checked'));
+  if (!checked.length) { showStatus('sendStatus','No participants selected.','error'); return; }
+
+  const toSend = checked.map(cb => matchedParticipants[parseInt(cb.dataset.idx, 10)]);
+
+  try {
+    window.emailjs.init({ publicKey: EMAILJS_PUBLIC_KEY });
+  } catch(e) {
+    showStatus('sendStatus','EmailJS initialisation failed. Check your public key in the script config.','error');
+    console.error('EmailJS init error:', e);
+    return;
+  }
+
+  const progressWrap  = document.getElementById('sendProgress');
+  const progressFill  = document.getElementById('progressFill');
+  const progressLabel = document.getElementById('progressLabel');
+  progressWrap.style.display = 'block';
+  document.getElementById('sendBtn').disabled = true;
+
+  let sent = 0, failed = 0;
+  const total = toSend.length;
+
+  function updateProgress() {
+    const pct = Math.round(((sent + failed) / total) * 100);
+    progressFill.style.width = pct + '%';
+    progressLabel.textContent = 'Sent ' + sent + ' of ' + total + (failed ? ' (' + failed + ' failed)' : '');
+  }
+  updateProgress();
+
+  for (const p of toSend) {
+    try {
+      await window.emailjs.send(EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, {
+        to_email:      p.email,
+        to_name:       p.firstName,
+        study_title:   studyTitle,
+        study_details: studyDetails,
+        researcher:    resName,
+        contact_email: resEmail,
+      });
+      sent++;
+    } catch(err) {
+      console.warn('Send failed for ' + p.email + ':', err);
+      failed++;
+    }
+    updateProgress();
+    if ((sent + failed) < total) await delay(EMAIL_DELAY_MS);
+  }
+
+  if (failed === 0) {
+    showStatus('sendStatus', 'All ' + sent + ' invitation' + (sent !== 1 ? 's' : '') + ' sent successfully.', 'success');
+  } else {
+    showStatus('sendStatus', sent + ' sent, ' + failed + ' failed. Check the browser console for details.', 'error');
+  }
+  document.getElementById('sendBtn').disabled = false;
+};
+
+// ============================================================
+// UTILITIES
+// ============================================================
+
+function showStatus(elId, msg, type) {
+  const el = document.getElementById(elId);
+  el.textContent  = msg;
+  el.className    = 'status-msg ' + (type || 'info');
+  el.style.display = 'block';
+}
+
+function delay(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+// ============================================================
+// INIT
+// ============================================================
+document.addEventListener('DOMContentLoaded', () => {
+  buildFilterGrid(ETHNICITY_OPTIONS,  'fEthnicityGrid');
+  buildFilterGrid(BMI_OPTIONS,        'fBmiGrid');
+  buildFilterGrid(SMOKING_OPTIONS,    'fSmokingGrid');
+  buildConditionsFilter();
+  buildFilterGrid(INJURY_AREAS,       'fInjuryGrid');
+  buildFilterGrid(MEDICATIONS,        'fMedicationsGrid');
+  buildFilterGrid(ACTIVITY_OPTIONS,   'fActivityGrid');
+  buildFilterGrid(SPORT_LEVEL_OPTIONS,'fSportLevelGrid');
+  buildFilterGrid(SPORTS,             'fSportsGrid');
+  buildFilterGrid(AVAILABILITY,       'fAvailabilityGrid');
+  buildFilterGrid(AFFILIATION_OPTIONS,'fAffiliationGrid');
+});
+
+</script>
+</body>
+</html>
