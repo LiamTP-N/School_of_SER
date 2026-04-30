@@ -237,7 +237,24 @@
     .module-block {
       background:var(--white); border:1px solid var(--border);
       margin-bottom:28px; scroll-margin-top:80px;
+      width:100%;       /* fill the right-hand grid column even when the table inside has no rows */
+      min-width:0;      /* allow shrinking inside a grid column without overflow */
     }
+    /* Empty module: give the empty table area a visible "no rows yet" zone
+       so the module doesn't visually collapse to header + add-row only. */
+    .table-wrap.is-empty {
+      min-height:80px;
+      display:flex; align-items:center; justify-content:center;
+      background:#fafafa;
+      color:var(--light);
+      font-size:12px;
+      font-style:italic;
+      border-bottom:1px dashed var(--border);
+    }
+    .table-wrap.is-empty::before {
+      content: 'No sessions yet - click "+ Add row" below to add the first one.';
+    }
+    .table-wrap.is-empty table { display:none; }
     .module-header {
       display:flex; align-items:center; padding:0;
       border-bottom:1px solid var(--border); background:var(--black);
@@ -966,8 +983,11 @@ function renderModule(code) {
   block.appendChild(hdr);
 
   // ── Table ──────────────────────────────────────────────────────────────────
+  // If the module has no sessions, mark the table-wrap as .is-empty so the
+  // CSS shows a friendly "no sessions yet" message instead of an empty/collapsed
+  // table. The "+ Add row" bar below remains and is the call-to-action.
   const tableWrap = document.createElement('div');
-  tableWrap.className = 'table-wrap';
+  tableWrap.className = 'table-wrap' + (mod.sessions.length === 0 ? ' is-empty' : '');
 
   const table = document.createElement('table');
   table.innerHTML =
@@ -1061,6 +1081,12 @@ function renderRow(code, sess, tbodyEl) {
     const mod = modules.get(code);
     if (mod) mod.sessions = mod.sessions.filter(s => s.id !== sess.id);
     tr.remove();
+    // If that was the last row, re-add the .is-empty class so the
+    // module shows the friendly "no sessions yet" placeholder again.
+    if (mod && mod.sessions.length === 0) {
+      const wrap = tbody.closest('.table-wrap');
+      if (wrap) wrap.classList.add('is-empty');
+    }
     updateSessionCount(code);
     renderSidebar();
   });
@@ -1095,6 +1121,11 @@ async function addRow(code) {
   try {
     await setDoc(doc(db, COL, newId), newSess);
     mod.sessions.push(newSess);
+    // First real row added -> drop the .is-empty styling on the table-wrap
+    // so it switches from "no sessions yet" placeholder to a real table.
+    const tbodyEl = document.getElementById('tbody-' + code);
+    const wrap = tbodyEl ? tbodyEl.closest('.table-wrap') : null;
+    if (wrap) wrap.classList.remove('is-empty');
     renderRow(code, newSess);
     updateSessionCount(code);
     renderSidebar();
