@@ -9,19 +9,28 @@
   ============================================================
   WHAT CHANGED IN THIS REVISION (2026-04-30):
   ============================================================
-  1. TOPIC NAVIGATION ROW (new, top of white area):
+  1. TOPIC NAVIGATION ROW (top of white area):
      - Inline button row links to per-topic pages:
        teaching.html, research.html, ethics.html,
        risk-assessment.html, workflows.html, lab-equipment.html,
-       inductions.html, peps.html, timetabling.html, siso.html
+       inductions.html
+     - PEPs content covered under teaching.html
+     - Timetabling content covered under teaching.html and
+       the Semester 1 / Semester 2 pages
+     - SiSo Bookings content covered under lab-equipment.html
      - Each topic has its own URL (shareable, bookmarkable,
        back-button friendly).
      - Topic page contents are stored in Firestore and shared
        across all pages (edit on one = visible on the other).
-     - To add a new topic: edit generate_topic_pages.py, re-run
-       it, AND add the matching button below.
+     - To add a new topic: create a new .html file from an
+       existing topic page, add the matching button below,
+       and add the entry to DEFAULT_TOPICS in the script.
 
-  2. USEFUL LINKS NOW FULLY EDITABLE:
+  2. PARTICIPANT BANK BUTTON:
+     - Links to participant-register.html (public registration)
+       in a new tab.
+
+  3. USEFUL LINKS NOW FULLY EDITABLE:
      - Hardcoded HARDCODED_LINKS array is now a SEED ONLY
        (used to populate Firestore on first load if empty).
      - All links are now stored in Firestore -> all links
@@ -72,8 +81,9 @@
   1. Sticky header - NU branding + nav links
   2. Page band - department title/strapline
   3. Two-column main layout:
-     LEFT (75%) - Workflow map banner + custom calendar widget
-                  + colour-coded legend
+     LEFT (75%) - Topic nav + Workflow map banner +
+                  Participant Bank banner + custom calendar
+                  widget + colour-coded legend
      RIGHT (25%) - A-Z useful links sidebar
   4. Footer
 
@@ -130,8 +140,6 @@
 
     /* ============================================================
        HEADER
-       Matches Northumbria University website: solid black bar,
-       white logo image, white nav links.
        ============================================================ */
     header {
       background: #000000;
@@ -194,8 +202,6 @@
 
     /* ============================================================
        PAGE BAND
-       Black background with white uppercase title, matching NU
-       hero banner style from northumbria.ac.uk.
        ============================================================ */
     .page-band {
       background: #000000;
@@ -241,7 +247,7 @@
     }
 
     /* ============================================================
-       WORKFLOW MAP BANNER
+       ACTION BANNERS
        ============================================================ */
     .primary-action {
       border: 2px solid var(--black);
@@ -284,24 +290,12 @@
     .btn-primary:hover { background: var(--dark); }
 
     /* ============================================================
-       CUSTOM CALENDAR WIDGET
-       Replaces the Google embed iframe. Renders events fetched
-       from the Calendar API into a week-view grid.
-       ============================================================ */
-    /* ============================================================
        CUSTOM CALENDAR WIDGET - DARK MODE
-       Dark background with alternating day column shades so
-       staff can distinguish days at a glance. Odd columns
-       (Mon, Wed, Fri) are slightly lighter than even (Tue, Thu).
-       Hour lines and half-hour lines are subtle so event colours
-       stand out. Toolbar and headers match the dark aesthetic.
        ============================================================ */
-
-    /* Dark mode CSS variables scoped to the calendar widget */
     .cal-widget {
-      --cal-bg:         #1e1e1e; /* main background */
-      --cal-bg-odd:     #242424; /* Mon, Wed, Fri column fill */
-      --cal-bg-even:    #1a1a1a; /* Tue, Thu column fill - slightly darker */
+      --cal-bg:         #1e1e1e;
+      --cal-bg-odd:     #242424;
+      --cal-bg-even:    #1a1a1a;
       --cal-toolbar-bg: #161616;
       --cal-header-bg:  #161616;
       --cal-border:     #333333;
@@ -310,14 +304,13 @@
       --cal-text-dim:   #666666;
       --cal-btn-bg:     #2a2a2a;
       --cal-btn-hover:  #333333;
-      --cal-today-bg:   #2d2d1a; /* subtle yellow tint for today column */
+      --cal-today-bg:   #2d2d1a;
       --cal-today-head: #ffdd44;
       border: 1px solid #333333;
       margin-bottom: 20px;
       background: var(--cal-bg);
     }
 
-    /* Toolbar */
     .cal-toolbar {
       display: flex;
       align-items: center;
@@ -339,7 +332,6 @@
       transition: background 0.1s;
     }
     .cal-toolbar button:hover { background: var(--cal-btn-hover); }
-    /* Active state for 1/3/5-day view toggle buttons */
     .cal-toolbar button.cal-view-active {
       background: #ffdd44;
       color: #111111;
@@ -360,18 +352,14 @@
       margin-left: auto;
     }
 
-    /* Day header row */
     .cal-header {
       display: grid;
-      /* Time gutter (48px) + 5 day columns (Mon-Fri, weekends excluded) */
       grid-template-columns: 48px repeat(5, 1fr);
       border-bottom: 1px solid var(--cal-border);
       background: var(--cal-header-bg);
     }
 
-    .cal-header-gutter {
-      border-right: 1px solid var(--cal-border);
-    }
+    .cal-header-gutter { border-right: 1px solid var(--cal-border); }
 
     .cal-day-head {
       padding: 8px 4px;
@@ -384,7 +372,6 @@
       letter-spacing: 0.05em;
     }
 
-    /* Today column header - subtle yellow highlight */
     .cal-day-head.today {
       color: var(--cal-today-head);
       background: #252510;
@@ -400,7 +387,6 @@
       margin-top: 2px;
     }
 
-    /* Today date number - yellow circle */
     .cal-day-head.today .cal-day-num {
       background: #ffdd44;
       color: #111111;
@@ -413,7 +399,6 @@
       margin-top: 4px;
     }
 
-    /* Scrollable time grid */
     .cal-body-scroll {
       overflow-y: auto;
       max-height: 580px;
@@ -422,11 +407,9 @@
     .cal-body {
       display: grid;
       grid-template-columns: 48px repeat(5, 1fr);
-      /* 24 hours * 48px per hour = 1152px total height */
       position: relative;
     }
 
-    /* Time gutter - dark, right-aligned hour labels */
     .cal-time-col {
       grid-column: 1;
       grid-row: 1 / span 24;
@@ -446,52 +429,37 @@
       border-bottom: 1px solid var(--cal-border);
     }
 
-    /* Day columns - alternating shades for easy day identification.
-       odd-col = Mon(1), Wed(3), Fri(5) - slightly lighter
-       even-col = Tue(2), Thu(4) - slightly darker
-       today-col = overrides with a subtle yellow tint */
     .cal-day-col {
       position: relative;
       border-right: 1px solid var(--cal-border);
-      background: var(--cal-bg-odd); /* default = odd shade */
+      background: var(--cal-bg-odd);
     }
 
-    .cal-day-col.even-col {
-      background: var(--cal-bg-even);
-    }
-
-    .cal-day-col.today-col {
-      background: #222215; /* very subtle yellow tint */
-    }
+    .cal-day-col.even-col { background: var(--cal-bg-even); }
+    .cal-day-col.today-col { background: #222215; }
 
     .cal-day-col-inner {
       position: relative;
-      height: 1152px; /* 24 * 48px */
+      height: 1152px;
     }
 
-    /* Hour lines - visible but subtle against dark background */
     .cal-hour-line {
       position: absolute;
-      left: 0;
-      right: 0;
+      left: 0; right: 0;
       height: 1px;
       background: var(--cal-border);
     }
 
-    /* Half-hour lines - barely visible */
     .cal-half-line {
       position: absolute;
-      left: 0;
-      right: 0;
+      left: 0; right: 0;
       height: 1px;
       background: var(--cal-border-half);
     }
 
-    /* Individual event block */
     .cal-event {
       position: absolute;
-      left: 2px;
-      right: 2px;
+      left: 2px; right: 2px;
       border-radius: 3px;
       padding: 2px 4px;
       font-size: 11px;
@@ -510,7 +478,6 @@
       filter: brightness(1.1);
     }
 
-    /* Error / empty state message */
     .cal-message {
       padding: 40px;
       text-align: center;
@@ -522,9 +489,7 @@
     /* ============================================================
        CALENDAR LEGEND
        ============================================================ */
-    .legend {
-      margin-bottom: 32px;
-    }
+    .legend { margin-bottom: 32px; }
 
     .legend-groups {
       display: grid;
@@ -564,17 +529,9 @@
 
     /* ============================================================
        A-Z LINKS SIDEBAR
-       Sidebar is sticky so it stays visible while scrolling.
-       lp-header: flex row with heading left, + Add button right.
-       lp-form: hidden by default, shown when adding/editing.
-       li.hardcoded: no edit button (hardcoded links can't be deleted).
        ============================================================ */
-    .sidebar {
-      position: sticky;
-      top: 72px;
-    }
+    .sidebar { position: sticky; top: 72px; }
 
-    /* Header row: section label + Add button */
     .lp-header {
       display: flex;
       align-items: center;
@@ -598,7 +555,6 @@
     .lp-add:hover { border-color: var(--black); color: var(--black); background: transparent; }
 
     .links-list { list-style: none; margin-bottom: 8px; }
-
     .links-list li { border-top: 1px solid var(--border); display: flex; align-items: center; }
     .links-list li:last-child { border-bottom: 1px solid var(--border); }
 
@@ -618,9 +574,6 @@
     }
     .links-list a:hover { color: var(--mid); }
 
-
-
-    /* Edit button on each dynamic link */
     .li-edit {
       font-size: 10px;
       padding: 1px 6px;
@@ -637,7 +590,6 @@
 
     .lp-empty { font-size: 12px; color: var(--light); }
 
-    /* Inline add/edit form */
     .lp-form {
       display: none;
       flex-direction: column;
@@ -662,7 +614,6 @@
     .lp-form input:focus { border-color: var(--black); outline: none; }
 
     .lp-btns { display: flex; gap: 6px; }
-
     .lp-btns button {
       flex: 1;
       padding: 5px;
@@ -680,11 +631,7 @@
     .lp-btns .lp-ddel:hover { background: #fff0f0; }
 
     /* ============================================================
-       TOPIC NAVIGATION (NEW 2026-04-30)
-       ------------------------------------------------------------
-       Buttons sit at the top of the white area, above the
-       workflow banner. Each one is a link to a dedicated topic
-       page (teaching.html, research.html, etc.).
+       TOPIC NAVIGATION
        ============================================================ */
     .topic-tabs {
       display: flex;
@@ -722,7 +669,7 @@
     }
 
     /* ============================================================
-       LINKS - DELETE BUTTON (NEW 2026-04-30)
+       LINKS - DELETE BUTTON
        ============================================================ */
     .li-del {
       font-size: 10px;
@@ -736,15 +683,10 @@
       margin-left: 4px;
       font-family: inherit;
     }
-    .li-del:hover {
-      border-color: #c0392b;
-      color: #c0392b;
-    }
+    .li-del:hover { border-color: #c0392b; color: #c0392b; }
 
     /* ============================================================
        FOOTER
-       Black background matching NU website footer style.
-       White text and links on black.
        ============================================================ */
     footer {
       background: #000000;
@@ -762,27 +704,12 @@
       flex-wrap: wrap;
     }
 
-    .footer-left {
-      display: flex;
-      flex-direction: column;
-      gap: 4px;
-    }
-
+    .footer-left { display: flex; flex-direction: column; gap: 4px; }
     .footer-left strong { font-size: 13px; font-weight: 800; color: #ffffff; }
     .footer-left span   { font-size: 12px; color: #aaaaaa; }
 
-    .footer-links {
-      display: flex;
-      gap: 24px;
-      flex-wrap: wrap;
-      align-items: flex-start;
-    }
-
-    .footer-links a {
-      font-size: 12px;
-      color: #aaaaaa;
-      text-decoration: none;
-    }
+    .footer-links { display: flex; gap: 24px; flex-wrap: wrap; align-items: flex-start; }
+    .footer-links a { font-size: 12px; color: #aaaaaa; text-decoration: none; }
     .footer-links a:hover { color: #ffffff; }
 
     /* ============================================================
@@ -834,12 +761,13 @@
   <div class="left-col">
 
     <!-- ============================================================
-         TOPIC NAVIGATION (NEW 2026-04-30)
+         TOPIC NAVIGATION
          ------------------------------------------------------------
-         Each button links to a dedicated topic page. Topic pages
-         share the same Firestore-backed editable content. To add
-         or remove a topic: edit generate_topic_pages.py, re-run it,
-         AND update this list to match.
+         7 topic pages. PEPs and timetabling content is covered
+         under teaching.html. SiSo booking content is covered under
+         lab-equipment.html. To add a topic: create a new .html file
+         from an existing topic page, add an entry to DEFAULT_TOPICS
+         in that file's script block, AND add the button below.
          ============================================================ -->
     <nav class="topic-tabs" aria-label="Topic navigation">
       <a class="topic-btn" href="teaching.html">Teaching</a>
@@ -849,9 +777,7 @@
       <a class="topic-btn" href="workflows.html">Workflows</a>
       <a class="topic-btn" href="lab-equipment.html">Lab &amp; Equipment</a>
       <a class="topic-btn" href="inductions.html">Inductions &amp; Training</a>
-      <a class="topic-btn" href="peps.html">PEPs</a>
-      <a class="topic-btn" href="timetabling.html">Timetabling</a>
-      <a class="topic-btn" href="siso.html">SiSo Bookings</a>
+      <a class="topic-btn" href="participant-register.html" target="_blank">Participant Bank</a>
     </nav>
 
     <!-- Workflow map banner -->
@@ -864,7 +790,7 @@
       <a href="workflow.html" class="btn-primary">Open Workflow Map</a>
     </div>
 
-    <!-- Teaching Alignment banners - side by side, compact, below the workflow map banner -->
+    <!-- Teaching Alignment banners -->
     <div style="display:flex;gap:12px;margin-top:12px;flex-wrap:wrap;">
       <div class="primary-action" style="flex:1;min-width:220px;margin-bottom:0;background:#f0faf4;">
         <div class="primary-action-text">
@@ -884,8 +810,7 @@
 
     <!-- ============================================================
          CUSTOM CALENDAR WIDGET
-         The widget is built entirely by the JavaScript below.
-         This div is the mount point - JS populates it on load.
+         Mount point - JS populates on load.
          ============================================================ -->
     <p class="section-heading">Lab &amp; Room Bookings</p>
     <div id="cal-widget" class="cal-widget">
@@ -894,8 +819,6 @@
 
     <!-- ============================================================
          CALENDAR LEGEND
-         Colours sourced from Google Apps Script output 2026-04-29.
-         White calendars shown as #e8e8e8 for visibility.
          ============================================================ -->
     <div class="legend">
       <div class="legend-groups">
@@ -951,14 +874,6 @@
 
   <!-- ============================================================
        RIGHT COLUMN - A-Z USEFUL LINKS SIDEBAR
-       Links are stored in Firebase Firestore (same project as the
-       workflow map). On load, hardcoded links are merged with any
-       links saved in Firestore, then sorted alphabetically.
-       The + Add button opens an inline form to add a new link.
-       Edit buttons allow renaming/deleting existing Firestore links.
-       Hardcoded links cannot be deleted from the UI (they are
-       always re-merged on load) - to remove one, edit the
-       HARDCODED_LINKS array in the links JS section below.
        ============================================================ -->
   <aside class="sidebar">
     <div class="lp-header">
@@ -966,7 +881,6 @@
       <button class="lp-add" onclick="showLinkForm(null)">+ Add</button>
     </div>
     <div id="linksList"><span class="lp-empty">Loading...</span></div>
-    <!-- Inline add/edit form - hidden by default -->
     <div class="lp-form" id="lpForm">
       <input id="lpName" placeholder="Name (e.g. Timetabling)">
       <input id="lpUrl"  placeholder="https://...">
@@ -1022,13 +936,10 @@
      - Week grid: 7 columns (Mon-Sun), 24-hour time axis
      - Each hour = 48px. Event top/height calculated from time.
      - Events are absolutely positioned within their day column.
-     - Overlapping events in same calendar are not de-collided
-       (rare for room bookings; can be added if needed).
 
      CALENDAR CONFIG:
      - CALENDARS array: one entry per calendar
      - Each entry has: id, color, name
-     - color is the hex from Google Apps Script output
      - White (#FFFFFF) calendars use #888888 for visibility
 
      TO DEBUG:
@@ -1039,25 +950,10 @@
 <script>
 (function() {
 
-  // ----------------------------------------------------------
-  // SERVICE ACCOUNT CREDENTIALS
-  // Replace PRIVATE_KEY_ID and PRIVATE_KEY if the key is
-  // ever revoked and a new one is created in Google Cloud.
-  // The PRIVATE_KEY must remain in PEM format with \n newlines.
-  // ----------------------------------------------------------
   var SA_EMAIL    = 'siso-gc@sisogc-213914.iam.gserviceaccount.com';
   var KEY_ID      = 'f2056198f628eea47f1b63d83adaf9188669c0ed';
   var PRIVATE_KEY = '-----BEGIN PRIVATE KEY-----\nMIIEvgIBADANBgkqhkiG9w0BAQEFAASCBKgwggSkAgEAAoIBAQC4kyzUGygpsoPy\nvb9IYGgU5QcaQ8LW1i6yqd9nbBNBGGAacAmeuqtP/1DrIAlS0tHoPy7cjFTPuKGy\nUp2oM9lMMhTQsRl2GCxUE8FV4e/0R1byx4cWldVnH6jiynWmPnh5JGPVtox7zTxq\noPVyL56zKWycIUVKp/ANOTH7a8h8rUfoXV5RM739KaF5AemRcZmFryEJU8buOK+T\neCRaHY+FMY9SrQeb6XDfcjs6dOyVL4rWZE2LaNRTLJpW/4WRSEgweMx1Jm4SvRQd\nWVoermqHmkVqDMJFRh5gjADkh6Q8oIvjN/vsd9kOlZtElovkbfPVcTDSUVvcRyLV\n168Ro6mFAgMBAAECggEAGY0iQRCrXC5ezs1OvCXActgLxiqIP/Zxi4ExsJ8JAVNv\nBmnpIwSjb5UgLhSGxeTycwzAH377xK/CDq4aLi1TURWDxSonJK6PAGqlso5vCemQ\nU1ak0E8YtkhvOEofxE5UniyX939obkEIspgqsk5+UT4UT37ZmU6rUCFRVoViwUN9\nT7oydIV2CcjWNaKA3azVjrn36zPBA2AP0PIS/WI/h9AbBBj38DaLVgId+eGpuls8\nMdfoUZTKqRofZUF6lErztr3VX8BpvAyQXa/fC6ODS+IUmh74g0SQHNztYZIgM1nT\nvJL5KpVdaOQjJxdskS0yBrieF/0j1vJNwqpJD/j6dwKBgQDszCGH5SUp+CPKWV3z\nQ6cHBwcIvRGuKZngIRwbeDvbAdTwHeNnEkgs2aRC2wDU+zNRzUlclw8aNoReD/x4\nPOsudzKffdPO0wsBx7R+3y7IC4ljblvxgMHJChRgFLyk9V11MJAma3nb5U4OYuis\nItItO70wohXAJmZUhmB7HAu5BwKBgQDHiupMjAeCFKicbsiWhAh5XZ0WDMAqM91D\nebL1nHmSe0YUy59tZy1kAVyYHDGqfDs3U4LNz3QWzuk0mxMHEmCDuuUwqP97DBsy\nbKmXIa9+KHKrbwpRBZyafGdz7rDGmtrEdjkBID+xVaZNX1eRRHjhK1BJXdbZhIW3\nExDITb4iEwKBgQDqCl/htsNildSZ/HX1J5qAQZvcMTK2Vnu1oEPtiopuTYMux/uo\nNdOMMJg/U8Ggv57bbPDjSJIusE9nwJkiJeO0iy9Hn8+mjcRFQCLPerr8ERr7YWoS\nadYeY4374MMKr1BtsU/oCTXp9tuNMIkTCV9+QZsd5DVnMwzU4fOd+fxEJQKBgFrq\nbD5cPr+B8iD0SOhrWAEUKhJ11MhlwRaRSHynwqx/BjtLW2RZclDyXeHgVrC60bAv\nmJV1RAtwUsjpLw41zUu3x90X4u+JYIrk/5AghPkSLMz3Vtf7mpK4w9oKkviqbaq9\nwtNEgkCmKZNvMVK6w+iz92y2GMIao2H6idb5tPuJAoGBANGVtmpTzM9pfnORt+6g\nlzOgMrmftvfq5gGTgcrVVfu2UbQ1+6Aog+9oms3qjivnk8IqGUpFATQqMWEP22qI\nGa0oFJXlBRset1CtxxvA70cpO2U9ZAe1vcxTNBkH8ekLGObKTQl4qHWFwlPkRukL\ncqVvoxrJDTBqbPjTof3VxP53\n-----END PRIVATE KEY-----\n';
 
-  // ----------------------------------------------------------
-  // CALENDAR CONFIGURATION
-  // Each entry: id = full calendar ID, color = hex from Apps
-  // Script output, name = display name for tooltip context.
-  // White calendars (#FFFFFF) use a grey fallback so events
-  // are visible on the white grid background.
-  // To add a calendar: add an entry here AND share the calendar
-  // with the service account email above.
-  // ----------------------------------------------------------
   var CALENDARS = [
     { id: 'h804sfk2b7dip0e1qgm390unkk@group.calendar.google.com', color: '#FF0000', name: 'SPF109: Sprint Track' },
     { id: '96go5s17lsafcminkben04ie0s@group.calendar.google.com', color: '#CD74E6', name: 'SPF110: Integrated Performance Lab' },
@@ -1092,18 +988,8 @@
     { id: 'c1bc9b923256db1b7f5fd51ec12b715eed364c1ff368bc096f06481ee32bc284@group.calendar.google.com', color: '#F83A22', name: 'Centrifuge: Wet Lab Bookings' }
   ];
 
-  // ----------------------------------------------------------
-  // TOKEN CACHE
-  // Stores the OAuth2 bearer token and its expiry time.
-  // Avoids re-authenticating on every week navigation.
-  // Tokens are valid for 60 min; we refresh at 55 min to be safe.
-  // ----------------------------------------------------------
   var tokenCache = { token: null, expiry: 0 };
 
-  // ----------------------------------------------------------
-  // BASE64URL HELPERS
-  // Web Crypto requires base64url encoding (no +, /, = chars).
-  // ----------------------------------------------------------
   function base64url(str) {
     return btoa(str).replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
   }
@@ -1115,11 +1001,6 @@
     return base64url(str);
   }
 
-  // ----------------------------------------------------------
-  // PEM -> CryptoKey
-  // Strips the PEM header/footer and newlines, decodes the
-  // base64 DER bytes, and imports as an RSA-SHA256 signing key.
-  // ----------------------------------------------------------
   function importPrivateKey(pem) {
     var b64 = pem
       .replace('-----BEGIN PRIVATE KEY-----', '')
@@ -1136,11 +1017,6 @@
     );
   }
 
-  // ----------------------------------------------------------
-  // BUILD AND SIGN JWT
-  // Constructs a service account JWT per Google's spec:
-  // https://developers.google.com/identity/protocols/oauth2/service-account
-  // ----------------------------------------------------------
   function buildJWT(cryptoKey) {
     var now = Math.floor(Date.now() / 1000);
     var header = base64url(JSON.stringify({ alg: 'RS256', typ: 'JWT', kid: KEY_ID }));
@@ -1162,11 +1038,6 @@
     });
   }
 
-  // ----------------------------------------------------------
-  // GET OAUTH2 TOKEN
-  // Exchanges the signed JWT for a bearer token.
-  // Result is cached for 55 minutes.
-  // ----------------------------------------------------------
   function getToken() {
     if (tokenCache.token && Date.now() < tokenCache.expiry) {
       return Promise.resolve(tokenCache.token);
@@ -1189,13 +1060,6 @@
       });
   }
 
-  // ----------------------------------------------------------
-  // FETCH EVENTS FOR ONE CALENDAR
-  // Calls events.list for the given calendar and date range.
-  // Returns array of event objects with: title, start, end,
-  // color, calName.
-  // All-day events are included but rendered as full-day bars.
-  // ----------------------------------------------------------
   function fetchCalendarEvents(token, calId, color, calName, timeMin, timeMax) {
     var url = 'https://www.googleapis.com/calendar/v3/calendars/'
       + encodeURIComponent(calId)
@@ -1231,18 +1095,8 @@
     });
   }
 
-  // ----------------------------------------------------------
-  // VIEW STATE
-  // currentDayCount: how many columns to show (1, 3, or 5).
-  // Default is 1 (today only). Staff can switch via toolbar buttons.
-  //
-  // currentViewStart: Date of the leftmost visible column (midnight).
-  // 1-day:  starts on today (or navigated day)
-  // 3-day:  starts on today (steps forward/back by 3)
-  // 5-day:  always snaps to the Monday of the current week
-  // ----------------------------------------------------------
   function getMondayOf(d) {
-    var day = d.getDay(); // 0=Sun, 1=Mon ... 6=Sat
+    var day = d.getDay();
     var diff = (day === 0) ? -6 : 1 - day;
     var mon = new Date(d);
     mon.setDate(d.getDate() + diff);
@@ -1250,8 +1104,6 @@
     return mon;
   }
 
-  // Returns the appropriate view start date for n-day mode.
-  // 5-day snaps to Monday; 1 and 3-day use d itself.
   function getViewStart(d, n) {
     var base = new Date(d);
     base.setHours(0, 0, 0, 0);
@@ -1262,19 +1114,10 @@
   var currentDayCount  = 1;
   var currentViewStart = getViewStart(new Date(), currentDayCount);
 
-  // ----------------------------------------------------------
-  // RENDER WIDGET
-  // Builds the day/3-day/5-day grid, fetches events, positions them.
-  // Called on load and on every navigation or view-mode change.
-  //
-  // viewStart: Date of leftmost column (midnight local time)
-  // dayCount:  1, 3, or 5
-  // ----------------------------------------------------------
   function renderWidget(viewStart, dayCount) {
     var widget = document.getElementById('cal-widget');
     if (!widget) return;
 
-    // Build array of Date objects for each visible column
     var days = [];
     for (var i = 0; i < dayCount; i++) {
       var d = new Date(viewStart);
@@ -1285,8 +1128,6 @@
     var today = new Date();
     today.setHours(0, 0, 0, 0);
 
-    // Format range label
-    // 1-day: "Wed 29 Apr 2026"  |  3/5-day: "28 Apr - 2 May 2026"
     var months   = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
     var dayNames = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
     var rangeLabel;
@@ -1295,11 +1136,10 @@
         + days[0].getDate() + ' ' + months[days[0].getMonth()] + ' ' + days[0].getFullYear();
     } else {
       rangeLabel = days[0].getDate() + ' ' + months[days[0].getMonth()]
-        + ' – '
+        + ' \u2013 '
         + days[dayCount-1].getDate() + ' ' + months[days[dayCount-1].getMonth()] + ' ' + days[dayCount-1].getFullYear();
     }
 
-    // Toolbar: Today | < | > | range label | loading | [1][3][5] toggle
     var toolbarHTML = '<div class="cal-toolbar">'
       + '<button id="cal-today-btn">Today</button>'
       + '<button id="cal-prev-btn">&#8249;</button>'
@@ -1313,7 +1153,6 @@
       + '</span>'
       + '</div>';
 
-    // Day header row - inline grid-template-columns overrides the CSS default
     var headerHTML = '<div class="cal-header" style="grid-template-columns:48px repeat(' + dayCount + ',1fr);">'
       + '<div class="cal-header-gutter"></div>';
     days.forEach(function(d) {
@@ -1325,7 +1164,6 @@
     });
     headerHTML += '</div>';
 
-    // Time gutter (24 hour labels, same for all view sizes)
     var timeGutterHTML = '<div class="cal-time-col">';
     for (var h = 0; h < 24; h++) {
       var label = h === 0 ? '' : (h < 10 ? '0' + h : h) + ':00';
@@ -1333,7 +1171,6 @@
     }
     timeGutterHTML += '</div>';
 
-    // Day columns - alternating shade by column index (not weekday)
     var dayColsHTML = '';
     days.forEach(function(d, idx) {
       var isToday = d.getTime() === today.getTime();
@@ -1356,13 +1193,10 @@
 
     widget.innerHTML = toolbarHTML + headerHTML + bodyHTML;
 
-    // ── Toolbar navigation ────────────────────────────────────────────────
-    // Today: jump back to today (snap to Monday if 5-day)
     document.getElementById('cal-today-btn').addEventListener('click', function() {
       currentViewStart = getViewStart(new Date(), currentDayCount);
       renderWidget(currentViewStart, currentDayCount);
     });
-    // Prev/Next: step by dayCount days
     document.getElementById('cal-prev-btn').addEventListener('click', function() {
       currentViewStart.setDate(currentViewStart.getDate() - currentDayCount);
       renderWidget(currentViewStart, currentDayCount);
@@ -1372,8 +1206,6 @@
       renderWidget(currentViewStart, currentDayCount);
     });
 
-    // ── View toggle buttons (1 / 3 / 5 day) ──────────────────────────────
-    // Keeps current leftmost day as anchor; 5-day snaps to its Monday
     [1, 3, 5].forEach(function(n) {
       var btn = document.getElementById('cal-view-' + n);
       if (!btn) return;
@@ -1384,13 +1216,11 @@
       });
     });
 
-    // ── ISO8601 range for Google Calendar API ─────────────────────────────
     var timeMin = days[0].toISOString().replace('.000Z', 'Z');
     var lastDay = new Date(days[dayCount - 1]);
     lastDay.setDate(lastDay.getDate() + 1);
     var timeMax = lastDay.toISOString().replace('.000Z', 'Z');
 
-    // Fetch all calendars in parallel then render events
     getToken().then(function(token) {
       var fetches = CALENDARS.map(function(cal) {
         return fetchCalendarEvents(token, cal.id, cal.color, cal.name, timeMin, timeMax);
@@ -1401,28 +1231,8 @@
       var loadingEl = document.getElementById('cal-loading');
       if (loadingEl) loadingEl.textContent = '';
 
-      // Flatten all events from all calendars
       var allEvents = [];
       results.forEach(function(evs) { allEvents = allEvents.concat(evs); });
-
-      // ----------------------------------------------------------
-      // COLLISION DETECTION AND SIDE-BY-SIDE LAYOUT
-      //
-      // Google Calendar renders overlapping events side by side.
-      // We replicate this by:
-      // 1. Grouping events by day column
-      // 2. For each day, sorting events by start time
-      // 3. Building "clash groups" - sets of events that overlap
-      //    with at least one other event in the group
-      // 4. Within each clash group, assigning each event a
-      //    column slot (0, 1, 2...) so they sit side by side
-      // 5. Each event gets left% and width% calculated from its
-      //    slot index and total slots in the group
-      //
-      // Two events overlap if one starts before the other ends.
-      // All-day events are excluded from collision logic (they
-      // sit at the very top as full-height background strips).
-      // ----------------------------------------------------------
 
       function fmtTime(iso) {
         var d = new Date(iso);
@@ -1430,7 +1240,6 @@
              + (d.getMinutes() < 10 ? '0' : '') + d.getMinutes();
       }
 
-      // Step 1: bucket events by day column index
       var byCol = {};
       allEvents.forEach(function(ev) {
         var evDate = new Date(ev.start);
@@ -1441,7 +1250,6 @@
         });
         if (colIdx === -1) return;
         if (!byCol[colIdx]) byCol[colIdx] = [];
-        // Pre-calculate minutes for collision math
         var startDate = new Date(ev.start);
         var endDate   = new Date(ev.end);
         var startMins = ev.allDay ? 0    : startDate.getHours() * 60 + startDate.getMinutes();
@@ -1450,45 +1258,32 @@
         byCol[colIdx].push({ ev: ev, startMins: startMins, endMins: endMins, colIdx: colIdx });
       });
 
-      // Step 2: for each day column, assign slots within clash groups
       Object.keys(byCol).forEach(function(colIdx) {
         var items = byCol[colIdx];
-        // Sort by start time, then by end time descending (longer events first)
         items.sort(function(a, b) {
           return a.startMins - b.startMins || b.endMins - a.endMins;
         });
 
-        // Build clash groups using a sweep-line approach:
-        // maintain a list of "active" groups; an item joins a group
-        // if it overlaps with any item already in that group.
-        // slotAssignments: array of {item, slot, totalSlots (filled later)}
         var slotAssignments = [];
-        // Each group tracks: end times per slot so we know which slot is free
-        var groups = []; // each group = array of slot end-times
+        var groups = [];
 
         items.forEach(function(item) {
           if (item.ev.allDay) {
-            // All-day events get full width, no collision logic
             slotAssignments.push({ item: item, slot: 0, totalSlots: 1 });
             return;
           }
 
-          // Find a group where this item overlaps at least one existing item
           var placed = false;
           for (var g = 0; g < groups.length; g++) {
             var group = groups[g];
-            // Check if item overlaps with ANY item in this group
             var overlapsGroup = slotAssignments.some(function(sa) {
               return sa.groupIdx === g &&
                      item.startMins < sa.item.endMins &&
                      item.endMins   > sa.item.startMins;
             });
             if (overlapsGroup) {
-              // Find the first free slot in this group
               var slot = 0;
-              while (group[slot] !== undefined && group[slot] > item.startMins) {
-                slot++;
-              }
+              while (group[slot] !== undefined && group[slot] > item.startMins) { slot++; }
               group[slot] = item.endMins;
               slotAssignments.push({ item: item, slot: slot, groupIdx: g, totalSlots: 0 });
               placed = true;
@@ -1496,7 +1291,6 @@
             }
           }
           if (!placed) {
-            // Start a new group
             var newGroup = [];
             newGroup[0] = item.endMins;
             groups.push(newGroup);
@@ -1504,21 +1298,17 @@
           }
         });
 
-        // Calculate totalSlots for each group (max slot + 1)
         var groupMaxSlot = {};
         slotAssignments.forEach(function(sa) {
           if (sa.item.ev.allDay) return;
           var g = sa.groupIdx;
-          if (groupMaxSlot[g] === undefined || sa.slot > groupMaxSlot[g]) {
-            groupMaxSlot[g] = sa.slot;
-          }
+          if (groupMaxSlot[g] === undefined || sa.slot > groupMaxSlot[g]) groupMaxSlot[g] = sa.slot;
         });
         slotAssignments.forEach(function(sa) {
           if (sa.item.ev.allDay) return;
           sa.totalSlots = (groupMaxSlot[sa.groupIdx] || 0) + 1;
         });
 
-        // Step 3: render each event with its calculated position
         var col = document.getElementById('cal-col-' + colIdx);
         if (!col) return;
         var inner = col.querySelector('.cal-day-col-inner');
@@ -1530,16 +1320,10 @@
           var topPx    = item.startMins * 0.8;
           var heightPx = Math.max((item.endMins - item.startMins) * 0.8, 18);
 
-          // Side-by-side positioning: divide column width equally among slots.
-          // Small gap (1px) between events for visual separation.
-          // All-day events use full width.
-          var pct       = 100 / sa.totalSlots;
-          var leftPct   = sa.slot * pct;
-          var widthPct  = pct;
-          // Add a tiny right-margin gap except for the last slot
-          var rightGap  = sa.slot < sa.totalSlots - 1 ? 1 : 0;
-
-          var timeStr = ev.allDay ? 'All day' : fmtTime(ev.start) + ' - ' + fmtTime(ev.end);
+          var pct      = 100 / sa.totalSlots;
+          var leftPct  = sa.slot * pct;
+          var widthPct = pct;
+          var rightGap = sa.slot < sa.totalSlots - 1 ? 1 : 0;
 
           var el = document.createElement('div');
           el.className = 'cal-event';
@@ -1548,17 +1332,13 @@
           el.style.background = ev.color;
           el.style.left       = leftPct + '%';
           el.style.width      = 'calc(' + widthPct + '% - ' + rightGap + 'px)';
-          // Override the default left/right absolute positioning
           el.style.right      = 'auto';
-          el.textContent      = ev.calName; // Show room name not booker name
-
-
+          el.textContent      = ev.calName;
 
           inner.appendChild(el);
         });
       });
 
-      // Scroll to 07:00 on load (7 * 48 = 336px)
       var scroll = document.querySelector('.cal-body-scroll');
       if (scroll) scroll.scrollTop = 336;
     })
@@ -1569,20 +1349,19 @@
     });
   }
 
-  // Initial render on page load - defaults to 1-day view showing today
   renderWidget(currentViewStart, currentDayCount);
 
 })();
 </script>
 
 <!-- ============================================================
-     LINKS SIDEBAR JAVASCRIPT  (REWRITTEN 2026-04-30)
+     LINKS SIDEBAR JAVASCRIPT
      ============================================================
      FOR AI/LLM READERS:
-     HARDCODED_LINKS is now a one-time SEED. On first ever load
-     (empty 'links' collection) all entries are written into
-     Firestore. After that, every link is a Firestore doc and
-     so every list item has BOTH an edit and a delete button.
+     HARDCODED_LINKS is a one-time seed. On first load (empty
+     'links' Firestore collection) all entries are written to
+     Firestore. After that every link is a Firestore doc with
+     both edit and delete buttons.
      ============================================================ -->
 <script type="module">
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.0/firebase-app.js';
@@ -1601,15 +1380,19 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig, 'links-app');
 const db  = getFirestore(app);
 
-// One-time seed - writes to Firestore on first load only.
+// One-time seed - written to Firestore only if the collection is empty on first load.
+// To permanently remove a link, delete it via the UI (x button).
+// To add a permanent default, add it here AND delete/re-seed Firestore.
 const HARDCODED_LINKS = [
   { name: 'Library',                 url: 'https://library.northumbria.ac.uk/' },
   { name: 'MyNorthumbria',           url: 'https://mynorthumbria.northumbria.ac.uk/' },
   { name: 'MyTimetable',             url: 'https://mytimetable.northumbria.ac.uk/' },
   { name: 'Northumbria University',  url: 'https://www.northumbria.ac.uk/' },
   { name: 'OneDrive / SharePoint',   url: 'https://northumbria.sharepoint.com/' },
+  { name: 'Participant Bank',        url: 'participant-register.html' },
   { name: 'Panopto',                 url: 'https://panopto.northumbria.ac.uk/' },
   { name: 'Risk Assessment Library', url: 'https://livenorthumbriaac.sharepoint.com/sites/RAL/RiskAssessments/Forms/AllItems.aspx?id=%2Fsites%2FRAL%2FRiskAssessments%2FHealth%20and%20Life%20Sciences%2FRisk%20Assessments&viewid=99a3ece3%2D91e1%2D4e4a%2Da245%2D63e7524d228c' },
+  { name: 'Researcher Panel',        url: 'participant-researcher.html' },
   { name: 'SiSo / Online Booking',   url: 'https://siso.northumbria.ac.uk/' },
   { name: 'Staff Directory',         url: 'https://www.northumbria.ac.uk/about-us/our-staff/' },
   { name: 'Teams / SharePoint',      url: 'https://northumbria.sharepoint.com/' },
@@ -1648,17 +1431,17 @@ function renderLinks() {
     .map(([id, l]) => ({ id, ...l }))
     .sort((a, b) => a.name.toLowerCase().localeCompare(b.name.toLowerCase()));
   if (!all.length) { list.innerHTML = '<span class="lp-empty">No links yet</span>'; return; }
-  list.innerHTML = '';
+  list.innerHTML = '<ul class="links-list">';
   all.forEach(link => {
-    const li = document.createElement('li');
     const isExternal = link.url.startsWith('http');
-    li.innerHTML = `
-      <a href="${esc(link.url)}"${isExternal ? ' target="_blank" rel="noopener"' : ''}>${esc(link.name)}</a>
-      <button class="li-edit" onclick="window.editLink('${link.id}')">edit</button>
-      <button class="li-del"  onclick="window.deleteLinkById('${link.id}')" title="Delete this link">x</button>
-    `;
-    list.appendChild(li);
+    list.querySelector('ul').innerHTML += `
+      <li>
+        <a href="${esc(link.url)}"${isExternal ? ' target="_blank" rel="noopener"' : ''}>${esc(link.name)}</a>
+        <button class="li-edit" onclick="window.editLink('${link.id}')">edit</button>
+        <button class="li-del"  onclick="window.deleteLinkById('${link.id}')" title="Delete">x</button>
+      </li>`;
   });
+  list.innerHTML += '</ul>';
 }
 
 window.showLinkForm = function(id) {
