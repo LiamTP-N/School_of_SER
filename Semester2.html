@@ -239,22 +239,19 @@
       margin-bottom:28px; scroll-margin-top:80px;
       width:100%;       /* fill the right-hand grid column even when the table inside has no rows */
       min-width:0;      /* allow shrinking inside a grid column without overflow */
+      display:block;    /* explicit - guards against any flex/grid context issues */
     }
-    /* Empty module: give the empty table area a visible "no rows yet" zone
-       so the module doesn't visually collapse to header + add-row only. */
-    .table-wrap.is-empty {
-      min-height:80px;
-      display:flex; align-items:center; justify-content:center;
-      background:#fafafa;
+    /* Empty-state row inside the tbody. Spans every column with a friendly
+       hint. We use a real <tr> so the table layout (and therefore the
+       module-block width) behaves identically to a populated module. */
+    tr.no-rows-row td {
+      padding:24px 16px;
+      text-align:center;
       color:var(--light);
       font-size:12px;
       font-style:italic;
-      border-bottom:1px dashed var(--border);
+      background:#fafafa;
     }
-    .table-wrap.is-empty::before {
-      content: 'No sessions yet - click "+ Add row" below to add the first one.';
-    }
-    .table-wrap.is-empty table { display:none; }
     .module-header {
       display:flex; align-items:center; padding:0;
       border-bottom:1px solid var(--border); background:var(--black);
@@ -669,7 +666,7 @@ async function deleteModuleRows(moduleCode) {
 // rows by the loader. Deleting first guarantees the collection
 // matches SEED_DATA exactly.
 async function runSeedIfNeeded() {
-  const metaRef = doc(db, META, 'seeded_v4');
+  const metaRef = doc(db, META, 'seeded_v5');
   let seeded = false;
   try {
     const snap = await getDoc(metaRef);
@@ -754,7 +751,7 @@ async function runSeedIfNeeded() {
   }
 
   // Mark as seeded
-  await setDoc(metaRef, { seeded: true, version: 4, seededAt: new Date().toISOString() });
+  await setDoc(metaRef, { seeded: true, version: 5, seededAt: new Date().toISOString() });
   return true;
 }
 
@@ -1012,11 +1009,12 @@ function renderModule(code) {
   block.appendChild(hdr);
 
   // ── Table ──────────────────────────────────────────────────────────────────
-  // If the module has no sessions, mark the table-wrap as .is-empty so the
-  // CSS shows a friendly "no sessions yet" message instead of an empty/collapsed
-  // table. The "+ Add row" bar below remains and is the call-to-action.
+  // A populated module renders one tbody row per session. An empty module
+  // renders a single "no rows yet" row instead, so the table (and therefore
+  // the module-block) keeps its full width and visible structure - this
+  // avoids the layout collapse that happens when the tbody is genuinely empty.
   const tableWrap = document.createElement('div');
-  tableWrap.className = 'table-wrap' + (mod.sessions.length === 0 ? ' is-empty' : '');
+  tableWrap.className = 'table-wrap';
 
   const table = document.createElement('table');
   table.innerHTML =
@@ -1046,7 +1044,22 @@ function renderModule(code) {
   // Render existing sessions into tbody.
   // Pass the tbody element directly - the block isn't in the DOM yet
   // so getElementById('tbody-' + code) would return null.
-  mod.sessions.forEach(sess => renderRow(code, sess, tbody));
+  if (mod.sessions.length === 0) {
+    // Empty module: render a single full-width "no rows" placeholder row.
+    // Same column count as the real header (8 columns including the trailing
+    // delete-button column) so colspan=8 spans them all. This row is removed
+    // by addRow() before the first real row is inserted.
+    const phRow = document.createElement('tr');
+    phRow.className = 'no-rows-row';
+    phRow.id = 'no-rows-' + code;
+    const phTd = document.createElement('td');
+    phTd.colSpan = 8;
+    phTd.textContent = 'No sessions yet - click "+ Add row" below to add the first one.';
+    phRow.appendChild(phTd);
+    tbody.appendChild(phRow);
+  } else {
+    mod.sessions.forEach(sess => renderRow(code, sess, tbody));
+  }
 
   return block;
 }
@@ -1110,11 +1123,17 @@ function renderRow(code, sess, tbodyEl) {
     const mod = modules.get(code);
     if (mod) mod.sessions = mod.sessions.filter(s => s.id !== sess.id);
     tr.remove();
-    // If that was the last row, re-add the .is-empty class so the
-    // module shows the friendly "no sessions yet" placeholder again.
+    // If that was the last row, re-insert the "no rows yet" placeholder
+    // so the module continues to render at full width.
     if (mod && mod.sessions.length === 0) {
-      const wrap = tbody.closest('.table-wrap');
-      if (wrap) wrap.classList.add('is-empty');
+      const phRow = document.createElement('tr');
+      phRow.className = 'no-rows-row';
+      phRow.id = 'no-rows-' + code;
+      const phTd = document.createElement('td');
+      phTd.colSpan = 8;
+      phTd.textContent = 'No sessions yet - click "+ Add row" below to add the first one.';
+      phRow.appendChild(phTd);
+      tbody.appendChild(phRow);
     }
     updateSessionCount(code);
     renderSidebar();
@@ -1150,11 +1169,10 @@ async function addRow(code) {
   try {
     await setDoc(doc(db, COL, newId), newSess);
     mod.sessions.push(newSess);
-    // First real row added -> drop the .is-empty styling on the table-wrap
-    // so it switches from "no sessions yet" placeholder to a real table.
-    const tbodyEl = document.getElementById('tbody-' + code);
-    const wrap = tbodyEl ? tbodyEl.closest('.table-wrap') : null;
-    if (wrap) wrap.classList.remove('is-empty');
+    // First real row added -> remove the "no rows yet" placeholder row
+    // if present. Safe to call even if the row doesn't exist.
+    const noRowsTr = document.getElementById('no-rows-' + code);
+    if (noRowsTr) noRowsTr.remove();
     renderRow(code, newSess);
     updateSessionCount(code);
     renderSidebar();
