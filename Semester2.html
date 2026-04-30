@@ -214,7 +214,64 @@
       background:var(--accent); color:#fff;
       border-bottom-color:var(--accent);
     }
+    /* Empty modules (no sessions) - greyed out so staff can see they exist
+       but visually distinct from modules with content. Still clickable. */
+    .mod-link.empty {
+      color:#bbb;
+      font-weight:500;
+      font-style:italic;
+    }
+    .mod-link.empty:hover { color:#888; background:#fafafa; }
+    .mod-link.active.empty {
+      color:#fff; font-style:normal;  /* don't grey out when active */
+    }
     .mod-link .mod-sub { display:none; } /* not used in this layout */
+
+    /* Empty-state panel shown when an empty module is selected.
+       Replaces the broken module-block render for zero-session modules. */
+    .empty-module-panel {
+      background:var(--white);
+      border:1px solid var(--border);
+      padding:48px 32px;
+      text-align:center;
+    }
+    .empty-module-panel h2 {
+      font-size:16px; font-weight:800; color:var(--black);
+      margin-bottom:6px; letter-spacing:-0.01em;
+    }
+    .empty-module-panel .em-name {
+      font-size:13px; color:var(--mid); margin-bottom:24px;
+    }
+    .empty-module-panel .em-msg {
+      font-size:13px; color:var(--light); font-style:italic;
+      margin-bottom:24px; max-width:420px; margin-left:auto; margin-right:auto;
+      line-height:1.5;
+    }
+    .empty-module-panel .em-actions {
+      display:flex; gap:10px; justify-content:center; flex-wrap:wrap;
+    }
+    .empty-module-panel button {
+      padding:9px 18px; font-size:12px; font-weight:700;
+      letter-spacing:0.02em; text-transform:uppercase;
+      border:1px solid var(--border); border-radius:3px;
+      background:transparent; color:var(--mid); cursor:pointer;
+      font-family:inherit;
+    }
+    .empty-module-panel button:hover {
+      border-color:var(--black); color:var(--black);
+    }
+    .empty-module-panel button.em-primary {
+      background:var(--black); color:#fff; border-color:var(--black);
+    }
+    .empty-module-panel button.em-primary:hover {
+      background:var(--dark);
+    }
+    .empty-module-panel button.em-danger {
+      color:var(--red); border-color:#f5c6c6;
+    }
+    .empty-module-panel button.em-danger:hover {
+      background:#fff5f5; border-color:var(--red);
+    }
 
 
     /* ── RIGHT PANEL: single module view ── */
@@ -241,17 +298,8 @@
       min-width:0;      /* allow shrinking inside a grid column without overflow */
       display:block;    /* explicit - guards against any flex/grid context issues */
     }
-    /* Empty-state row inside the tbody. Spans every column with a friendly
-       hint. We use a real <tr> so the table layout (and therefore the
-       module-block width) behaves identically to a populated module. */
-    tr.no-rows-row td {
-      padding:24px 16px;
-      text-align:center;
-      color:var(--light);
-      font-size:12px;
-      font-style:italic;
-      background:#fafafa;
-    }
+    /* (Empty-module rendering is handled by the dedicated empty-module-panel
+       defined above; we no longer inject placeholder rows into the tbody.) */
     .module-header {
       display:flex; align-items:center; padding:0;
       border-bottom:1px solid var(--border); background:var(--black);
@@ -800,9 +848,11 @@ function renderSidebar() {
   [...modules.keys()].sort().forEach(code => {
     const mod = modules.get(code);
     const div = document.createElement('div');
-    div.className = 'mod-link';
+    // Tag empty modules so the CSS can grey them out. They stay clickable.
+    div.className = 'mod-link' + (mod.sessions.length === 0 ? ' empty' : '');
     div.id = 'sbl-' + code;
-    div.title = mod.name && mod.name !== code ? mod.name : '';
+    const titleSuffix = mod.sessions.length === 0 ? ' (no sessions)' : '';
+    div.title = (mod.name && mod.name !== code ? mod.name : '') + titleSuffix;
     div.textContent = code;
     div.addEventListener('click', () => selectModule(code));
     sidebar.appendChild(div);
@@ -830,15 +880,36 @@ function selectModule(code) {
   const noSel = document.getElementById('noSelection');
   if (noSel) noSel.style.display = 'none';
 
-  // Remove the previously rendered block (if any)
+  // Remove any previously rendered panel (empty-state OR populated module-block)
   if (selectedCode && selectedCode !== code) {
-    const old = document.getElementById('mod-' + selectedCode);
-    if (old) old.remove();
+    const oldBlock = document.getElementById('mod-' + selectedCode);
+    if (oldBlock) oldBlock.remove();
+    const oldEmpty = document.getElementById('empty-' + selectedCode);
+    if (oldEmpty) oldEmpty.remove();
   }
 
   selectedCode = code;
 
-  // Render the module block if not already in DOM
+  const mod = modules.get(code);
+  if (!mod) return;
+
+  // Empty module path: render the dedicated empty-state panel.
+  // This sidesteps the populated-module render entirely (which would
+  // collapse to zero width when the table tbody is empty).
+  if (mod.sessions.length === 0) {
+    const existing = document.getElementById('empty-' + code);
+    if (!existing) {
+      const panel = renderEmptyModulePanel(code);
+      if (panel) document.getElementById('mainContent').appendChild(panel);
+    }
+    // Hide the staff filter for empty modules - nothing to filter
+    const sf = document.getElementById('staffSidebar');
+    if (sf) { sf.innerHTML = '<div class="sidebar-head">Staff</div>'; sf.style.display='none'; }
+    document.querySelector('.layout')?.classList.remove('staff-visible');
+    return;
+  }
+
+  // Populated module path - existing behaviour.
   const existing = document.getElementById('mod-' + code);
   if (!existing) {
     const block = renderModule(code);
@@ -847,6 +918,73 @@ function selectModule(code) {
 
   // Populate staff filter for this module
   renderStaffFilter(code);
+}
+
+// ── RENDER: empty-module panel ────────────────────────────────────────────────
+// Shown when a module with zero sessions is selected. Gives staff a clean
+// "this module has no sessions" view with two actions: add a first row
+// (which converts to the populated module-block UI) or delete the module.
+function renderEmptyModulePanel(code) {
+  const mod = modules.get(code);
+  if (!mod) return null;
+
+  const wrap = document.createElement('div');
+  wrap.className = 'empty-module-panel';
+  wrap.id = 'empty-' + code;
+
+  const h = document.createElement('h2');
+  h.textContent = mod.code;
+  wrap.appendChild(h);
+
+  const nameEl = document.createElement('div');
+  nameEl.className = 'em-name';
+  nameEl.textContent = (mod.name && mod.name !== mod.code) ? mod.name : '';
+  if (nameEl.textContent) wrap.appendChild(nameEl);
+
+  const msg = document.createElement('div');
+  msg.className = 'em-msg';
+  msg.textContent = 'This module has no scheduled sessions yet. Add the first row to start populating it, or delete the module if it is not needed this semester.';
+  wrap.appendChild(msg);
+
+  const actions = document.createElement('div');
+  actions.className = 'em-actions';
+
+  // Primary: add first row -> swaps the empty panel for the real
+  // populated-module render with one row in it.
+  const btnAdd = document.createElement('button');
+  btnAdd.className = 'em-primary';
+  btnAdd.textContent = '+ Add first row';
+  btnAdd.addEventListener('click', async () => {
+    await addRow(code);
+    // After the first row is added, replace this empty panel with the
+    // proper populated-module block by re-selecting the module.
+    const panel = document.getElementById('empty-' + code);
+    if (panel) panel.remove();
+    selectedCode = null; // force selectModule to render
+    selectModule(code);
+  });
+  actions.appendChild(btnAdd);
+
+  // Secondary: delete the module entirely.
+  const btnDel = document.createElement('button');
+  btnDel.className = 'em-danger';
+  btnDel.textContent = 'Delete module';
+  btnDel.addEventListener('click', async () => {
+    if (!confirm('Delete module ' + mod.code + '?\n\nIt has no sessions, so nothing else is lost. You can re-add it later via "+ Add module".')) return;
+    await deleteModuleRows(code);
+    modules.delete(code);
+    wrap.remove();
+    renderSidebar();
+    updateModCount();
+    // Clear selection so the no-selection placeholder shows again
+    selectedCode = null;
+    const noSel = document.getElementById('noSelection');
+    if (noSel) noSel.style.display = '';
+  });
+  actions.appendChild(btnDel);
+
+  wrap.appendChild(actions);
+  return wrap;
 }
 
 // ── STAFF FILTER ──────────────────────────────────────────────────────────────
@@ -1044,22 +1182,10 @@ function renderModule(code) {
   // Render existing sessions into tbody.
   // Pass the tbody element directly - the block isn't in the DOM yet
   // so getElementById('tbody-' + code) would return null.
-  if (mod.sessions.length === 0) {
-    // Empty module: render a single full-width "no rows" placeholder row.
-    // Same column count as the real header (8 columns including the trailing
-    // delete-button column) so colspan=8 spans them all. This row is removed
-    // by addRow() before the first real row is inserted.
-    const phRow = document.createElement('tr');
-    phRow.className = 'no-rows-row';
-    phRow.id = 'no-rows-' + code;
-    const phTd = document.createElement('td');
-    phTd.colSpan = 8;
-    phTd.textContent = 'No sessions yet - click "+ Add row" below to add the first one.';
-    phRow.appendChild(phTd);
-    tbody.appendChild(phRow);
-  } else {
-    mod.sessions.forEach(sess => renderRow(code, sess, tbody));
-  }
+  // Note: empty modules are intercepted in selectModule() and rendered as
+  // a dedicated empty-state panel, so by the time we reach renderModule
+  // we always have at least one session.
+  mod.sessions.forEach(sess => renderRow(code, sess, tbody));
 
   return block;
 }
@@ -1123,17 +1249,22 @@ function renderRow(code, sess, tbodyEl) {
     const mod = modules.get(code);
     if (mod) mod.sessions = mod.sessions.filter(s => s.id !== sess.id);
     tr.remove();
-    // If that was the last row, re-insert the "no rows yet" placeholder
-    // so the module continues to render at full width.
+    // If that was the last row, the module is now empty. Per the user
+    // preference (rev. 3), deleting the last row also removes the whole
+    // module from the sidebar - the staff can re-add it via "+ Add module"
+    // if they need it again later.
     if (mod && mod.sessions.length === 0) {
-      const phRow = document.createElement('tr');
-      phRow.className = 'no-rows-row';
-      phRow.id = 'no-rows-' + code;
-      const phTd = document.createElement('td');
-      phTd.colSpan = 8;
-      phTd.textContent = 'No sessions yet - click "+ Add row" below to add the first one.';
-      phRow.appendChild(phTd);
-      tbody.appendChild(phRow);
+      await deleteModuleRows(code);   // cleans up any lingering placeholder docs
+      modules.delete(code);
+      const blockEl = document.getElementById('mod-' + code);
+      if (blockEl) blockEl.remove();
+      selectedCode = null;
+      const noSel = document.getElementById('noSelection');
+      if (noSel) noSel.style.display = '';
+      renderSidebar();
+      updateModCount();
+      flashSave('saved', 'Module removed');
+      return;
     }
     updateSessionCount(code);
     renderSidebar();
@@ -1169,10 +1300,6 @@ async function addRow(code) {
   try {
     await setDoc(doc(db, COL, newId), newSess);
     mod.sessions.push(newSess);
-    // First real row added -> remove the "no rows yet" placeholder row
-    // if present. Safe to call even if the row doesn't exist.
-    const noRowsTr = document.getElementById('no-rows-' + code);
-    if (noRowsTr) noRowsTr.remove();
     renderRow(code, newSess);
     updateSessionCount(code);
     renderSidebar();
