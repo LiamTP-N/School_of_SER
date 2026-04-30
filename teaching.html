@@ -7,42 +7,66 @@
 
   FOR AI/LLM READERS - ARCHITECTURE OVERVIEW:
   ============================================================
-  This is one of 7 topic pages in the SER staff portal.
+  This is one of 10 topic pages in the SER staff portal.
   Each page is structurally identical; only PAGE_TOPIC_KEY,
-  the <title>, the page-band h1/strap, and the active nav
-  button differ.
+  the <title>, the page-band h1/strap, the active nav button,
+  and the DEFAULT_TOPICS seed content differ.
 
-  CONTENT STORAGE:
-  - All editable content lives in Firebase Firestore,
-    project: nu-school-of-sport
+  CONTENT STORAGE - FIRESTORE SCHEMA:
+  - Firebase project: nu-school-of-sport
   - Collection: 'topics'
-  - Each document is keyed by topic slug (e.g. 'teaching')
-  - Each document has: name, order, subsections{}
-  - Each subsection has: html (string), editedBy, editedAt
+  - Document ID = PAGE_TOPIC_KEY (e.g. 'workflows')
+  - Document shape:
+      {
+        name: string,
+        order: number,
+        subsections: {
+          [key]: { html, editedBy, editedAt, hidden? }
+        },
+        customSections: [
+          { id, label, html, editedBy, editedAt }
+        ]
+      }
 
-  FIREBASE BUG FIX (2026-04-30):
-  - Previous versions imported only setDoc, not updateDoc.
-    This caused saveSubsection() to throw a ReferenceError
-    at runtime, silently preventing all saves. Fixed here.
+  SECTION TYPES:
+  1. Fixed subsections - defined in SUBSECTIONS array below.
+     These cannot be permanently deleted. Instead they have a
+     `hidden` flag stored in Firestore. Hidden fixed sections
+     can be restored via the "Add / restore section" panel.
+  2. Custom sections - created by staff at runtime. Stored in
+     the `customSections` array on the topic document. These
+     CAN be permanently deleted (removed from the array).
 
-  RICH-TEXT EDITOR:
-  - The raw HTML textarea has been replaced with a
-    contenteditable div + toolbar.
-  - Toolbar uses document.execCommand (widely supported,
-    sufficient for this use case).
-  - On save, innerHTML is read from the editor div.
-  - On open, innerHTML is written to the editor div.
-  - No external libraries required.
+  ADD / DELETE FLOW:
+  - Each card has a small "Delete" button in its header.
+  - For fixed sections: sets subsections.[key].hidden = true
+    in Firestore, hides card immediately.
+  - For custom sections: removes the entry from the
+    customSections array in Firestore, removes card.
+  - A persistent "+ Add / restore section" button at the
+    bottom of the content area opens a panel showing:
+      a) Hidden fixed sections (as restore buttons)
+      b) A text input to create a new custom section
+  - All changes sync to Firestore and render immediately.
 
-  SUBSECTIONS (shared across all topic pages):
-    overview   | contacts  | howto
-    faqs       | documents | diagram
+  EDIT FLOW:
+  - Edit button on each card opens a rich-text modal.
+  - Modal uses a contenteditable div + toolbar (execCommand).
+  - On save, Firestore is updated via updateDoc (dot-notation
+    for fixed subsections, array replacement for custom).
+  - Editor name is cached in localStorage.
+
+  FIREBASE IMPORTS NOTE:
+  - arrayUnion / arrayRemove are NOT suitable here because
+    Firestore cannot match objects inside arrays by partial
+    field. Instead we read the array, mutate locally, and
+    write the full array back with updateDoc.
 
   TO ADD A NEW TOPIC:
-  1. Copy this file, update PAGE_TOPIC_KEY, title, h1, strap,
-     active nav button.
-  2. Add the matching DEFAULT_TOPICS entry.
-  3. Add a nav button to all other topic pages.
+  1. Copy this file, update PAGE_TOPIC_KEY, <title>, h1,
+     strap text, and the active nav button.
+  2. Add a matching entry to DEFAULT_TOPICS.
+  3. Add a nav link to all other topic pages.
   ============================================================
 -->
 <html lang="en">
@@ -51,7 +75,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
 <title>Teaching &mdash; SER Staff Portal</title>
 <style>
-/* ── Reset & tokens ───────────────────────────────────────── */
+/* ── Reset & design tokens ────────────────────────────────── */
 *, *::before, *::after { margin:0; padding:0; box-sizing:border-box; }
 :root { --black:#111; --dark:#222; --mid:#555; --light:#888; --border:#ddd; --bg:#f7f7f7; --white:#fff; }
 html { scroll-behavior:smooth; }
@@ -87,10 +111,15 @@ header { background:#000; position:sticky; top:0; z-index:100; }
 
 /* ── Subsection cards ─────────────────────────────────────── */
 .subsection { background:var(--white); border:1px solid var(--border); padding:14px 16px; margin-bottom:12px; }
-.subsection-head { display:flex; align-items:center; justify-content:space-between; margin-bottom:8px; }
-.subsection-title { font-size:11px; font-weight:700; letter-spacing:0.1em; text-transform:uppercase; color:var(--mid); }
+.subsection-head { display:flex; align-items:center; gap:6px; margin-bottom:8px; }
+/* Title takes up all remaining space */
+.subsection-title { font-size:11px; font-weight:700; letter-spacing:0.1em; text-transform:uppercase; color:var(--mid); flex:1; }
+/* Edit button - matches original style */
 .subsection-edit { background:transparent; border:1px solid var(--border); border-radius:3px; padding:2px 8px; font-size:11px; cursor:pointer; color:var(--light); font-family:inherit; }
 .subsection-edit:hover { border-color:var(--black); color:var(--black); }
+/* Delete button - visually lighter than edit; uses red on hover to signal destructive action */
+.subsection-delete { background:transparent; border:1px solid var(--border); border-radius:3px; padding:2px 8px; font-size:11px; cursor:pointer; color:var(--light); font-family:inherit; }
+.subsection-delete:hover { border-color:#c00; color:#c00; }
 .subsection-body { font-size:13px; line-height:1.6; color:var(--dark); }
 .subsection-body p { margin-bottom:8px; }
 .subsection-body p:last-child { margin-bottom:0; }
@@ -103,6 +132,28 @@ header { background:#000; position:sticky; top:0; z-index:100; }
 .subsection-body code { background:var(--bg); padding:1px 5px; border-radius:3px; font-size:12px; font-family:ui-monospace,Consolas,monospace; }
 .subsection-empty { font-size:12px; color:var(--light); font-style:italic; }
 .subsection-footer { margin-top:8px; padding-top:6px; border-top:1px dashed var(--border); font-size:10px; color:var(--light); letter-spacing:0.02em; }
+
+/* ── Add / restore panel ──────────────────────────────────────
+   Sits below all section cards. Contains:
+   - Restore buttons for any hidden fixed sections
+   - Input + button to create a new custom section             */
+.add-panel { border:1px dashed var(--border); padding:14px 16px; margin-bottom:12px; background:var(--bg); }
+.add-panel-title { font-size:10px; font-weight:700; letter-spacing:0.1em; text-transform:uppercase; color:var(--light); margin-bottom:10px; }
+.add-panel-restore { display:flex; flex-wrap:wrap; gap:6px; margin-bottom:10px; }
+/* Restore buttons - one per hidden fixed section */
+.btn-restore { padding:4px 10px; font-size:11px; font-weight:600; border:1px solid var(--border); border-radius:3px; background:var(--white); color:var(--mid); cursor:pointer; font-family:inherit; }
+.btn-restore:hover { border-color:var(--black); color:var(--black); }
+.add-panel-new { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+/* Text input for the new section label */
+.add-panel-input { flex:1; min-width:180px; padding:6px 10px; border:1px solid var(--border); border-radius:3px; font-size:13px; font-family:inherit; background:var(--white); color:var(--black); }
+.add-panel-input:focus { border-color:var(--black); outline:none; }
+/* Add button to confirm new section creation */
+.btn-add-section { padding:6px 14px; font-size:12px; font-weight:700; border:1px solid var(--black); border-radius:3px; background:var(--black); color:var(--white); cursor:pointer; font-family:inherit; }
+.btn-add-section:hover { background:var(--dark); }
+
+/* ── Toggle button for the add/restore panel ──────────────── */
+.btn-toggle-panel { display:block; width:100%; text-align:center; padding:8px; font-size:11px; font-weight:700; letter-spacing:0.05em; text-transform:uppercase; border:1px dashed var(--border); border-radius:3px; background:transparent; color:var(--light); cursor:pointer; font-family:inherit; margin-top:4px; }
+.btn-toggle-panel:hover { border-color:var(--black); color:var(--black); }
 
 /* ── Edit modal ───────────────────────────────────────────── */
 .modal-backdrop { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.55); z-index:1000; align-items:center; justify-content:center; padding:20px; }
@@ -125,20 +176,13 @@ header { background:#000; position:sticky; top:0; z-index:100; }
 .rte-btn:hover { background:var(--white); border-color:var(--border); }
 .rte-btn.active { background:var(--black); color:var(--white); border-color:var(--black); }
 .rte-btn-sep { width:1px; background:var(--border); margin:2px 4px; align-self:stretch; }
-/* The actual editable area inside the modal */
+/* Editable area inside modal - mirrors subsection-body for WYSIWYG effect */
 #rteEditor {
-  min-height:260px;
-  max-height:360px;
-  overflow-y:auto;
-  padding:10px 12px;
-  font-size:13px;
-  line-height:1.6;
-  color:var(--dark);
-  outline:none;
+  min-height:260px; max-height:360px; overflow-y:auto; padding:10px 12px;
+  font-size:13px; line-height:1.6; color:var(--dark); outline:none;
   font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;
 }
 #rteEditor:focus { border-color:var(--black); }
-/* Mirror subsection-body styles inside the editor so WYSIWYG */
 #rteEditor p { margin-bottom:8px; }
 #rteEditor ul, #rteEditor ol { margin:6px 0 8px 22px; }
 #rteEditor li { margin-bottom:3px; }
@@ -146,7 +190,7 @@ header { background:#000; position:sticky; top:0; z-index:100; }
 #rteEditor strong { font-weight:700; }
 #rteEditor em { font-style:italic; }
 
-/* Link prompt (shown inside modal when inserting a link) */
+/* Link prompt shown inside the modal when inserting a hyperlink */
 .link-prompt { display:none; align-items:center; gap:8px; padding:8px 10px; background:var(--bg); border:1px solid var(--border); border-radius:3px; }
 .link-prompt.visible { display:flex; }
 .link-prompt input { flex:1; padding:5px 8px; border:1px solid var(--border); border-radius:3px; font-size:12px; font-family:inherit; }
@@ -203,7 +247,7 @@ footer { background:#000; padding:36px 32px; margin-top:0; }
 </div>
 
 <div class="main">
-  <!-- Topic navigation tabs - active class marks the current page -->
+  <!-- Topic navigation tabs - the active class marks the current page -->
   <nav class="topic-tabs" aria-label="Topic navigation">
     <a class="topic-btn active" href="teaching.html">Teaching</a>
     <a class="topic-btn" href="research.html">Research</a>
@@ -212,20 +256,22 @@ footer { background:#000; padding:36px 32px; margin-top:0; }
     <a class="topic-btn" href="workflows.html">Workflows</a>
     <a class="topic-btn" href="lab-equipment.html">Lab &amp; Equipment</a>
     <a class="topic-btn" href="inductions.html">Inductions &amp; Training</a>
+    <a class="topic-btn" href="peps.html">PEPs</a>
+    <a class="topic-btn" href="timetabling.html">Timetabling</a>
+    <a class="topic-btn" href="siso.html">SiSo Bookings</a>
   </nav>
   <p class="section-heading">Teaching &mdash; sections</p>
-  <!-- topicContent is populated by renderTopic() after Firestore fetch -->
+  <!-- topicContent is populated dynamically by renderTopic() after Firestore fetch -->
   <div id="topicContent">
     <p style="color:var(--light);font-size:13px;">Loading&hellip;</p>
   </div>
 </div>
 
 <!-- ── Edit modal ─────────────────────────────────────────────
-     Clicking the pencil button on any subsection card opens
-     this modal. The contenteditable #rteEditor div acts as the
-     rich-text input. On save, its innerHTML is written to
-     Firestore via updateDoc (dot-notation path so only the
-     changed subsection is touched).
+     Opens when clicking the Edit button on any section card.
+     data-sub stores the section key being edited.
+     data-custom="true" signals a custom section (different
+     save path - writes to customSections array, not subsections{}).
   ──────────────────────────────────────────────────────────── -->
 <div class="modal-backdrop" id="editModal">
   <div class="modal-box">
@@ -241,9 +287,8 @@ footer { background:#000; padding:36px 32px; margin-top:0; }
       </div>
       <div>
         <label>Content</label>
-        <!-- Toolbar buttons use execCommand on the contenteditable div below.
-             execCommand is deprecated in the spec but remains universally
-             supported across all browsers for basic formatting like this. -->
+        <!-- Rich-text toolbar. Buttons carry data-cmd which maps to execCommand actions.
+             execCommand is deprecated in spec but universally supported for basic formatting. -->
         <div class="rte-wrap">
           <div class="rte-toolbar" id="rteToolbar">
             <button class="rte-btn" data-cmd="bold" title="Bold (Ctrl+B)"><strong>B</strong></button>
@@ -257,19 +302,18 @@ footer { background:#000; padding:36px 32px; margin-top:0; }
             <div class="rte-btn-sep"></div>
             <button class="rte-btn" data-cmd="removeFormat" title="Clear formatting">Clear</button>
           </div>
-          <!-- Link URL prompt - hidden until the Link button is clicked -->
+          <!-- Link URL prompt - hidden by default; shown when Link button is pressed -->
           <div class="link-prompt" id="linkPrompt">
             <input id="linkUrl" type="url" placeholder="https://..." />
             <button class="link-ok" onclick="insertLink()">Insert</button>
             <button class="link-cancel" onclick="hideLinkPrompt()">Cancel</button>
           </div>
-          <!-- The actual editable area. innerHTML is read on save and
-               written on open. Styled to match subsection-body display. -->
+          <!-- The editable area. innerHTML read on save, written on open. -->
           <div id="rteEditor" contenteditable="true" spellcheck="true"></div>
         </div>
         <p class="modal-hint" style="margin-top:6px;">
           Type normally. Use the toolbar for bold, italic, lists and links.
-          Paste text from Word or email - formatting will be cleaned up automatically.
+          Paste from Word or email - formatting is cleaned automatically.
         </p>
       </div>
     </div>
@@ -301,15 +345,14 @@ footer { background:#000; padding:36px 32px; margin-top:0; }
   ============================================================
   FIREBASE SETUP
   ============================================================
-  KEY FIX: updateDoc is now imported alongside setDoc.
-  Previous versions omitted updateDoc, causing a ReferenceError
-  at runtime whenever saveSubsection() was called - meaning
-  NO edits were ever actually written to Firestore.
+  Imports: initializeApp, getFirestore, getDocs, doc, setDoc,
+  updateDoc, collection.
 
-  setDoc  - used only for first-time seeding of the collection
-  updateDoc - used for all subsequent edits (dot-notation path
-              means only the changed subsection field is written,
-              not the entire document - safer for concurrent edits)
+  arrayUnion / arrayRemove are NOT used here. Firestore cannot
+  target objects inside an array by partial field match, so
+  adding/removing custom sections is done by reading the whole
+  array, mutating it locally, then writing it back with
+  updateDoc. This is safe at this scale (arrays are small).
   ============================================================
 */
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.0/firebase-app.js';
@@ -328,13 +371,14 @@ const app = initializeApp(firebaseConfig, 'portal-app');
 const db  = getFirestore(app);
 
 /* ── Page identity ───────────────────────────────────────────
-   PAGE_TOPIC_KEY must match the document ID in Firestore's
-   'topics' collection. Change this per-file only. */
+   PAGE_TOPIC_KEY must match the Firestore document ID in the
+   'topics' collection. Change this constant per file only. */
 const PAGE_TOPIC_KEY = 'teaching';
 
-/* ── Subsection definitions ──────────────────────────────────
-   Order here controls render order on the page.
-   key must match the Firestore subsections field names. */
+/* ── Fixed subsection definitions ────────────────────────────
+   These are the permanent structural sections that exist on
+   every topic page. They cannot be fully deleted - only hidden.
+   Order here controls render order. */
 const SUBSECTIONS = [
   { key:'overview',  label:'Overview' },
   { key:'contacts',  label:'Key Contacts' },
@@ -344,84 +388,112 @@ const SUBSECTIONS = [
   { key:'diagram',   label:'Process Diagram / Flowchart' }
 ];
 
-/* ── Helpers ─────────────────────────────────────────────────*/
-function esc(s){ const d=document.createElement('div'); d.textContent=s; return d.innerHTML; }
-function emptySubs(){ const o={}; SUBSECTIONS.forEach(s=>{o[s.key]={html:'',editedBy:'',editedAt:0};}); return o; }
-function sub(html){ return {html:html||'',editedBy:html?'System (seed)':'',editedAt:html?Date.now():0}; }
+/* ── Helpers ──────────────────────────────────────────────── */
 
-/* ── Default seed content ────────────────────────────────────
-   Written to Firestore only if the 'topics' collection is
-   empty. On subsequent loads this is ignored - Firestore is
-   the source of truth. To reset a topic to defaults, delete
-   its document in Firebase Console and reload the page. */
+/* esc() - safely escape a string for insertion into HTML text nodes.
+   Prevents XSS if user-supplied strings are ever rendered in HTML context. */
+function esc(s){ const d=document.createElement('div'); d.textContent=s; return d.innerHTML; }
+
+/* emptySubs() - returns an object with all SUBSECTIONS keys set to
+   blank defaults. Used when seeding a topic for the first time. */
+function emptySubs(){ const o={}; SUBSECTIONS.forEach(s=>{o[s.key]={html:'',editedBy:'',editedAt:0,hidden:false};}); return o; }
+
+/* sub() - creates a single subsection data object.
+   Passing html seeds the content; omitting it creates an empty section. */
+function sub(html){ return {html:html||'',editedBy:html?'System (seed)':'',editedAt:html?Date.now():0,hidden:false}; }
+
+/* ── Default seed content ─────────────────────────────────────
+   Written to Firestore ONCE, on first page load when the
+   'topics' collection is empty. After that, Firestore is the
+   single source of truth and this data is ignored.
+   To reset: delete the 'topics' collection in Firebase Console
+   and reload any topic page. */
 const DEFAULT_TOPICS = [
-  { key:'teaching', name:'Teaching', order:1, subsections:{
-    overview:sub('<p>Module setup, timetabling, practical sessions, room and equipment booking. See the Workflows topic for the end-to-end process map.</p>'),
+  { key:'teaching', name:'Teaching', order:1, customSections:[], subsections:{
+    overview:sub('<p>End-to-end departmental workflows and process maps. See the Workflows topic for the end-to-end process map.</p>'),
     contacts:sub('<p><em>Add module leads, programme leads and teaching admin contacts here.</em></p>'),
     howto:sub('<p><em>Add how-to content for teaching workflows (e.g. requesting a room, booking equipment for a practical, getting Panopto set up).</em></p>'),
     faqs:sub(), documents:sub(), diagram:sub()
   }},
-  { key:'research', name:'Research', order:2, subsections:{
+  { key:'research', name:'Research', order:2, customSections:[], subsections:{
     overview:sub('<p>Research support: lab booking for research projects, equipment access, ethics processes, data management.</p>'),
     contacts:sub(), howto:sub(), faqs:sub(), documents:sub(), diagram:sub()
   }},
-  { key:'ethics', name:'Ethics', order:3, subsections:{
+  { key:'ethics', name:'Ethics', order:3, customSections:[], subsections:{
     overview:sub('<p>Ethics approval workflow for research and teaching activities involving human participants.</p>'),
     contacts:sub('<p><em>Add the SER ethics chair and admin contacts here.</em></p>'),
     howto:sub(), faqs:sub(), documents:sub(), diagram:sub()
   }},
-  { key:'risk-assessment', name:'Risk Assessment', order:4, subsections:{
+  { key:'risk-assessment', name:'Risk Assessment', order:4, customSections:[], subsections:{
     overview:sub('<p>Risk Assessments (RAs) are required for all practical activities, research procedures and laboratory work within SER.</p>'),
     contacts:sub('<p><strong>Risk Assessment lead (technical):</strong> Dr Liam T. Pearson-Noseworthy</p>'),
     howto:sub('<p><em>Add step-by-step RA guidance here.</em></p>'),
     faqs:sub(), documents:sub(), diagram:sub()
   }},
-  { key:'workflows', name:'Workflows', order:5, subsections:{
+  { key:'workflows', name:'Workflows', order:5, customSections:[], subsections:{
     overview:sub('<p>End-to-end departmental workflows. The interactive workflow map is the canonical version.</p><p><a href="workflow.html"><strong>Open the interactive Workflow Map &rarr;</strong></a></p>'),
     contacts:sub(), howto:sub(), faqs:sub(), documents:sub(), diagram:sub()
   }},
-  { key:'lab-equipment', name:'Lab & Equipment', order:6, subsections:{
+  { key:'lab-equipment', name:'Lab & Equipment', order:6, customSections:[], subsections:{
     overview:sub('<p>Laboratories and equipment managed by the SER technical team across Sport Central (SPF), Northumberland Building and other sites.</p>'),
     contacts:sub('<p><strong>Lab manager:</strong> Dr Liam T. Pearson-Noseworthy</p>'),
     howto:sub('<p><em>How to request use of a lab, log faulty equipment, request calibration.</em></p>'),
     faqs:sub(), documents:sub(), diagram:sub()
   }},
-  { key:'inductions', name:'Inductions & Training', order:7, subsections:{
+  { key:'inductions', name:'Inductions & Training', order:7, customSections:[], subsections:{
     overview:sub('<p>Lab inductions, equipment-specific training, and refreshers for staff and students.</p>'),
     contacts:sub(),
     howto:sub('<p><em>How to request an induction, how to record completion, how to refresh.</em></p>'),
     faqs:sub(), documents:sub(), diagram:sub()
+  }},
+  { key:'peps', name:'PEPs', order:8, customSections:[], subsections:{
+    overview:sub('<p>Practical Exercise Protocols - per-module Word documents that drive equipment bookings.</p>'),
+    contacts:sub(), howto:sub(), faqs:sub(), documents:sub(), diagram:sub()
+  }},
+  { key:'timetabling', name:'Timetabling', order:9, customSections:[], subsections:{
+    overview:sub('<p>How sessions are timetabled into MyTimetable, and how that flows into SiSo.</p>'),
+    contacts:sub(), howto:sub(), faqs:sub(), documents:sub(), diagram:sub()
+  }},
+  { key:'siso', name:'SiSo Bookings', order:10, customSections:[], subsections:{
+    overview:sub('<p>Institutional booking system for rooms and equipment. Populated from MyTimetable each semester.</p>'),
+    contacts:sub(), howto:sub(), faqs:sub(), documents:sub(), diagram:sub()
   }}
 ];
 
 /* ── Topic state ─────────────────────────────────────────────
-   Populated by loadTopic(), consumed by renderTopic() and
-   saveSubsection(). Null means Firestore fetch failed or
-   the topic document does not exist. */
+   topicData mirrors the Firestore document for PAGE_TOPIC_KEY.
+   Mutated locally then written back to Firestore on every change.
+   null = fetch failed or document does not yet exist. */
 let topicData = null;
 
-/* ── loadTopic ───────────────────────────────────────────────
-   1. Fetch 'topics' collection.
-   2. If empty, seed all DEFAULT_TOPICS (first-run only).
-   3. Find this page's topic document by PAGE_TOPIC_KEY.
-   4. If still not found, seed just this topic.
-   5. Call renderTopic() regardless of outcome. */
+/* panelOpen tracks whether the Add/Restore panel is expanded */
+let panelOpen = false;
+
+/* ── loadTopic ────────────────────────────────────────────────
+   1. Fetch 'topics' collection
+   2. If empty, seed all DEFAULT_TOPICS (first-run only)
+   3. Find this page's document by PAGE_TOPIC_KEY
+   4. If not found, seed just this topic individually
+   5. Ensure all SUBSECTIONS keys exist in the document
+      (guards against schema additions in later code updates)
+   6. Ensure customSections array exists (added in this version)
+   7. Call renderTopic() */
 async function loadTopic() {
   try {
     const snap = await getDocs(collection(db,'topics'));
     if (snap.empty) {
-      // First ever load - seed all topics
+      /* First-ever load across the whole portal - seed everything */
       for (const t of DEFAULT_TOPICS) {
         const { key, ...rest } = t;
         await setDoc(doc(db,'topics',key), rest);
       }
     }
-    // Read back from Firestore (source of truth)
+    /* Read back from Firestore (source of truth after seeding) */
     const allSnap = await getDocs(collection(db,'topics'));
     allSnap.forEach(d => { if (d.id === PAGE_TOPIC_KEY) topicData = d.data(); });
 
     if (!topicData) {
-      // Topic exists in defaults but not yet in DB - seed it individually
+      /* This topic page is new and not yet in Firestore - seed it individually */
       const fromDefaults = DEFAULT_TOPICS.find(t => t.key === PAGE_TOPIC_KEY);
       if (fromDefaults) {
         const { key, ...rest } = fromDefaults;
@@ -429,13 +501,18 @@ async function loadTopic() {
         topicData = rest;
       }
     }
-    // Ensure all subsection keys exist (guards against schema additions)
+
     if (topicData) {
+      /* Ensure subsections map exists */
       if (!topicData.subsections) topicData.subsections = emptySubs();
+      /* Add any missing subsection keys (schema migration guard) */
       SUBSECTIONS.forEach(s => {
         if (!topicData.subsections[s.key])
-          topicData.subsections[s.key] = { html:'', editedBy:'', editedAt:0 };
+          topicData.subsections[s.key] = { html:'', editedBy:'', editedAt:0, hidden:false };
       });
+      /* Ensure customSections array exists - added in the delete/add update.
+         Old documents in Firestore won't have this field; default to []. */
+      if (!Array.isArray(topicData.customSections)) topicData.customSections = [];
     }
   } catch(e) {
     console.warn('[SER Portal] Could not load topic from Firestore:', e);
@@ -443,46 +520,233 @@ async function loadTopic() {
   renderTopic();
 }
 
-/* ── renderTopic ─────────────────────────────────────────────
-   Builds subsection card HTML from topicData and injects into
-   #topicContent. Called on load and after every save. */
+/* ── buildCardHtml ────────────────────────────────────────────
+   Produces HTML string for a single section card.
+   isCustom: boolean - controls which delete handler is called
+             and which data attribute is set on the edit button.
+   key: for fixed sections, the SUBSECTIONS key.
+        for custom sections, the unique id string.
+   label: display label shown in the card header.
+   ss: the subsection data object { html, editedBy, editedAt }  */
+function buildCardHtml(isCustom, key, label, ss) {
+  /* Render body - show placeholder if no content yet */
+  const bodyHtml = ss.html
+    ? ss.html
+    : '<span class="subsection-empty">Nothing here yet - click Edit to add content.</span>';
+
+  /* Last-edited footer */
+  let footer = '';
+  if (ss.editedBy && ss.editedAt) {
+    const dStr = new Date(ss.editedAt).toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric'});
+    footer = '<div class="subsection-footer">Last edited by ' + esc(ss.editedBy) + ' on ' + dStr + '</div>';
+  }
+
+  /* Edit button onclick - passes key and isCustom flag */
+  const editCall = isCustom
+    ? 'editSubsection(\'' + key + '\',true)'
+    : 'editSubsection(\'' + key + '\',false)';
+
+  /* Delete button onclick:
+     - Fixed sections: call hideSection(key) - sets hidden:true in Firestore
+     - Custom sections: call deleteCustomSection(id) - removes from array */
+  const delCall = isCustom
+    ? 'deleteCustomSection(\'' + key + '\')'
+    : 'hideSection(\'' + key + '\')';
+
+  /* Delete button tooltip differs by type to set expectations */
+  const delTitle = isCustom ? 'Delete this section permanently' : 'Hide this section (can be restored)';
+
+  return (
+    '<div class="subsection">' +
+      '<div class="subsection-head">' +
+        '<span class="subsection-title">' + esc(label) + '</span>' +
+        '<button class="subsection-edit" onclick="' + editCall + '">&#9998; Edit</button>' +
+        '<button class="subsection-delete" onclick="' + delCall + '" title="' + delTitle + '">&#10005; Delete</button>' +
+      '</div>' +
+      '<div class="subsection-body">' + bodyHtml + '</div>' +
+      footer +
+    '</div>'
+  );
+}
+
+/* ── renderTopic ──────────────────────────────────────────────
+   Builds the full section list HTML and injects into #topicContent.
+   Called on initial load, after every save, hide, restore, or
+   custom section add/delete. */
 function renderTopic() {
   const wrap = document.getElementById('topicContent');
   if (!wrap) return;
+
   if (!topicData) {
     wrap.innerHTML = '<p style="color:var(--light);font-size:13px;">Could not load content. Check your connection and reload.</p>';
     return;
   }
+
   let html = '';
+
+  /* Render fixed sections that are not hidden */
   SUBSECTIONS.forEach(s => {
-    const ss = (topicData.subsections && topicData.subsections[s.key]) || { html:'', editedBy:'', editedAt:0 };
-    const bodyHtml = ss.html
-      ? ss.html
-      : '<span class="subsection-empty">Nothing here yet - click Edit to add content.</span>';
-    let footer = '';
-    if (ss.editedBy && ss.editedAt) {
-      const dStr = new Date(ss.editedAt).toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric'});
-      footer = '<div class="subsection-footer">Last edited by ' + esc(ss.editedBy) + ' on ' + dStr + '</div>';
-    }
-    html +=
-      '<div class="subsection">' +
-        '<div class="subsection-head">' +
-          '<span class="subsection-title">' + esc(s.label) + '</span>' +
-          '<button class="subsection-edit" onclick="editSubsection(\'' + s.key + '\')">&#9998; Edit</button>' +
-        '</div>' +
-        '<div class="subsection-body">' + bodyHtml + '</div>' +
-        footer +
-      '</div>';
+    const ss = (topicData.subsections && topicData.subsections[s.key]) || { html:'', editedBy:'', editedAt:0, hidden:false };
+    if (ss.hidden) return; /* skip hidden fixed sections */
+    html += buildCardHtml(false, s.key, s.label, ss);
   });
+
+  /* Render custom sections (always visible unless deleted) */
+  (topicData.customSections || []).forEach(cs => {
+    html += buildCardHtml(true, cs.id, cs.label, cs);
+  });
+
+  /* ── Add / restore panel ────────────────────────────────────
+     Shows restore buttons for hidden fixed sections, plus an
+     input to create a brand-new custom section.
+     Panel visibility is toggled by panelOpen flag. */
+  const hiddenFixed = SUBSECTIONS.filter(s => {
+    const ss = topicData.subsections && topicData.subsections[s.key];
+    return ss && ss.hidden;
+  });
+
+  /* Build restore buttons for each hidden fixed section */
+  let restoreButtons = '';
+  hiddenFixed.forEach(s => {
+    restoreButtons += '<button class="btn-restore" onclick="restoreSection(\'' + s.key + '\')">' +
+      '+ Restore: ' + esc(s.label) + '</button>';
+  });
+
+  /* Only show the restore row if there are hidden sections */
+  const restoreRow = hiddenFixed.length
+    ? '<div class="add-panel-restore">' + restoreButtons + '</div>'
+    : '';
+
+  /* The toggle button label changes depending on panelOpen state */
+  const toggleLabel = panelOpen ? '&#8722; Close' : '+ Add / restore section';
+
+  const panelHtml = panelOpen
+    ? '<div class="add-panel">' +
+        '<div class="add-panel-title">Add or restore a section</div>' +
+        (restoreRow || '') +
+        '<div class="add-panel-new">' +
+          '<input class="add-panel-input" id="newSectionLabel" placeholder="New section title..." maxlength="80">' +
+          '<button class="btn-add-section" onclick="addCustomSection()">Add section</button>' +
+        '</div>' +
+      '</div>'
+    : '';
+
+  html += panelHtml;
+  html += '<button class="btn-toggle-panel" onclick="togglePanel()">' + toggleLabel + '</button>';
+
   wrap.innerHTML = html;
+
+  /* Re-attach Enter key handler for the new section input if panel is open */
+  if (panelOpen) {
+    const inp = document.getElementById('newSectionLabel');
+    if (inp) inp.addEventListener('keydown', function(e){ if(e.key==='Enter') addCustomSection(); });
+  }
 }
 
-/* ── Rich-text editor helpers ────────────────────────────────*/
+/* ── togglePanel ──────────────────────────────────────────────
+   Toggles the Add/Restore panel open or closed. */
+window.togglePanel = function() {
+  panelOpen = !panelOpen;
+  renderTopic();
+  /* If just opened, focus the input */
+  if (panelOpen) {
+    const inp = document.getElementById('newSectionLabel');
+    if (inp) setTimeout(() => inp.focus(), 30);
+  }
+};
 
-/* Cleans pasted HTML to remove Word/browser junk while keeping
-   semantically useful tags (p, ul, ol, li, strong, em, a, br) */
+/* ── hideSection ──────────────────────────────────────────────
+   Marks a fixed subsection as hidden in Firestore (hidden:true).
+   The section still exists in the database; it can be restored.
+   Dot-notation path means only this field is written. */
+window.hideSection = async function(subKey) {
+  if (!confirm('Hide the "' + (SUBSECTIONS.find(s=>s.key===subKey)||{}).label + '" section? You can restore it using the Add / restore panel.')) return;
+  try {
+    topicData.subsections[subKey].hidden = true;
+    await updateDoc(doc(db,'topics',PAGE_TOPIC_KEY), { ['subsections.'+subKey+'.hidden']: true });
+    renderTopic();
+  } catch(e) {
+    alert('Error hiding section: ' + e.message);
+    console.error('[SER Portal] hideSection failed:', e);
+  }
+};
+
+/* ── restoreSection ───────────────────────────────────────────
+   Un-hides a fixed subsection by setting hidden:false in Firestore.
+   Called by the Restore buttons in the Add/Restore panel. */
+window.restoreSection = async function(subKey) {
+  try {
+    topicData.subsections[subKey].hidden = false;
+    await updateDoc(doc(db,'topics',PAGE_TOPIC_KEY), { ['subsections.'+subKey+'.hidden']: false });
+    renderTopic();
+  } catch(e) {
+    alert('Error restoring section: ' + e.message);
+    console.error('[SER Portal] restoreSection failed:', e);
+  }
+};
+
+/* ── addCustomSection ─────────────────────────────────────────
+   Creates a new custom section from the label input.
+   - Generates a unique id using Date.now() + short random suffix
+     to avoid collisions if two staff add at the same millisecond.
+   - Appends to local customSections array.
+   - Writes the full array back to Firestore via updateDoc.
+   - Closes the panel and re-renders. */
+window.addCustomSection = async function() {
+  const inp = document.getElementById('newSectionLabel');
+  if (!inp) return;
+  const label = inp.value.trim();
+  if (!label) { alert('Please enter a section title.'); inp.focus(); return; }
+
+  /* Generate a collision-resistant id */
+  const id = 'custom_' + Date.now() + '_' + Math.random().toString(36).slice(2,6);
+
+  const newEntry = { id, label, html:'', editedBy:'', editedAt:0 };
+  topicData.customSections.push(newEntry);
+
+  try {
+    /* Write the full customSections array back - Firestore cannot target
+       array elements by field value, so we replace the whole array. */
+    await updateDoc(doc(db,'topics',PAGE_TOPIC_KEY), { customSections: topicData.customSections });
+    panelOpen = false;
+    renderTopic();
+  } catch(e) {
+    /* Roll back local mutation on failure */
+    topicData.customSections.pop();
+    alert('Error adding section: ' + e.message);
+    console.error('[SER Portal] addCustomSection failed:', e);
+  }
+};
+
+/* ── deleteCustomSection ──────────────────────────────────────
+   Permanently removes a custom section by its id.
+   Filters the local array, then writes the full array back.
+   This is a hard delete - content is lost. Confirm prompt is
+   shown to prevent accidental deletions. */
+window.deleteCustomSection = async function(id) {
+  const entry = (topicData.customSections||[]).find(cs => cs.id === id);
+  if (!confirm('Permanently delete "' + (entry ? esc(entry.label) : 'this section') + '"? This cannot be undone.')) return;
+
+  const prev = [...topicData.customSections];
+  topicData.customSections = topicData.customSections.filter(cs => cs.id !== id);
+
+  try {
+    await updateDoc(doc(db,'topics',PAGE_TOPIC_KEY), { customSections: topicData.customSections });
+    renderTopic();
+  } catch(e) {
+    /* Roll back on failure */
+    topicData.customSections = prev;
+    alert('Error deleting section: ' + e.message);
+    console.error('[SER Portal] deleteCustomSection failed:', e);
+  }
+};
+
+/* ── Rich-text editor helpers ─────────────────────────────── */
+
+/* cleanPastedHtml - strips Word/browser cruft from pasted content
+   while retaining semantically useful tags: p, ul, ol, li,
+   strong, em, a, br. */
 function cleanPastedHtml(html) {
-  // Strip style/class attributes and tags we don't want
   return html
     .replace(/<(span|div|font|h[1-6])[^>]*>/gi, '<p>')
     .replace(/<\/(span|div|font|h[1-6])>/gi, '</p>')
@@ -492,19 +756,20 @@ function cleanPastedHtml(html) {
     .replace(/(<\/p>)\s*(<\/p>)/gi, '$1');
 }
 
-/* Toolbar button click handler - routes to execCommand */
+/* Toolbar mousedown - route data-cmd to execCommand.
+   mousedown (not click) fires before the editor loses focus. */
 document.getElementById('rteToolbar').addEventListener('mousedown', function(e) {
   const btn = e.target.closest('[data-cmd]');
   if (!btn) return;
-  e.preventDefault(); // prevent editor losing focus
+  e.preventDefault(); /* keep editor focus */
   document.execCommand(btn.dataset.cmd, false, null);
   document.getElementById('rteEditor').focus();
 });
 
-/* Link button - shows the URL prompt instead of execCommand */
+/* Link button handler - saves selection before opening the URL prompt
+   so we can restore it after the input steals focus. */
 document.getElementById('btnLink').addEventListener('mousedown', function(e) {
   e.preventDefault();
-  // Save selection so we can restore it after the prompt input steals focus
   const sel = window.getSelection();
   if (sel && sel.rangeCount) window._savedRange = sel.getRangeAt(0).cloneRange();
   document.getElementById('linkUrl').value = '';
@@ -512,24 +777,20 @@ document.getElementById('btnLink').addEventListener('mousedown', function(e) {
   document.getElementById('linkUrl').focus();
 });
 
-/* insertLink - called by the Insert button in the link prompt */
 window.insertLink = function() {
   const url = document.getElementById('linkUrl').value.trim();
   if (!url) { hideLinkPrompt(); return; }
-  // Restore saved selection before executing command
   const editor = document.getElementById('rteEditor');
   editor.focus();
+  /* Restore the saved selection before inserting the link */
   if (window._savedRange) {
     const sel = window.getSelection();
     sel.removeAllRanges();
     sel.addRange(window._savedRange);
   }
   document.execCommand('createLink', false, url);
-  // Make inserted links open in new tab
-  editor.querySelectorAll('a:not([target])').forEach(a => {
-    a.target = '_blank';
-    a.rel = 'noopener';
-  });
+  /* Ensure all inserted links open in a new tab */
+  editor.querySelectorAll('a:not([target])').forEach(a => { a.target='_blank'; a.rel='noopener'; });
   hideLinkPrompt();
 };
 
@@ -539,7 +800,7 @@ window.hideLinkPrompt = function() {
   document.getElementById('rteEditor').focus();
 };
 
-/* Intercept paste to strip unwanted formatting */
+/* Paste intercept - strips formatting junk, preserves structure */
 document.getElementById('rteEditor').addEventListener('paste', function(e) {
   e.preventDefault();
   const html = (e.clipboardData || window.clipboardData).getData('text/html');
@@ -547,64 +808,102 @@ document.getElementById('rteEditor').addEventListener('paste', function(e) {
   if (html) {
     document.execCommand('insertHTML', false, cleanPastedHtml(html));
   } else {
-    // Plain text - wrap paragraphs
+    /* Plain text - split on blank lines and wrap each paragraph */
     const wrapped = text.split(/\n\s*\n/).map(p => '<p>' + esc(p.trim()).replace(/\n/g,'<br>') + '</p>').join('');
     document.execCommand('insertHTML', false, wrapped || text);
   }
 });
 
-/* ── editSubsection ──────────────────────────────────────────
-   Opens the edit modal pre-populated with existing content
-   for the given subsection key. */
-window.editSubsection = function(subKey) {
+/* ── editSubsection ───────────────────────────────────────────
+   Opens the edit modal pre-populated with the section's content.
+   isCustom: true for custom sections, false for fixed.
+   For custom sections, subKey is the unique id string.
+   Stores both subKey and isCustom on the modal element so
+   saveSubsection() knows which path to use. */
+window.editSubsection = function(subKey, isCustom) {
   if (!topicData) return;
-  const ss = (topicData.subsections && topicData.subsections[subKey]) || { html:'' };
-  const subLabel = (SUBSECTIONS.find(s => s.key === subKey) || {}).label || subKey;
+
+  let ss, labelText;
+  if (isCustom) {
+    /* Custom section: find by id in the customSections array */
+    ss = (topicData.customSections||[]).find(cs => cs.id === subKey) || { html:'' };
+    labelText = ss.label || subKey;
+  } else {
+    /* Fixed section: find by key in subsections map */
+    ss = (topicData.subsections && topicData.subsections[subKey]) || { html:'' };
+    labelText = (SUBSECTIONS.find(s => s.key === subKey) || {}).label || subKey;
+  }
+
   const modal = document.getElementById('editModal');
-  modal.dataset.sub = subKey;
-  document.getElementById('modalTitle').textContent = 'Edit: ' + (topicData.name||'') + ' \u2014 ' + subLabel;
-  // Load content into the rich-text editor
+  modal.dataset.sub    = subKey;
+  modal.dataset.custom = isCustom ? 'true' : 'false';
+
+  document.getElementById('modalTitle').textContent =
+    'Edit: ' + (topicData.name||'') + ' \u2014 ' + labelText;
+
+  /* Populate editor with existing content */
   document.getElementById('rteEditor').innerHTML = ss.html || '';
-  // Restore cached editor name
+  /* Restore the cached editor name from localStorage */
   document.getElementById('modalName').value = localStorage.getItem('serPortalEditorName') || '';
+
   modal.classList.add('visible');
-  // Focus name field if empty, otherwise editor
   const nameField = document.getElementById('modalName');
+  /* Focus the name field if empty, otherwise go straight to the editor */
   setTimeout(() => { (nameField.value ? document.getElementById('rteEditor') : nameField).focus(); }, 50);
 };
 
-/* ── closeEditModal ──────────────────────────────────────────*/
+/* ── closeEditModal ─────────────────────────────────────────── */
 window.closeEditModal = function() {
   const modal = document.getElementById('editModal');
   modal.classList.remove('visible');
-  modal.dataset.sub = '';
+  modal.dataset.sub    = '';
+  modal.dataset.custom = '';
   hideLinkPrompt();
 };
 
-/* ── saveSubsection ──────────────────────────────────────────
-   Reads innerHTML from the rich-text editor, writes to
-   Firestore using updateDoc with dot-notation so only the
-   changed subsection field is touched. Calls renderTopic()
-   on success to update the visible card immediately. */
+/* ── saveSubsection ───────────────────────────────────────────
+   Reads innerHTML from rteEditor, identifies whether this is a
+   fixed or custom section (via modal.dataset.custom), then
+   writes to Firestore using the appropriate path:
+
+   Fixed sections:
+     updateDoc with dot-notation: subsections.[key] = newSub
+     Only the single subsection field is written.
+
+   Custom sections:
+     Find the entry in topicData.customSections by id, update
+     it locally, then write the full array back with updateDoc.
+     (Firestore array operations cannot target by field value.) */
 window.saveSubsection = async function() {
-  const modal = document.getElementById('editModal');
+  const modal  = document.getElementById('editModal');
   const subKey = modal.dataset.sub;
+  const isCustom = modal.dataset.custom === 'true';
   if (!subKey) { closeEditModal(); return; }
+
   const name = document.getElementById('modalName').value.trim();
   if (!name) { alert('Please enter your name before saving.'); return; }
   localStorage.setItem('serPortalEditorName', name);
 
-  // Get HTML from rich-text editor and do a light clean
+  /* Get HTML from editor, strip browser-inserted empty paragraphs */
   let content = document.getElementById('rteEditor').innerHTML.trim();
-  // Remove empty paragraphs browsers insert
   content = content.replace(/<p><br><\/p>/gi,'').replace(/<p>\s*<\/p>/gi,'').trim();
 
   try {
     const newSub = { html: content, editedBy: name, editedAt: Date.now() };
-    // Update local state immediately so renderTopic() reflects the change
-    topicData.subsections[subKey] = newSub;
-    // Write only the changed subsection to Firestore (dot-notation path)
-    await updateDoc(doc(db,'topics',PAGE_TOPIC_KEY), { ['subsections.'+subKey]: newSub });
+
+    if (isCustom) {
+      /* Custom section - update the matching entry in the array */
+      const idx = topicData.customSections.findIndex(cs => cs.id === subKey);
+      if (idx === -1) { alert('Could not find section to save.'); return; }
+      /* Preserve id and label; update html/editedBy/editedAt */
+      topicData.customSections[idx] = { ...topicData.customSections[idx], ...newSub };
+      await updateDoc(doc(db,'topics',PAGE_TOPIC_KEY), { customSections: topicData.customSections });
+    } else {
+      /* Fixed section - dot-notation path for minimal write */
+      topicData.subsections[subKey] = { ...topicData.subsections[subKey], ...newSub };
+      await updateDoc(doc(db,'topics',PAGE_TOPIC_KEY), { ['subsections.'+subKey]: topicData.subsections[subKey] });
+    }
+
     closeEditModal();
     renderTopic();
   } catch(e) {
@@ -613,7 +912,7 @@ window.saveSubsection = async function() {
   }
 };
 
-/* ── Keyboard & backdrop dismiss ─────────────────────────────*/
+/* ── Keyboard & backdrop dismiss ──────────────────────────── */
 document.addEventListener('keydown', function(e) {
   if (e.key === 'Escape') {
     const m = document.getElementById('editModal');
@@ -624,7 +923,7 @@ document.getElementById('editModal').addEventListener('click', function(e) {
   if (e.target === this) closeEditModal();
 });
 
-// Kick off Firestore fetch on page load
+/* Kick off Firestore fetch on page load */
 loadTopic();
 </script>
 </body>
