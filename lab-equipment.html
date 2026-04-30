@@ -60,7 +60,7 @@ header { background:#000; position:sticky; top:0; z-index:100; }
 .page-band .strap { font-size:13px; color:#aaa; margin-top:10px; max-width:720px; line-height:1.5; }
 
 /* ── Main 2-col layout ────────────────────────────────── */
-.main { max-width:1400px; margin:0 auto; padding:32px 32px 48px; display:grid; grid-template-columns:1fr 260px; gap:40px; align-items:start; }
+.main { max-width:1400px; margin:0 auto; padding:32px 32px 48px; }
 .section-heading { font-size:10px; font-weight:700; letter-spacing:0.12em; text-transform:uppercase; color:var(--light); border-top:1px solid var(--border); padding-top:10px; margin-bottom:16px; }
 
 /* ── Topic nav (the 10 buttons) ───────────────────────── */
@@ -109,30 +109,6 @@ header { background:#000; position:sticky; top:0; z-index:100; }
 .modal-foot .modal-save { background:var(--black); color:var(--white); border-color:var(--black); }
 .modal-foot .modal-save:hover { background:var(--dark); }
 
-/* ── Useful Links sidebar ─────────────────────────────── */
-.sidebar { position:sticky; top:72px; }
-.lp-header { display:flex; align-items:center; justify-content:space-between; border-top:1px solid var(--border); padding-top:10px; margin-bottom:16px; }
-.lp-add { font-size:11px; padding:3px 9px; border:1px solid var(--border); border-radius:3px; background:transparent; color:var(--mid); cursor:pointer; font-family:inherit; }
-.lp-add:hover { border-color:var(--black); color:var(--black); }
-.links-list { list-style:none; margin-bottom:8px; }
-.links-list li { border-top:1px solid var(--border); display:flex; align-items:center; }
-.links-list li:last-child { border-bottom:1px solid var(--border); }
-.links-list a { flex:1; padding:9px 0; font-size:13px; font-weight:600; color:var(--black); text-decoration:none; line-height:1.35; min-width:0; }
-.links-list a:hover { color:var(--mid); }
-.li-edit, .li-del { font-size:10px; padding:1px 6px; border:1px solid var(--border); border-radius:3px; background:transparent; color:var(--light); cursor:pointer; flex-shrink:0; margin-left:4px; font-family:inherit; }
-.li-edit:hover { border-color:var(--black); color:var(--black); }
-.li-del:hover { border-color:#c0392b; color:#c0392b; }
-.lp-empty { font-size:12px; color:var(--light); }
-.lp-form { display:none; flex-direction:column; gap:6px; margin-top:8px; padding:10px; border:1px solid var(--border); background:var(--bg); }
-.lp-form.vis { display:flex; }
-.lp-form input { width:100%; padding:5px 8px; border:1px solid var(--border); border-radius:3px; font-size:12px; font-family:inherit; background:var(--white); color:var(--black); }
-.lp-form input:focus { border-color:var(--black); outline:none; }
-.lp-btns { display:flex; gap:6px; }
-.lp-btns button { flex:1; padding:5px; font-size:12px; border-radius:3px; cursor:pointer; border:1px solid var(--border); background:var(--white); color:var(--mid); font-family:inherit; }
-.lp-btns .lp-save { background:var(--black); color:var(--white); border-color:var(--black); }
-.lp-btns .lp-save:hover { background:var(--dark); }
-.lp-btns .lp-ddel { border-color:#e74c3c; color:#c0392b; background:transparent; }
-.lp-btns .lp-ddel:hover { background:#fff0f0; }
 
 /* ── Footer ───────────────────────────────────────────── */
 footer { background:#000; padding:36px 32px; margin-top:0; }
@@ -144,7 +120,7 @@ footer { background:#000; padding:36px 32px; margin-top:0; }
 .footer-links a:hover { color:#fff; }
 
 @media (max-width:900px) {
-  .main { grid-template-columns:1fr; padding:24px 20px 40px; }
+  .main { padding:24px 20px 40px; }
   .sidebar { position:static; }
   .page-band { padding:28px 20px 24px; }
   .header-inner { padding:0 20px; }
@@ -186,32 +162,12 @@ footer { background:#000; padding:36px 32px; margin-top:0; }
   <a class="topic-btn" href="workflows.html">Workflows</a>
   <a class="topic-btn active" href="lab-equipment.html">Lab &amp; Equipment</a>
   <a class="topic-btn" href="inductions.html">Inductions &amp; Training</a>
-  <a class="topic-btn" href="peps.html">PEPs</a>
-  <a class="topic-btn" href="timetabling.html">Timetabling</a>
-  <a class="topic-btn" href="siso.html">SiSo Bookings</a>
 </nav>
     <p class="section-heading">Lab &amp; Equipment &mdash; sections</p>
     <div id="topicContent">
       <p style="color:var(--light);font-size:13px;">Loading...</p>
     </div>
   </div>
-
-  <aside class="sidebar">
-    <div class="lp-header">
-      <p class="section-heading" style="margin-bottom:0;border-top:none;padding-top:0;">Useful Links A&ndash;Z</p>
-      <button class="lp-add" onclick="showLinkForm(null)">+ Add</button>
-    </div>
-    <ul class="links-list" id="linksList"><span class="lp-empty">Loading...</span></ul>
-    <div class="lp-form" id="lpForm">
-      <input id="lpName" placeholder="Name (e.g. Timetabling)">
-      <input id="lpUrl" placeholder="https://...">
-      <div class="lp-btns">
-        <button id="lpDel" class="lp-ddel" style="display:none" onclick="deleteLink()">Delete</button>
-        <button onclick="hideLinkForm()">Cancel</button>
-        <button class="lp-save" onclick="saveLink()">Save</button>
-      </div>
-    </div>
-  </aside>
 </div>
 
 <div class="modal-backdrop" id="editModal">
@@ -252,7 +208,7 @@ footer { background:#000; padding:36px 32px; margin-top:0; }
 
 <script type="module">
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.0/firebase-app.js';
-import { getFirestore, collection, getDocs, addDoc, updateDoc, deleteDoc, doc, setDoc }
+import { getFirestore, collection, getDocs, doc, setDoc }
   from 'https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore.js';
 
 const firebaseConfig = {
@@ -269,107 +225,7 @@ const db  = getFirestore(app);
 // The slug of the topic this page renders. Set per-file by the build script.
 const PAGE_TOPIC_KEY = 'lab-equipment';
 
-/* ============================================================
-   USEFUL LINKS
-   Hardcoded list = SEED ONLY. After first load, all links are
-   Firestore docs and so all have edit + delete buttons.
-   ============================================================ */
-const HARDCODED_LINKS = [
-  { name:'Library', url:'https://library.northumbria.ac.uk/' },
-  { name:'MyNorthumbria', url:'https://mynorthumbria.northumbria.ac.uk/' },
-  { name:'MyTimetable', url:'https://mytimetable.northumbria.ac.uk/' },
-  { name:'Northumbria University', url:'https://www.northumbria.ac.uk/' },
-  { name:'OneDrive / SharePoint', url:'https://northumbria.sharepoint.com/' },
-  { name:'Panopto', url:'https://panopto.northumbria.ac.uk/' },
-  { name:'Risk Assessment Library', url:'https://livenorthumbriaac.sharepoint.com/sites/RAL/RiskAssessments/Forms/AllItems.aspx?id=%2Fsites%2FRAL%2FRiskAssessments%2FHealth%20and%20Life%20Sciences%2FRisk%20Assessments&viewid=99a3ece3%2D91e1%2D4e4a%2Da245%2D63e7524d228c' },
-  { name:'SiSo / Online Booking', url:'https://siso.northumbria.ac.uk/' },
-  { name:'Staff Directory', url:'https://www.northumbria.ac.uk/about-us/our-staff/' },
-  { name:'Teams / SharePoint', url:'https://northumbria.sharepoint.com/' },
-  { name:'Workflow Map', url:'workflow.html' },
-  { name:'WorkTribe', url:'https://worktribe.com/' },
-];
 
-let editLinkId = null;
-let firestoreLinks = {};
-
-function esc(s) {
-  return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-}
-
-async function loadLinks() {
-  try {
-    const snap = await getDocs(collection(db,'links'));
-    if (snap.empty) {
-      console.log('[links] First-time seed');
-      for (const l of HARDCODED_LINKS) await addDoc(collection(db,'links'), l);
-      const seeded = await getDocs(collection(db,'links'));
-      firestoreLinks = {};
-      seeded.forEach(d => { firestoreLinks[d.id] = d.data(); });
-    } else {
-      firestoreLinks = {};
-      snap.forEach(d => { firestoreLinks[d.id] = d.data(); });
-    }
-  } catch(e) { console.warn('Could not load links:', e); }
-  renderLinks();
-}
-
-function renderLinks() {
-  const list = document.getElementById('linksList');
-  if (!list) return;
-  const all = Object.entries(firestoreLinks)
-    .map(([id,l]) => ({ id, ...l }))
-    .sort((a,b) => a.name.toLowerCase().localeCompare(b.name.toLowerCase()));
-  if (!all.length) { list.innerHTML = '<span class="lp-empty">No links yet</span>'; return; }
-  list.innerHTML = '';
-  all.forEach(link => {
-    const li = document.createElement('li');
-    const ext = link.url.startsWith('http');
-    li.innerHTML =
-      '<a href="' + esc(link.url) + '"' + (ext?' target="_blank" rel="noopener"':'') + '>' + esc(link.name) + '</a>' +
-      '<button class="li-edit" onclick="window.editLink(\'' + link.id + '\')">edit</button>' +
-      '<button class="li-del" onclick="window.deleteLinkById(\'' + link.id + '\')" title="Delete this link">x</button>';
-    list.appendChild(li);
-  });
-}
-
-window.showLinkForm = function(id) {
-  editLinkId = id;
-  const link = id ? firestoreLinks[id] : null;
-  document.getElementById('lpName').value = link ? (link.name||'') : '';
-  document.getElementById('lpUrl').value  = link ? (link.url||'')  : '';
-  document.getElementById('lpDel').style.display = id ? '' : 'none';
-  document.getElementById('lpForm').classList.add('vis');
-  document.getElementById('lpName').focus();
-};
-window.hideLinkForm = function() {
-  editLinkId = null;
-  document.getElementById('lpForm').classList.remove('vis');
-};
-window.saveLink = async function() {
-  const name = document.getElementById('lpName').value.trim();
-  const url  = document.getElementById('lpUrl').value.trim();
-  if (!name || !url) { alert('Both name and URL are required.'); return; }
-  try {
-    if (editLinkId) await updateDoc(doc(db,'links',editLinkId), { name, url });
-    else            await addDoc(collection(db,'links'), { name, url });
-    window.hideLinkForm();
-    await loadLinks();
-  } catch(e) { alert('Error saving: ' + e.message); }
-};
-window.deleteLink = async function() {
-  if (!editLinkId) return;
-  const link = firestoreLinks[editLinkId];
-  if (!confirm('Delete "' + (link?.name||'this link') + '"?')) return;
-  try { await deleteDoc(doc(db,'links',editLinkId)); window.hideLinkForm(); await loadLinks(); }
-  catch(e) { alert('Error deleting: ' + e.message); }
-};
-window.deleteLinkById = async function(id) {
-  const link = firestoreLinks[id];
-  if (!confirm('Delete "' + (link?.name||'this link') + '"?')) return;
-  try { await deleteDoc(doc(db,'links',id)); await loadLinks(); }
-  catch(e) { alert('Error deleting: ' + e.message); }
-};
-window.editLink = function(id) { window.showLinkForm(id); };
 
 /* ============================================================
    TOPICS
@@ -379,7 +235,6 @@ const SUBSECTIONS = [
   { key:'contacts',  label:'Key Contacts' },
   { key:'howto',     label:'How-To Guides' },
   { key:'faqs',      label:'FAQs' },
-  { key:'links',     label:'Useful Links' },
   { key:'documents', label:'Documents & Templates' },
   { key:'diagram',   label:'Process Diagram / Flowchart' }
 ];
@@ -408,28 +263,26 @@ const DEFAULT_TOPICS = [
     overview:sub('<p>Module setup, timetabling, practical sessions, room and equipment booking. See the Workflows topic for the end-to-end process map.</p>'),
     contacts:sub('<p><em>Add module leads, programme leads and teaching admin contacts here.</em></p>'),
     howto:sub('<p><em>Add how-to content for teaching workflows (e.g. requesting a room, booking equipment for a practical, getting Panopto set up).</em></p>'),
-    faqs:sub(), links:sub('<ul><li><a href="https://mytimetable.northumbria.ac.uk/" target="_blank" rel="noopener">MyTimetable</a></li><li><a href="Semester1.html">Teaching Alignment - Semester 1</a></li><li><a href="Semester2.html">Teaching Alignment - Semester 2</a></li></ul>'),
+    faqs:sub(),
     documents:sub(), diagram:sub()
   }},
   { key:'research', name:'Research', order:2, subsections:{
     overview:sub('<p>Research support: lab booking for research projects, equipment access, ethics processes, data management.</p>'),
     contacts:sub(), howto:sub(), faqs:sub(),
-    links:sub('<ul><li><a href="https://worktribe.com/" target="_blank" rel="noopener">WorkTribe</a></li></ul>'),
     documents:sub(), diagram:sub()
   }},
   { key:'ethics', name:'Ethics', order:3, subsections:{
     overview:sub('<p>Ethics approval workflow for research and teaching activities involving human participants.</p>'),
     contacts:sub('<p><em>Add the SER ethics chair and admin contacts here.</em></p>'),
-    howto:sub(), faqs:sub(), links:sub(), documents:sub(), diagram:sub()
+    howto:sub(), faqs:sub(), documents:sub(), diagram:sub()
   }},
   { key:'risk-assessment', name:'Risk Assessment', order:4, subsections:{
     overview:sub(RA_OVERVIEW), contacts:sub(RA_CONTACTS), howto:sub(RA_HOWTO),
-    faqs:sub(RA_FAQS), links:sub(RA_LINKS), documents:sub(RA_DOCUMENTS), diagram:sub(RA_DIAGRAM)
+    faqs:sub(RA_FAQS), documents:sub(RA_DOCUMENTS), diagram:sub(RA_DIAGRAM)
   }},
   { key:'workflows', name:'Workflows', order:5, subsections:{
     overview:sub('<p>End-to-end departmental workflows. The interactive workflow map is the canonical version.</p><p><a href="workflow.html"><strong>Open the interactive Workflow Map &rarr;</strong></a></p>'),
     contacts:sub(), howto:sub(), faqs:sub(),
-    links:sub('<ul><li><a href="workflow.html">Interactive Workflow Map</a></li></ul>'),
     documents:sub(), diagram:sub()
   }},
   { key:'lab-equipment', name:'Lab & Equipment', order:6, subsections:{
@@ -437,20 +290,19 @@ const DEFAULT_TOPICS = [
     contacts:sub('<p><strong>Lab manager:</strong> Dr Liam T. Pearson-Noseworthy</p>'),
     howto:sub('<p><em>How to request use of a lab, how to log faulty equipment, how to request a calibration.</em></p>'),
     faqs:sub(),
-    links:sub('<ul><li><a href="https://siso.northumbria.ac.uk/" target="_blank" rel="noopener">SiSo - online booking</a></li></ul>'),
     documents:sub(), diagram:sub()
   }},
   { key:'inductions', name:'Inductions & Training', order:7, subsections:{
     overview:sub('<p>Lab inductions, equipment-specific training, and refreshers for staff and students.</p>'),
     contacts:sub(),
     howto:sub('<p><em>How to request an induction, how to record completion, how to refresh.</em></p>'),
-    faqs:sub(), links:sub(), documents:sub(), diagram:sub()
+    faqs:sub(), documents:sub(), diagram:sub()
   }},
   { key:'peps', name:'PEPs', order:8, subsections:{
     overview:sub('<p>Practical Exercise Protocols (PEPs) are the per-module Word documents that define the equipment, group sizes and timing for each practical session. They feed directly into SiSo equipment bookings.</p>'),
     contacts:sub('<p><em>PEPs are owned by each module lead.</em></p>'),
     howto:sub('<p><em>How to write a PEP, what fields are required, what to do when kit changes mid-semester.</em></p>'),
-    faqs:sub(), links:sub(),
+    faqs:sub(),
     documents:sub('<p><em>Link to the current PEP template here.</em></p>'),
     diagram:sub()
   }},
@@ -458,7 +310,6 @@ const DEFAULT_TOPICS = [
     overview:sub('<p>How sessions are timetabled into MyTimetable, how room bookings flow from there into SiSo, and how to handle changes.</p>'),
     contacts:sub('<p><em>Add Timetabling Office contact details here.</em></p>'),
     howto:sub(), faqs:sub(),
-    links:sub('<ul><li><a href="https://mytimetable.northumbria.ac.uk/" target="_blank" rel="noopener">MyTimetable</a></li></ul>'),
     documents:sub(), diagram:sub()
   }},
   { key:'siso', name:'SiSo Bookings', order:10, subsections:{
@@ -466,7 +317,6 @@ const DEFAULT_TOPICS = [
     contacts:sub('<p><strong>Tech lead:</strong> Dr Liam T. Pearson-Noseworthy (SiSo user ID: 145368)</p>'),
     howto:sub('<p><em>How to request a booking, how the CSV import works, what to do when SiSo rejects a row.</em></p>'),
     faqs:sub(),
-    links:sub('<ul><li><a href="https://siso.northumbria.ac.uk/" target="_blank" rel="noopener">SiSo</a></li></ul>'),
     documents:sub(), diagram:sub()
   }}
 ];
@@ -586,7 +436,6 @@ document.getElementById('editModal').addEventListener('click', function(e) {
   if (e.target === this) closeEditModal();
 });
 
-loadLinks();
 loadTopic();
 </script>
 </body>
