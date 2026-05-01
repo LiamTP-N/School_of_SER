@@ -4,7 +4,7 @@
   FILE: Semester1.html
   PURPOSE: SER Technical Team Teaching Alignment - Semester 1
   OWNER: Liam Pearson-Noseworthy, Northumbria University
-  LAST UPDATED: 2026-04-29
+  LAST UPDATED: 2026-05-01
 
   FOR AI/LLM READERS - FULL ARCHITECTURE:
   =========================================
@@ -29,7 +29,9 @@
       start:       string   (HH:MM)
       finish:      string   (HH:MM)
       room:        string   (lab/room name)
-      pep:         string   (PEP filename or link)
+      pep:         string   (PEP URL or filename; rendered as clickable link if URL)
+      techSetup:   string   (Yes / No / etc. - technical setup required before session?)
+      techSupport: string   (Yes / No / etc. - in-class technical support required?)
       setup:       string   (Yes / No / Drop-off only / etc.)
       support:     string   (Yes / No)
       food:        string   (Yes / No)
@@ -279,6 +281,15 @@
       border:1px solid var(--border);
       background:var(--white);
       min-height:300px;
+      /* CRITICAL: as a CSS grid item, .main-content's default min-width
+         is 'auto' (= the minimum content size). Without this override the
+         grid track containing it would shrink-to-fit child content
+         whenever that content was narrow (e.g. an empty module's
+         placeholder panel), causing the whole panel to render at a
+         fraction of its 1fr track width with text wrapping vertically.
+         min-width:0 forces the grid track to honour the 1fr directive
+         regardless of inner content size. */
+      min-width:0;
     }
 
     /* Empty state shown before any module is selected */
@@ -782,7 +793,7 @@ async function runSeedIfNeeded() {
           moduleCode: mod.code, moduleName: mod.name,
           moduleLead: mod.lead||'', techLead: mod.techLead||'',
           week:'', repeats:'', academic:'', date:'', start:'', finish:'',
-          room:'', pep:'', setup:'', support:'', food:'', _order:0,
+          room:'', techSetup:'', techSupport:'', pep:'', setup:'', support:'', food:'', _order:0,
           _placeholder: true,
         }
       });
@@ -1155,13 +1166,20 @@ function renderModule(code) {
   tableWrap.className = 'table-wrap';
 
   const table = document.createElement('table');
+  // ── TABLE HEADER ──────────────────────────────────────────────────────────────
+  // Column order: Academic | Date | Start | Finish | Lab/Room |
+  //               Tech Setup? | Tech Support? | PEP | Food? | (delete)
+  // Tech Setup? and Tech Support? were added per staff feedback (2026-04-30).
+  // PEP renders as a clickable link (see makePepCell) rather than plain text.
   table.innerHTML =
     '<thead><tr>' +
       '<th class="staff-col">Academic</th>' +
       '<th>Date</th><th>Start</th><th>Finish</th><th style="min-width:120px">Lab / Room</th>' +
+      '<th class="staff-col" style="min-width:90px">Tech setup?</th>' +
+      '<th class="staff-col" style="min-width:100px">Tech support?</th>' +
       '<th class="staff-col" style="min-width:140px">PEP</th>' +
       '<th class="staff-col">Food?</th>' +
-      '<th></th>' +   // delete button column
+      '<th></th>' +   // delete button column - no header text
     '</tr></thead>';
   const tbody = document.createElement('tbody');
   tbody.id = 'tbody-' + code;
@@ -1227,15 +1245,92 @@ function renderRow(code, sess, tbodyEl) {
     return td;
   }
 
-  // Editable: Academic
-  tr.appendChild(makeCell('academic', sess.academic, null, 'max-width:140px'));
-  // Timetable columns
-  tr.appendChild(makeCell('date',   sess.date,   null, 'max-width:100px'));
-  tr.appendChild(makeCell('start',  sess.start,  null, 'max-width:70px'));
-  tr.appendChild(makeCell('finish', sess.finish, null, 'max-width:70px'));
-  tr.appendChild(makeCell('room',   sess.room,   null, 'max-width:160px'));
-  tr.appendChild(makeCell('pep',    sess.pep,    null, 'max-width:180px'));
-  tr.appendChild(makeCell('food',    sess.food,    null, 'max-width:80px'));
+  // ── Row cells ─────────────────────────────────────────────────────────────────
+  // Column order must match the thead defined in renderModule.
+  // techSetup and techSupport were added 2026-04-30 per staff feedback.
+  // pep uses makePepCell (link + edit pencil) rather than plain makeCell.
+
+  tr.appendChild(makeCell('academic',   sess.academic,   null, 'max-width:140px'));
+  tr.appendChild(makeCell('date',       sess.date,       null, 'max-width:100px'));
+  tr.appendChild(makeCell('start',      sess.start,      null, 'max-width:70px'));
+  tr.appendChild(makeCell('finish',     sess.finish,     null, 'max-width:70px'));
+  tr.appendChild(makeCell('room',       sess.room,       null, 'max-width:160px'));
+  tr.appendChild(makeCell('techSetup',  sess.techSetup,  null, 'max-width:90px'));
+  tr.appendChild(makeCell('techSupport',sess.techSupport,null, 'max-width:100px'));
+  tr.appendChild(makePepCell(sess, debouncedSave));   // clickable link cell
+  tr.appendChild(makeCell('food',       sess.food,       null, 'max-width:80px'));
+
+  // ── makePepCell ───────────────────────────────────────────────────────────────
+  // Renders the PEP field as a clickable hyperlink when the stored value looks
+  // like a URL (starts with http/https). A small pencil button beside the link
+  // opens a prompt() to let the user update the URL, which is then saved to
+  // Firestore via the normal debouncedSave path.
+  // If the value is NOT a URL (e.g. a filename or empty), it falls back to a
+  // plain contenteditable cell identical to makeCell, so older text-based PEP
+  // entries remain editable without any extra steps.
+  function makePepCell(sess, debouncedSave) {
+    const td = document.createElement('td');
+    td.style.cssText = 'max-width:180px; position:relative;';
+
+    function renderPep() {
+      td.innerHTML = '';
+      const val = sess.pep || '';
+      const isUrl = /^https?:\/\//i.test(val);
+
+      if (isUrl) {
+        // Link mode: show the URL as a clickable anchor
+        const wrap = document.createElement('div');
+        wrap.style.cssText = 'display:flex;align-items:center;gap:4px;';
+
+        const a = document.createElement('a');
+        a.href = val;
+        a.target = '_blank';
+        a.rel = 'noopener noreferrer';
+        a.textContent = 'Open PEP';
+        a.title = val;
+        a.style.cssText = 'font-size:12px;color:var(--accent);text-decoration:underline;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:120px;display:inline-block;';
+
+        // Pencil button to edit the URL
+        const editBtn = document.createElement('button');
+        editBtn.textContent = '\u270f\ufe0f'; // ✏️ pencil
+        editBtn.title = 'Edit PEP link';
+        editBtn.style.cssText = 'background:none;border:none;cursor:pointer;font-size:13px;padding:0 2px;line-height:1;flex-shrink:0;';
+        editBtn.addEventListener('click', e => {
+          e.stopPropagation();
+          const newVal = prompt('Enter PEP URL (or plain text):', sess.pep || '');
+          if (newVal === null) return; // cancelled
+          sess.pep = newVal.trim();
+          debouncedSave(sess.id, { pep: sess.pep });
+          renderPep(); // re-render the cell
+        });
+
+        wrap.appendChild(a);
+        wrap.appendChild(editBtn);
+        td.appendChild(wrap);
+
+      } else {
+        // Plain text / empty mode: contenteditable cell (same as makeCell)
+        const div = document.createElement('div');
+        div.className = 'cell';
+        div.contentEditable = 'true';
+        div.spellcheck = false;
+        div.textContent = val;
+        div.addEventListener('blur', () => {
+          sess.pep = div.textContent.trim();
+          debouncedSave(sess.id, { pep: sess.pep });
+          // If the user just typed a URL, switch to link mode on next render
+          if (/^https?:\/\//i.test(sess.pep)) renderPep();
+        });
+        div.addEventListener('keydown', e => {
+          if (e.key === 'Enter') { e.preventDefault(); div.blur(); }
+        });
+        td.appendChild(div);
+      }
+    }
+
+    renderPep();
+    return td;
+  }
 
   // Delete row button
   const delTd = document.createElement('td');
@@ -1294,7 +1389,7 @@ async function addRow(code) {
     id: newId, moduleCode: code, moduleName: mod.name,
     moduleLead: mod.lead, techLead: mod.techLead,
     academic:'', date:'', start:'', finish:'',
-    room:'', pep:'', food:'', _order: maxOrder + 1,
+    room:'', techSetup:'', techSupport:'', pep:'', food:'', _order: maxOrder + 1,
   };
   flashSave('saving', 'Saving...');
   try {
@@ -1330,7 +1425,7 @@ window.saveNewModule = async () => {
     id: newId, moduleCode: code, moduleName: name||code,
     moduleLead: lead, techLead: tech,
     academic:'', date:'', start:'', finish:'',
-    room:'', pep:'', food:'', _order: 0,
+    room:'', techSetup:'', techSupport:'', pep:'', food:'', _order: 0,
   };
 
   flashSave('saving', 'Saving...');
