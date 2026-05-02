@@ -256,6 +256,10 @@ footer { background:#000; padding:36px 32px; margin-top:0; }
     <a class="topic-btn" href="workflows.html">Workflows</a>
     <a class="topic-btn active" href="lab-equipment.html">Lab &amp; Equipment</a>
     <a class="topic-btn" href="inductions.html">Inductions &amp; Training</a>
+    <a class="topic-btn" href="peps.html">PEPs</a>
+    <a class="topic-btn" href="timetabling.html">Timetabling</a>
+    <a class="topic-btn" href="siso.html">SiSo Bookings</a>
+    <!-- AI/LLM NOTE: Canonical 10-button topic nav. See teaching.html for full notes. -->
   </nav>
   <p class="section-heading">Lab &amp; Equipment &mdash; sections</p>
   <!-- topicContent is populated dynamically by renderTopic() after Firestore fetch -->
@@ -422,10 +426,12 @@ const DEFAULT_TOPICS = [
     howto:sub(), faqs:sub(), documents:sub(), diagram:sub()
   }},
   { key:'risk-assessment', name:'Risk Assessment', order:4, customSections:[], subsections:{
-    overview:sub('<p>Risk Assessments (RAs) are required for all practical activities, research procedures and laboratory work within SER.</p>'),
-    contacts:sub('<p><strong>Risk Assessment lead (technical):</strong> Dr Liam T. Pearson-Noseworthy</p>'),
-    howto:sub('<p><em>Add step-by-step RA guidance here.</em></p>'),
-    faqs:sub(), documents:sub(), diagram:sub()
+    overview:sub('<p>Risk Assessments (RAs) are required for all practical activities, research procedures and laboratory work within the School of Sport, Exercise and Rehabilitation (SER).</p><p>RAs are stored centrally in the <strong>SharePoint Risk Assessment Library</strong> and reviewed on a biennial cycle (or sooner if equipment, procedure or location changes).</p><p><a href="https://livenorthumbriaac.sharepoint.com/sites/RAL/RiskAssessments/Forms/AllItems.aspx?id=%2Fsites%2FRAL%2FRiskAssessments%2FHealth%20and%20Life%20Sciences%2FRisk%20Assessments&amp;viewid=99a3ece3%2D91e1%2D4e4a%2Da245%2D63e7524d228c"><strong>Open the SER Risk Assessment Library on SharePoint &rarr;</strong></a></p>'),
+    contacts:sub('<p><strong>Risk Assessment lead (technical):</strong> Dr Liam T. Pearson-Noseworthy</p><p>Liam is the first point of contact for any RA-related query: locating an existing RA, drafting a new one, requesting an early review, or logging a change to equipment or procedure that might invalidate an existing RA.</p>'),
+    howto:sub('<p><strong>Finding an existing RA:</strong> Open the SharePoint Risk Assessment Library (link in Overview). Filter by module code, equipment name, or activity type. If unsure, contact Liam.</p><p><strong>Creating a new RA:</strong> Use the current SER template from the SharePoint library. Complete all sections including hazard identification, control measures, and residual risk rating. Submit to Liam for review before signing off and uploading to the SharePoint library.</p><p><strong>Updating an RA:</strong> If equipment, procedure, location, or participant population changes, the RA must be reviewed and re-issued. Do not amend the existing document in place; create a new version and supersede the old one.</p>'),
+    faqs:sub('<p><strong>How often are RAs reviewed?</strong><br>Biennially as standard. Sooner if anything material changes (new equipment, new procedure, new location, change in participant group).</p><p><strong>Who signs off an RA?</strong><br>The activity owner (academic or technician) drafts and signs. The technical RA lead (Liam) reviews. For higher-risk procedures, additional sign-off from the HoD or Health &amp; Safety may be required.</p><p><strong>What if I find an out-of-date RA?</strong><br>Flag it to Liam. Do not run the activity under an expired RA.</p><p><strong>Where do RAs live?</strong><br>Exclusively in the SharePoint Risk Assessment Library. Local copies (OneDrive, email attachments, paper) should be considered reference only and never the source of truth.</p>'),
+    documents:sub('<p>The current SER RA template lives in the SharePoint library. Older templates (pre-2024) are retained in the same library under an archive folder for reference but should not be used for new RAs.</p>'),
+    diagram:sub()
   }},
   { key:'workflows', name:'Workflows', order:5, customSections:[], subsections:{
     overview:sub('<p>End-to-end departmental workflows. The interactive workflow map is the canonical version.</p><p><a href="workflow.html"><strong>Open the interactive Workflow Map &rarr;</strong></a></p>'),

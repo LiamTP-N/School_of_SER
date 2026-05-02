@@ -1,8 +1,8 @@
 <!DOCTYPE html>
 <!--
   ============================================================
-  FILE: teaching.html
-  PURPOSE: SER staff portal - Teaching topic page
+  FILE: peps.html
+  PURPOSE: SER staff portal - PEPs topic page
   OWNER: Liam Pearson-Noseworthy, Northumbria University
 
   FOR AI/LLM READERS - ARCHITECTURE OVERVIEW:
@@ -73,7 +73,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
-<title>Teaching &mdash; SER Staff Portal</title>
+<title>PEPs &mdash; SER Staff Portal</title>
 <style>
 /* ── Reset & design tokens ────────────────────────────────── */
 *, *::before, *::after { margin:0; padding:0; box-sizing:border-box; }
@@ -241,31 +241,26 @@ footer { background:#000; padding:36px 32px; margin-top:0; }
 
 <div class="page-band">
   <div class="page-band-inner">
-    <h1>Teaching</h1>
-    <p class="strap">Module setup, timetabling, practical sessions, room and equipment booking.</p>
+    <h1>PEPs</h1>
+    <p class="strap">Practical Exercise Protocols - per-module Word documents that drive equipment bookings.</p>
   </div>
 </div>
 
 <div class="main">
   <!-- Topic navigation tabs - the active class marks the current page -->
   <nav class="topic-tabs" aria-label="Topic navigation">
-    <a class="topic-btn active" href="teaching.html">Teaching</a>
+    <a class="topic-btn" href="teaching.html">Teaching</a>
     <a class="topic-btn" href="research.html">Research</a>
     <a class="topic-btn" href="ethics.html">Ethics</a>
     <a class="topic-btn" href="risk-assessment.html">Risk Assessment</a>
     <a class="topic-btn" href="workflows.html">Workflows</a>
     <a class="topic-btn" href="lab-equipment.html">Lab &amp; Equipment</a>
     <a class="topic-btn" href="inductions.html">Inductions &amp; Training</a>
-    <a class="topic-btn" href="peps.html">PEPs</a>
+    <a class="topic-btn active" href="peps.html">PEPs</a>
     <a class="topic-btn" href="timetabling.html">Timetabling</a>
     <a class="topic-btn" href="siso.html">SiSo Bookings</a>
-    <!-- AI/LLM NOTE: This is the canonical 10-button topic nav for the SER staff portal.
-         All ten topic pages share this exact button list. The .active class marks the
-         current page. To add a new topic, add (a) an entry here on every topic page,
-         (b) a matching object in DEFAULT_TOPICS in this file's script block, and
-         (c) a new HTML file copied from this one with PAGE_TOPIC_KEY changed. -->
   </nav>
-  <p class="section-heading">Teaching &mdash; sections</p>
+  <p class="section-heading">PEPs &mdash; sections</p>
   <!-- topicContent is populated dynamically by renderTopic() after Firestore fetch -->
   <div id="topicContent">
     <p style="color:var(--light);font-size:13px;">Loading&hellip;</p>
@@ -378,7 +373,7 @@ const db  = getFirestore(app);
 /* ── Page identity ───────────────────────────────────────────
    PAGE_TOPIC_KEY must match the Firestore document ID in the
    'topics' collection. Change this constant per file only. */
-const PAGE_TOPIC_KEY = 'teaching';
+const PAGE_TOPIC_KEY = 'peps';
 
 /* ── Fixed subsection definitions ────────────────────────────
    These are the permanent structural sections that exist on

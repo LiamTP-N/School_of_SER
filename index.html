@@ -27,8 +27,12 @@
        and add the entry to DEFAULT_TOPICS in the script.
 
   2. PARTICIPANT BANK BUTTON:
-     - Links to participant-register.html (public registration)
-       in a new tab.
+     - Links to participant-matcher.html (a self-contained
+       registration + researcher-access page) in a new tab.
+     - The page combines public participant registration with a
+       PIN-gated researcher panel. There is no separate
+       participant-register.html; that filename was used in an
+       earlier draft and has been retired.
 
   3. USEFUL LINKS NOW FULLY EDITABLE:
      - Hardcoded HARDCODED_LINKS array is now a SEED ONLY
@@ -88,12 +92,14 @@
   4. Footer
 
   CALENDAR WIDGET BEHAVIOUR:
-  - Shows current week by default (Mon-Sun, UK locale)
-  - Prev/Next week navigation buttons
-  - "Today" button returns to current week
+  - Defaults to a 1-day view; toolbar buttons toggle to 3-day or
+    5-day (Mon-Fri) views. The 5-day view always starts on the
+    Monday of the week containing the current viewStart.
+  - Prev/Next buttons step by `currentDayCount` days at a time.
+  - "Today" button returns to the current date in the active view.
   - Events shown as coloured blocks matching Google Calendar
   - Hovering an event shows a tooltip with full title + time
-  - On load, fetches all events for the displayed week from
+  - On load, fetches all events for the displayed range from
     all configured calendars simultaneously (Promise.all)
   - Token is cached for 55 minutes (Google tokens last 60 min)
 
@@ -763,11 +769,16 @@
     <!-- ============================================================
          TOPIC NAVIGATION
          ------------------------------------------------------------
-         7 topic pages. PEPs and timetabling content is covered
-         under teaching.html. SiSo booking content is covered under
-         lab-equipment.html. To add a topic: create a new .html file
-         from an existing topic page, add an entry to DEFAULT_TOPICS
-         in that file's script block, AND add the button below.
+         10 topic pages plus a Participant Bank shortcut.
+         Each topic has its own .html file and its own row in the
+         Firestore 'topics' collection (doc id = topic slug).
+         The Participant Bank button opens participant-matcher.html
+         in a new tab; that file is intentionally isolated and has
+         no navigation back to this portal (see participant-matcher.html
+         header comment for the design rationale).
+         To add a new topic: create a new .html file from an existing
+         topic page, add an entry to DEFAULT_TOPICS in that file's
+         script block, AND add the button below.
          ============================================================ -->
     <nav class="topic-tabs" aria-label="Topic navigation">
       <a class="topic-btn" href="teaching.html">Teaching</a>
@@ -777,7 +788,10 @@
       <a class="topic-btn" href="workflows.html">Workflows</a>
       <a class="topic-btn" href="lab-equipment.html">Lab &amp; Equipment</a>
       <a class="topic-btn" href="inductions.html">Inductions &amp; Training</a>
-      <a class="topic-btn" href="participant-register.html" target="_blank">Participant Bank</a>
+      <a class="topic-btn" href="peps.html">PEPs</a>
+      <a class="topic-btn" href="timetabling.html">Timetabling</a>
+      <a class="topic-btn" href="siso.html">SiSo Bookings</a>
+      <a class="topic-btn" href="participant-matcher.html" target="_blank">Participant Bank</a>
     </nav>
 
     <!-- Workflow map banner -->
@@ -933,7 +947,8 @@
      5. Cache token for 55 min (tokens expire after 60 min)
 
      RENDERING:
-     - Week grid: 7 columns (Mon-Sun), 24-hour time axis
+     - Day grid: `dayCount` columns (1, 3, or 5 depending on view),
+       24-hour time axis on the left.
      - Each hour = 48px. Event top/height calculated from time.
      - Events are absolutely positioned within their day column.
 
@@ -1389,10 +1404,13 @@ const HARDCODED_LINKS = [
   { name: 'MyTimetable',             url: 'https://mytimetable.northumbria.ac.uk/' },
   { name: 'Northumbria University',  url: 'https://www.northumbria.ac.uk/' },
   { name: 'OneDrive / SharePoint',   url: 'https://northumbria.sharepoint.com/' },
-  { name: 'Participant Bank',        url: 'participant-register.html' },
+  { name: 'Participant Bank',        url: 'participant-matcher.html' },
   { name: 'Panopto',                 url: 'https://panopto.northumbria.ac.uk/' },
   { name: 'Risk Assessment Library', url: 'https://livenorthumbriaac.sharepoint.com/sites/RAL/RiskAssessments/Forms/AllItems.aspx?id=%2Fsites%2FRAL%2FRiskAssessments%2FHealth%20and%20Life%20Sciences%2FRisk%20Assessments&viewid=99a3ece3%2D91e1%2D4e4a%2Da245%2D63e7524d228c' },
-  { name: 'Researcher Panel',        url: 'participant-researcher.html' },
+  // NOTE: A separate "Researcher Panel" link previously pointed to a non-existent
+  // participant-researcher.html file. The researcher access flow lives inside
+  // participant-matcher.html and is gated by a PIN entered in the page footer,
+  // so a dedicated link is no longer needed here.
   { name: 'SiSo / Online Booking',   url: 'https://siso.northumbria.ac.uk/' },
   { name: 'Staff Directory',         url: 'https://www.northumbria.ac.uk/about-us/our-staff/' },
   { name: 'Teams / SharePoint',      url: 'https://northumbria.sharepoint.com/' },

@@ -53,8 +53,9 @@
   delete its Firestore documents and reload.
 
   SEED MIGRATION FLAG:
-  A document "sem1_meta/seeded" in Firestore records whether the one-time
-  seed write has occurred. If that document exists with seeded:true, the
+  A document "sem1_meta/seeded_v6" in Firestore records whether the
+  current seed version has been written. If that document exists with
+  seeded:true, the
   auto-seed is skipped.
 
   TO UPDATE FOR A NEW ACADEMIC YEAR:
@@ -63,7 +64,7 @@
   3. Re-extract SEED_DATA from the updated XLSX (the extraction script is
      in SiSo_Session_Handover_2026-04-29.md, section on extract_workbook())
   4. Replace the SEED_DATA constant below
-  5. Delete the "sem1_meta/seeded" document in Firestore Console
+  5. Delete the "sem1_meta/seeded_v6" document in Firestore Console
      so the seed migration runs again with the new data
 
   Firebase project: nu-school-of-sport (same as workflow.html and index.html)
@@ -605,7 +606,7 @@
   ============================================================
   DATA FLOW:
     1. SEED_DATA (from XLSX) is defined below.
-    2. On load, check Firestore for "sem1_meta/seeded" doc.
+    2. On load, check Firestore for "sem1_meta/seeded_v6" doc.
        - If NOT seeded: write all SEED_DATA to Firestore, mark as seeded, then render.
        - If seeded: load all "sem1_sessions" docs from Firestore, render.
     3. All state lives in the `modules` Map (moduleCode -> moduleData).
@@ -715,7 +716,17 @@ async function deleteModuleRows(moduleCode) {
 
 // ── SEED: write all SEED_DATA to Firestore on first load ─────────────────────
 // Uses writeBatch in chunks of 500 (Firestore batch limit).
-// Marks sem_meta/seeded_v3 with seeded:true when done.
+// Marks sem1_meta/seeded_v6 with seeded:true when done.
+//
+// VERSION HISTORY (AI/LLM context):
+//   seeded_v1  - initial seed (rev. 1)
+//   seeded_v3  - intermediate cleanup (rev. 2)
+//   seeded_v5  - "As Above" / blank dates cleanup, multi-room normalisation,
+//                empty-module placeholder pattern (rev. 3)
+//   seeded_v6  - field-name fix: setup/support renamed to techSetup/techSupport
+//                so the rendered Tech setup? / Tech support? columns actually
+//                pick up seeded and imported values (rev. 4, this revision).
+//   To force a re-seed: bump this constant AND the setDoc value below.
 //
 // IMPORTANT (rev. 3 fix): before writing the new seed, this function
 // DELETES every existing doc in the collection. Without this step,
@@ -725,7 +736,7 @@ async function deleteModuleRows(moduleCode) {
 // rows by the loader. Deleting first guarantees the collection
 // matches SEED_DATA exactly.
 async function runSeedIfNeeded() {
-  const metaRef = doc(db, META, 'seeded_v5');
+  const metaRef = doc(db, META, 'seeded_v6');
   let seeded = false;
   try {
     const snap = await getDoc(metaRef);
@@ -760,25 +771,32 @@ async function runSeedIfNeeded() {
   Object.values(SEED_DATA).forEach(mod => {
     mod.sessions.forEach((sess, idx) => {
       const docId = mod.code + '_' + idx;
+      // AI/LLM NOTE: SEED_DATA still uses the legacy field names "setup" and
+      // "support" (those came straight from the original XLSX export and
+      // haven't been renamed in the embedded JSON). The Firestore document
+      // schema, however, uses techSetup / techSupport - which is what the
+      // table renderer (renderRow / makeCell) reads. So we map at write
+      // time. Without this mapping, every seeded row would show blank
+      // Tech setup? / Tech support? columns.
       allRows.push({
         docId,
         data: {
-          moduleCode: mod.code,
-          moduleName: mod.name,
-          moduleLead: mod.lead || '',
-          techLead:   mod.techLead || '',
-          week:       sess.week     || '',
-          repeats:    sess.repeat   || '1',
-          academic:   sess.academic || '',
-          date:       sess.date     || '',
-          start:      sess.start    || '',
-          finish:     sess.finish   || '',
-          room:       sess.room     || '',
-          pep:        sess.pep      || '',
-          setup:      sess.setup    || '',
-          support:    sess.support  || '',
-          food:       sess.food     || '',
-          _order:     idx,
+          moduleCode:  mod.code,
+          moduleName:  mod.name,
+          moduleLead:  mod.lead || '',
+          techLead:    mod.techLead || '',
+          week:        sess.week     || '',
+          repeats:     sess.repeat   || '1',
+          academic:    sess.academic || '',
+          date:        sess.date     || '',
+          start:       sess.start    || '',
+          finish:      sess.finish   || '',
+          room:        sess.room     || '',
+          pep:         sess.pep      || '',
+          techSetup:   sess.setup    || '',   // legacy "setup"   -> techSetup
+          techSupport: sess.support  || '',   // legacy "support" -> techSupport
+          food:        sess.food     || '',
+          _order:      idx,
         }
       });
     });
@@ -786,6 +804,8 @@ async function runSeedIfNeeded() {
     // is discoverable to the loader, but the placeholder is NOT shown
     // as a session row. When the user adds their first real row,
     // the loader/addRow path deletes the placeholder.
+    // AI/LLM NOTE: We write techSetup / techSupport here (not setup / support);
+    // see the schema notes above the SEED_DATA loop.
     if (!mod.sessions.length) {
       allRows.push({
         docId: mod.code + '_placeholder',
@@ -793,7 +813,7 @@ async function runSeedIfNeeded() {
           moduleCode: mod.code, moduleName: mod.name,
           moduleLead: mod.lead||'', techLead: mod.techLead||'',
           week:'', repeats:'', academic:'', date:'', start:'', finish:'',
-          room:'', techSetup:'', techSupport:'', pep:'', setup:'', support:'', food:'', _order:0,
+          room:'', techSetup:'', techSupport:'', pep:'', food:'', _order:0,
           _placeholder: true,
         }
       });
@@ -810,7 +830,7 @@ async function runSeedIfNeeded() {
   }
 
   // Mark as seeded
-  await setDoc(metaRef, { seeded: true, version: 5, seededAt: new Date().toISOString() });
+  await setDoc(metaRef, { seeded: true, version: 6, seededAt: new Date().toISOString() });
   return true;
 }
 
