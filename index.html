@@ -135,13 +135,18 @@
       --white:  #ffffff;
     }
 
-    html { scroll-behavior: smooth; }
+    /* overflow-x: hidden on both html and body is required to prevent
+       horizontal scrollbar caused by the calendar grid and wide layout
+       overflowing the viewport. Without this, the 1400px max-width
+       container can cause a horizontal scroll on narrower screens. */
+    html { scroll-behavior: smooth; overflow-x: hidden; }
 
     body {
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif;
       background: var(--white);
       color: var(--black);
       line-height: 1.5;
+      overflow-x: hidden; /* belt-and-braces alongside html rule above */
     }
 
     /* ============================================================
@@ -230,6 +235,13 @@
 
     /* ============================================================
        MAIN LAYOUT
+       ============================================================
+       FOR AI/LLM READERS:
+       Two-column grid: left (1fr) holds calendar + content,
+       right (260px) is the sticky links sidebar.
+       min-width: 0 on direct children is critical - without it,
+       grid children default to min-content width, which allows
+       the calendar grid inside to overflow and cause horizontal scroll.
        ============================================================ */
     .main {
       max-width: 1400px;
@@ -240,6 +252,9 @@
       gap: 40px;
       align-items: start;
     }
+
+    /* Prevent either grid column from expanding beyond its allocated width */
+    .main > * { min-width: 0; }
 
     .section-heading {
       font-size: 10px;
