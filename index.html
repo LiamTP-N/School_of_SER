@@ -654,17 +654,23 @@
     /* ============================================================
        TOPIC NAVIGATION
        ============================================================ */
+    /* ============================================================
+       TOPIC NAVIGATION TABS
+       ------------------------------------------------------------
+       flex-wrap: wrap ensures buttons flow onto new lines rather
+       than creating a horizontal scrollbar.
+       overflow-x: auto has been intentionally removed.
+       padding-bottom retained to give breathing room below the
+       last row of buttons before the border.
+       ============================================================ */
     .topic-tabs {
       display: flex;
+      flex-wrap: wrap;
       gap: 8px;
-      overflow-x: auto;
       padding-bottom: 12px;
       margin-bottom: 24px;
       border-bottom: 1px solid var(--border);
-      scrollbar-width: thin;
     }
-    .topic-tabs::-webkit-scrollbar { height: 6px; }
-    .topic-tabs::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
 
     .topic-btn {
       flex-shrink: 0;
@@ -803,9 +809,6 @@
       <a class="topic-btn" href="workflows.html">Workflows</a>
       <a class="topic-btn" href="lab-equipment.html">Lab &amp; Equipment</a>
       <a class="topic-btn" href="inductions.html">Inductions &amp; Training</a>
-      <a class="topic-btn" href="peps.html">PEPs</a>
-      <a class="topic-btn" href="timetabling.html">Timetabling</a>
-      <a class="topic-btn" href="siso.html">SiSo Bookings</a>
       <a class="topic-btn" href="participant-matcher.html" target="_blank">Participant Bank</a>
     </nav>
 
